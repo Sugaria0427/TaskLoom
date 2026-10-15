@@ -1,0 +1,68 @@
+[
+  {
+    "arxiv_id": "2507.16438",
+    "url": "https://arxiv.org/abs/2507.16438",
+    "title": "The Sweet Danger of Sugar: Debunking Representation Learning for Encrypted Traffic Classification",
+    "first_submitted": "2025/07/22",
+    "doi": "10.1145/3718958.3750498",
+    "abstract": "Abstract: Recently we have witnessed the explosion of proposals that, inspired by Language Models like BERT, exploit Representation Learning models to create traffic representations. All of them promise astonishing performance in encrypted traffic classification (up to 98% accuracy). In this paper, with a networking expert mindset, we critically reassess their performance. Through extensive analysis, we demonstrate that the reported successes are heavily influenced by data preparation problems, which allow these models to find easy shortcuts - spurious correlation between features and labels - during fine-tuning that unrealistically boost their performance. When such shortcuts are not present - as in real scenarios - these models perform poorly. We also introduce Pcap-Encoder, an LM-based representation learning model that we specifically design to extract features from protocol headers. Pcap-Encoder appears to be the only model that provides an instrumental representation for traffic classification. Yet, its complexity questions its applicability in practical settings. Our findings reveal flaws in dataset preparation and model training, calling for a better and more conscious test design. We propose a correct evaluation methodology and stress the need for rigorous benchmarking.",
+    "comments": "This paper has been accepted at ACM SIGCOMM 2025. It will appear in the proceedings with DOI https://doi.org/10.1145/3718958.3750498",
+    "verification_scope": "arXiv abstract and bibliographic page; DOI records additionally checked through Crossref for journal/conference articles",
+    "retrieved_date": "2026-09-23"
+  },
+  {
+    "arxiv_id": "2505.20866",
+    "url": "https://arxiv.org/abs/2505.20866",
+    "title": "Respond to Change with Constancy: Instruction-tuning with LLM for Non-I.I.D. Network Traffic Classification",
+    "first_submitted": "2025/05/27",
+    "doi": "10.1109/TIFS.2025.3574971",
+    "abstract": "Abstract: Encrypted traffic classification is highly challenging in network security due to the need for extracting robust features from content-agnostic traffic data. Existing approaches face critical issues: (i) Distribution drift, caused by reliance on the closedworld assumption, limits adaptability to realworld, shifting patterns; (ii) Dependence on labeled data restricts applicability where such data is scarce or unavailable. Large language models (LLMs) have demonstrated remarkable potential in offering generalizable solutions across a wide range of tasks, achieving notable success in various specialized fields. However, their effectiveness in traffic analysis remains constrained by challenges in adapting to the unique requirements of the traffic domain. In this paper, we introduce a novel traffic representation model named Encrypted Traffic Out-of-Distribution Instruction Tuning with LLM (ETooL), which integrates LLMs with knowledge of traffic structures through a self-supervised instruction tuning paradigm. This framework establishes connections between textual information and traffic interactions. ETooL demonstrates more robust classification performance and superior generalization in both supervised and zero-shot traffic classification tasks. Notably, it achieves significant improvements in F1 scores: APP53 (I.I.D.) to 93.19%(6.62%) and 92.11%(4.19%), APP53 (O.O.D.) to 74.88%(18.17%) and 72.13%(15.15%), and ISCX-Botnet (O.O.D.) to 95.03%(9.16%) and 81.95%(12.08%). Additionally, we construct NETD, a traffic dataset designed to support dynamic distributional shifts, and use it to validate ETooL's effectiveness under varying distributional conditions. Furthermore, we evaluate the efficiency gains achieved through ETooL's instruction tuning approach.",
+    "comments": "IEEE Transactions on Information Forensics and Security (TIFS) camera ready, 15 pages, 6 figures, 7 tables",
+    "verification_scope": "arXiv abstract and bibliographic page; DOI records additionally checked through Crossref for journal/conference articles",
+    "retrieved_date": "2026-09-23"
+  },
+  {
+    "arxiv_id": "2506.11319",
+    "url": "https://arxiv.org/abs/2506.11319",
+    "title": "Hardware-Aware Neural Architecture Search for Encrypted Traffic Classification on Resource-Constrained Devices",
+    "first_submitted": "2025/06/12",
+    "doi": "10.1109/TNSM.2026.3666676",
+    "abstract": "Abstract: This paper presents a hardware-efficient deep neural network (DNN), optimized through hardware-aware neural architecture search (HW-NAS); the DNN supports the classification of session-level encrypted traffic on resource-constrained Internet of Things (IoT) and edge devices. Thanks to HW-NAS, a 1D convolutional neural network (CNN) is tailored on the ISCX VPN-nonVPN dataset to meet strict memory and computational limits while achieving robust performance. The optimized model attains 96.60% accuracy with just 88.26K parameters, 10.08M FLOPs, and a maximum tensor size of 20.12K. Compared to state-of-the-art models, it achieves reductions of up to 444-fold, 312-fold, and 15-fold in these metrics, respectively, minimizing memory footprint and runtime requirements. The model also achieves up to 99.86% across multiple VPN and traffic classification (TC) tasks; it further generalizes to external benchmarks with up to 99.98% accuracy on USTC-TFC and QUIC NetFlow. In addition, an in-depth study of header-level preprocessing confirms that the optimized model can provide performance across a wide range of configurations, even in scenarios with stricter privacy considerations. Likewise, a reduction in the length of sessions of up to 75% yields significant improvements in efficiency, while maintaining high accuracy with only a negligible drop of 1-2%. However, the importance of careful preprocessing and session length selection in the classification of raw traffic data is still present, as improper settings or aggressive reductions can cause a 7% reduction in accuracy. The quantized architecture was deployed on STM32 microcontrollers and evaluated across input sizes; results confirm that the efficiency gains from shorter sessions translate to practical, low-latency embedded inference. These findings demonstrate the method's practicality for encrypted traffic analysis in constrained IoT networks.",
+    "comments": "14 pages, 7 figures. Published in IEEE Transactions on Network and Service Management (2026)",
+    "verification_scope": "arXiv abstract and bibliographic page; DOI records additionally checked through Crossref for journal/conference articles",
+    "retrieved_date": "2026-09-23"
+  },
+  {
+    "arxiv_id": "2509.11157",
+    "url": "https://arxiv.org/abs/2509.11157",
+    "title": "UDFS: Lightweight Representation-Driven Open World Robust Encrypted Traffic Classification",
+    "first_submitted": "2025/09/14",
+    "doi": null,
+    "abstract": "Abstract: In recent years, sequence features such as packet length have received considerable attention due to their central role in encrypted traffic analysis. Existing sequence modeling approaches can be broadly categorized into flow-level and trace-level methods: the former suffer from high feature redundancy, limiting their discriminative power, whereas the latter preserve complete information but incur substantial computational and storage overhead. To address these limitations, we propose the \\textbf{U}p-\\textbf{D}own \\textbf{F}low \\textbf{S}equence (\\textbf{UDFS}) representation, which compresses an entire trace into a two-dimensional sequence and characterizes each flow by the aggregate of its upstream and downstream traffic, reducing complexity while maintaining high discriminability. Furthermore, to address the challenge of class-specific discriminability differences, we propose an adaptive threshold mechanism that dynamically adjusts training weights and rejection boundaries, enhancing the model's classification performance. Experimental results demonstrate that the proposed method achieves superior classification performance and robustness on both coarse-grained and fine-grained datasets, as well as under concept drift and open-world scenarios. Code and Dataset are available at this https URL .",
+    "comments": "Code and Dataset are available at this https URL",
+    "verification_scope": "arXiv abstract and bibliographic page; DOI records additionally checked through Crossref for journal/conference articles",
+    "retrieved_date": "2026-09-23"
+  },
+  {
+    "arxiv_id": "2608.22683",
+    "url": "https://arxiv.org/abs/2608.22683",
+    "title": "The Colossus with Feet of Clay: Debunking Encrypted Traffic Classifiers under PQC Evolution",
+    "first_submitted": "2026/08/24",
+    "doi": null,
+    "abstract": "Abstract: Encrypted traffic classifiers often achieve high accuracy under matched training and testing conditions, implicitly assuming that deployment traffic follows the training distribution. TLS migration toward post-quantum cryptography (PQC) challenges this assumption because hybrid key establishment can reshape observable traffic without changing application labels. We frame this change as PQC-induced protocol drift and study its effects through closed-world HTTPS website fingerprinting using the deployed TLS~1.3 Hybrid-PQC group \\texttt{\\detokenize{X25519MLKEM768}}. We build a controlled, PQC-aware benchmark pairing Traditional (Non-PQC) and Hybrid-PQC traffic, then evaluate five representative classifiers and side-channel representations under matched-domain, cross-domain, and deployment-ratio settings. Collectively, the experiments show that PQC evolution does not remove learnable website information. Instead, it changes how that information appears in traffic, causing classifiers and feature combinations that perform well in-domain to lose reliability across cryptographic domains. By exposing the fragility of matched-domain evaluation, we offer strategic guidance, identify cross-domain robustness as a research priority, and recommend protocol-aware practices for dependable real-world encrypted traffic classification. The code is available at this http URL .",
+    "comments": null,
+    "verification_scope": "arXiv abstract and bibliographic page; DOI records additionally checked through Crossref for journal/conference articles",
+    "retrieved_date": "2026-09-23"
+  },
+  {
+    "arxiv_id": "2609.02140",
+    "url": "https://arxiv.org/abs/2609.02140",
+    "title": "SoK: Where Do Flow Labels Come From? Auditing Label Provenance in Encrypted Traffic Benchmarks",
+    "first_submitted": "2026/09/02",
+    "doi": null,
+    "abstract": "Abstract: Encrypted traffic classification infers semantics beyond the flow record from transport-layer observables, and supervised training rests on labels that hold for the individual flow they are attached to. Recent systematizations scrutinize model in- puts and data splits; we systematize the complementary label side. Across 14 audited benchmark entries, we identify two recurring label-side strategies: coarse inheritance, which risks labelling flows the evidence does not cover, and overstrict filtering, which keeps only self-attesting flows and risks dis- carding relevant ones. No audited entry exposes a countable pre-selection population, and the task objects downstream papers attach to the same labels disagree with the recovered record in 8 of 23 referenced cells. Under strict side-channel features we derive a representation-relative ceiling on bal- anced accuracy for any classifier restricted to those features: on the public benchmarks that inherit, it ranges from 0.56 to 0.76. On the filtering side, only 24.95% of connections in our fully captured corpus carry an observable SNI of their own; yet the discarded connections raise macro accuracy from 0.44 to 0.65 through same-run co-occurrence features. We end with recommendations for benchmark builders and users.",
+    "comments": null,
+    "verification_scope": "arXiv abstract and bibliographic page; DOI records additionally checked through Crossref for journal/conference articles",
+    "retrieved_date": "2026-09-23"
+  }
+]

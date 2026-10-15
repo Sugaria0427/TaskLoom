@@ -1,0 +1,29 @@
+@startuml
+!include _theme.iuml
+top to bottom direction
+hide empty description
+state "已登记\nREGISTERED" as Registered
+state "执行中\nRUNNING" as Running #EEEDF9
+state "结果核验\nVERIFYING" as Verifying
+state "取消请求中\nCANCEL_REQUESTED" as Cancelling #FBF2E1
+state "核对实际执行\nRECONCILING" as Reconciling #FBF2E1
+state "成功\nSUCCEEDED" as Success #EBF6F2
+state "失败\nFAILED" as Failure #FBEDEF
+state "已取消\nCANCELLED" as Cancelled #F5F7FA
+state "结果待核实\nUNKNOWN" as Unknown #FCF2DD
+[*] --> Registered
+Registered --> Running : 获得执行许可并派发
+Registered --> Cancelled : 取消 [确认尚未执行]
+Running --> Verifying : 收到完整结果
+Verifying --> Success : 验收通过
+Verifying --> Failure : 验收失败
+Running --> Failure : 已确认失败
+Running --> Cancelling : 用户或上级请求取消
+Running --> Reconciling : 失联／响应丢失
+Cancelling --> Reconciling : 查询效果与实际停止状态
+Reconciling --> Cancelled : 确认取消且结果可确定
+Reconciling --> Verifying : 找到可核验结果
+Reconciling --> Failure : 确认失败
+Reconciling --> Unknown : 暂无法确认外部效果
+Unknown --> Reconciling : 后续查询／迟到事件／人工核对
+@enduml

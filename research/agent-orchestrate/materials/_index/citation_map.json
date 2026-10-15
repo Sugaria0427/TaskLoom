@@ -1,0 +1,244 @@
+{
+  "specification": "docs/TaskLoom_项目说明书_分层清晰版.md",
+  "mappings": [
+    {
+      "citation_id": "S01",
+      "source_ids": [
+        "P14"
+      ],
+      "urls": [
+        "https://arxiv.org/abs/2606.30560v2"
+      ],
+      "status": "mapped"
+    },
+    {
+      "citation_id": "S02",
+      "source_ids": [
+        "P16"
+      ],
+      "urls": [
+        "https://arxiv.org/abs/2608.00101"
+      ],
+      "status": "mapped"
+    },
+    {
+      "citation_id": "S03",
+      "source_ids": [
+        "P17",
+        "L07"
+      ],
+      "urls": [
+        "https://arxiv.org/abs/2608.24509"
+      ],
+      "status": "mapped"
+    },
+    {
+      "citation_id": "S04",
+      "source_ids": [
+        "P18"
+      ],
+      "urls": [
+        "https://arxiv.org/abs/2403.16971v5"
+      ],
+      "status": "mapped"
+    },
+    {
+      "citation_id": "S05",
+      "source_ids": [],
+      "urls": [
+        "https://proceedings.mlr.press/v235/kim24y.html"
+      ],
+      "status": "external_reference"
+    },
+    {
+      "citation_id": "S06",
+      "source_ids": [
+        "A06",
+        "A07",
+        "L08"
+      ],
+      "urls": [
+        "https://arxiv.org/abs/2604.17111"
+      ],
+      "status": "mapped"
+    },
+    {
+      "citation_id": "S07",
+      "source_ids": [
+        "A13"
+      ],
+      "urls": [
+        "https://docs.litellm.ai/docs/proxy/dynamic_rate_limit",
+        "https://github.com/BerriAI/litellm/pull/38647"
+      ],
+      "status": "mapped"
+    },
+    {
+      "citation_id": "S08",
+      "source_ids": [
+        "A24",
+        "A25"
+      ],
+      "urls": [
+        "https://docs.temporal.io/develop/task-queue-priority-fairness",
+        "https://docs.temporal.io/guides/rate-limit-downstream-apis"
+      ],
+      "status": "mapped"
+    },
+    {
+      "citation_id": "S09",
+      "source_ids": [
+        "P11",
+        "A10"
+      ],
+      "urls": [
+        "https://docs.langchain.com/oss/python/langgraph/persistence"
+      ],
+      "status": "mapped"
+    },
+    {
+      "citation_id": "S10",
+      "source_ids": [
+        "R01",
+        "R02"
+      ],
+      "urls": [
+        "https://developers.openai.com/api/docs/guides/function-calling",
+        "https://developers.openai.com/api/docs/guides/conversation-state"
+      ],
+      "status": "mapped"
+    },
+    {
+      "citation_id": "S11",
+      "source_ids": [
+        "C03"
+      ],
+      "urls": [
+        "https://docs.kernel.org/admin-guide/cgroup-v2.html"
+      ],
+      "status": "mapped"
+    },
+    {
+      "citation_id": "S12",
+      "source_ids": [
+        "CX48524"
+      ],
+      "urls": [
+        "https://github.com/openai/codex/issues/48524"
+      ],
+      "status": "mapped"
+    },
+    {
+      "citation_id": "S13",
+      "source_ids": [
+        "D7936"
+      ],
+      "urls": [
+        "https://github.com/deepseek-ai/deepseek-harness/discussions/7936"
+      ],
+      "status": "mapped"
+    },
+    {
+      "citation_id": "S14",
+      "source_ids": [
+        "CX34953"
+      ],
+      "urls": [
+        "https://github.com/openai/codex/issues/34953"
+      ],
+      "status": "mapped"
+    },
+    {
+      "citation_id": "S15",
+      "source_ids": [
+        "D1316"
+      ],
+      "urls": [
+        "https://github.com/deepseek-ai/deepseek-harness/discussions/1316"
+      ],
+      "status": "mapped"
+    },
+    {
+      "citation_id": "S16",
+      "source_ids": [],
+      "urls": [
+        "https://github.com/anthropics/claude-code/issues/30378"
+      ],
+      "status": "external_reference"
+    },
+    {
+      "citation_id": "S17",
+      "source_ids": [
+        "R04"
+      ],
+      "urls": [
+        "https://docs.langchain.com/oss/python/langchain/middleware/custom",
+        "https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/subsystems/tools.md"
+      ],
+      "status": "mapped"
+    },
+    {
+      "citation_id": "S18",
+      "source_ids": [
+        "A01",
+        "A02"
+      ],
+      "urls": [
+        "https://developers.openai.com/api/docs/guides/rate-limits",
+        "https://platform.claude.com/docs/en/api/rate-limits"
+      ],
+      "status": "mapped"
+    },
+    {
+      "citation_id": "S19",
+      "source_ids": [
+        "D3128",
+        "C04"
+      ],
+      "urls": [
+        "https://github.com/deepseek-ai/deepseek-harness/discussions/3128",
+        "https://aws.amazon.com/cn/builders-library/timeouts-retries-and-backoff-with-jitter/"
+      ],
+      "status": "mapped"
+    },
+    {
+      "citation_id": "S20",
+      "source_ids": [],
+      "urls": [
+        "https://doi.org/10.1109/90.502236",
+        "https://doi.org/10.1145/321738.321743"
+      ],
+      "status": "external_reference"
+    },
+    {
+      "citation_id": "S21",
+      "source_ids": [
+        "OS21"
+      ],
+      "urls": [
+        "https://www.cs.utexas.edu/~EWD/transcriptions/EWD06xx/EWD623.html"
+      ],
+      "status": "mapped"
+    },
+    {
+      "citation_id": "S22",
+      "source_ids": [
+        "OS22"
+      ],
+      "urls": [
+        "https://www.cs.uic.edu/~jbell/CourseNotes/OperatingSystems/7_Deadlocks.html"
+      ],
+      "status": "mapped"
+    },
+    {
+      "citation_id": "S23",
+      "source_ids": [
+        "OS23"
+      ],
+      "urls": [
+        "https://docs.kernel.org/locking/rt-mutex-design.html"
+      ],
+      "status": "mapped"
+    }
+  ]
+}

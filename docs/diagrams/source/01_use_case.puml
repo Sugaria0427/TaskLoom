@@ -1,0 +1,26 @@
+@startuml
+!include _theme.iuml
+left to right direction
+actor "项目用户" as User
+actor "平台管理员／实验人员" as Admin
+actor "固定模型 API 服务" as Model <<external>>
+actor "受控工具程序" as Tool <<external>>
+rectangle "TaskLoom 系统边界：个人端 ＋ 应用平台" {
+  usecase "提交并运行\nAgent 任务" as Run
+  usecase "查看任务进度\n与等待原因" as Observe
+  usecase "取消任务" as Cancel
+  usecase "恢复可继续的任务" as Resume
+  usecase "查看与导出\n已确认的结果" as Result
+  usecase "配置资源与额度策略" as Config #FBF2E1
+  usecase "运行策略对照\n与故障实验" as Evaluate #FBF2E1
+}
+User -right- Run
+User -right- Observe
+User -right- Cancel
+User -right- Resume
+User -right- Result
+Admin -right- Config
+Admin -right- Evaluate
+Run -right- Model
+Run -right- Tool
+@enduml

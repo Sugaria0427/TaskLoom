@@ -1,0 +1,127 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mxfile host="app.diagrams.net" version="29.0.0" agent="TaskLoom native draw.io authoring">
+  <diagram id="02_components" name="TaskLoom · 两端四层组件图">
+    <mxGraphModel dx="1600" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1000" math="0" shadow="0" background="#FAFBFE">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="canvas" value="" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=#FAFBFE;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;locked=1;" vertex="1" parent="1" data-role="neutral" data-uml-kind="decoration">
+          <mxGeometry x="0" y="0" width="1600" height="1000" as="geometry" />
+        </mxCell>
+        <mxCell id="title" value="TaskLoom · 两端四层组件图" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=42;fontColor=#25364D;fontStyle=1;align=left;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="1" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="50" y="30" width="1500" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="pc" value="" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#416BB4;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;dashed=1;dashPattern=6 4;container=1;collapsible=0;" vertex="1" parent="1" data-role="task" data-uml-kind="boundary">
+          <mxGeometry x="40" y="130" width="970" height="815" as="geometry" />
+        </mxCell>
+        <mxCell id="pc-title" value="个人端：每位用户在自己的电脑上运行" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=28;fontColor=#25364D;fontStyle=1;align=left;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#416BB4;" vertex="1" parent="pc" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="30" y="24" width="910" height="46" as="geometry" />
+        </mxCell>
+        <mxCell id="platform-zone" value="" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#7957A7;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;dashed=1;dashPattern=6 4;container=1;collapsible=0;" vertex="1" parent="1" data-role="platform" data-uml-kind="boundary">
+          <mxGeometry x="1050" y="130" width="510" height="520" as="geometry" />
+        </mxCell>
+        <mxCell id="platform-zone-title" value="平台端：协调多个用户的请求" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=28;fontColor=#25364D;fontStyle=1;align=left;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#7957A7;" vertex="1" parent="platform-zone" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="30" y="24" width="450" height="46" as="geometry" />
+        </mxCell>
+        <mxCell id="harness" value="" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=#EAF0FD;strokeColor=#416BB4;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="pc" data-role="task" data-uml-kind="component">
+          <mxGeometry x="40" y="115" width="380" height="260" as="geometry" />
+        </mxCell>
+        <mxCell id="harness-st" value="«component»" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=20;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#416BB4;" vertex="1" parent="harness" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="16" y="9" width="348" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="harness-title" value="L2 · Harness 与任务管理" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=27;fontColor=#25364D;fontStyle=1;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="harness" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="16" y="39" width="348" height="38" as="geometry" />
+        </mxCell>
+        <mxCell id="harness-body" value="依赖图判断步骤是否就绪。&#10;子 Agent 继承根任务份额。&#10;检查点保存已确认的进度。" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=26;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="harness" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="16" y="85" width="348" height="165" as="geometry" />
+        </mxCell>
+        <mxCell id="client" value="" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=#FFF2DD;strokeColor=#AD6C18;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="pc" data-role="client" data-uml-kind="component">
+          <mxGeometry x="520" y="115" width="405" height="260" as="geometry" />
+        </mxCell>
+        <mxCell id="client-st" value="«component»" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=20;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#AD6C18;" vertex="1" parent="client" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="16" y="9" width="373" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="client-title" value="L3 · 客户端请求调度" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=27;fontColor=#25364D;fontStyle=1;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="client" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="16" y="39" width="373" height="38" as="geometry" />
+        </mxCell>
+        <mxCell id="client-body" value="成本 DRR 与老化安排发送。&#10;速率、在途与预算分别校验。&#10;限速提示指导后续重试。" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=26;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="client" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="16" y="85" width="373" height="165" as="geometry" />
+        </mxCell>
+        <mxCell id="tools" value="" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=#E4F4F0;strokeColor=#167C77;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="pc" data-role="local" data-uml-kind="component">
+          <mxGeometry x="40" y="505" width="380" height="265" as="geometry" />
+        </mxCell>
+        <mxCell id="tools-st" value="«component»" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=20;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#167C77;" vertex="1" parent="tools" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="16" y="9" width="348" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="tools-title" value="L1 · 本地资源与工具执行" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=26;fontColor=#25364D;fontStyle=1;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="tools" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="16" y="39" width="348" height="38" as="geometry" />
+        </mxCell>
+        <mxCell id="tools-body" value="列表调度选择可执行工具。&#10;原子准入统一预留资源。&#10;银行家检查受控阶段的安全。&#10;锁与 cgroup 约束实际执行。" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="tools" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="16" y="85" width="348" height="170" as="geometry" />
+        </mxCell>
+        <mxCell id="support" value="" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=#EDF1F6;strokeColor=#64748B;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="pc" data-role="neutral" data-uml-kind="component">
+          <mxGeometry x="520" y="505" width="405" height="265" as="geometry" />
+        </mxCell>
+        <mxCell id="support-st" value="«component»" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=20;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#64748B;" vertex="1" parent="support" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="16" y="9" width="373" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="support-title" value="共用支撑：守护、记录与界面" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=1;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="support" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="16" y="39" width="373" height="38" as="geometry" />
+        </mxCell>
+        <mxCell id="support-body" value="独立守护进程核对资源回收。&#10;事件日志支持状态核对与恢复。&#10;界面展示等待原因及任务结果。" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="support" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="16" y="85" width="373" height="170" as="geometry" />
+        </mxCell>
+        <mxCell id="gateway" value="" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=#F1EBFB;strokeColor=#7957A7;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="platform-zone" data-role="platform" data-uml-kind="component">
+          <mxGeometry x="30" y="115" width="450" height="335" as="geometry" />
+        </mxCell>
+        <mxCell id="gateway-st" value="«component»" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=20;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#7957A7;" vertex="1" parent="gateway" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="16" y="9" width="418" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="gateway-title" value="L4 · 平台多用户请求调度" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=28;fontColor=#25364D;fontStyle=1;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="gateway" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="16" y="39" width="418" height="38" as="geometry" />
+        </mxCell>
+        <mxCell id="gateway-body" value="先在用户间分配服务份额，&#10;再按根任务进行成本轮转。&#10;有界队列控制请求积压。&#10;平台反馈拥塞与等待状态。&#10;共享上游额度由平台裁决。" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=27;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="gateway" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="16" y="85" width="418" height="240" as="geometry" />
+        </mxCell>
+        <mxCell id="model" value="" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=#EDF1F6;strokeColor=#64748B;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="1" data-role="neutral" data-uml-kind="external-component">
+          <mxGeometry x="1090" y="755" width="450" height="170" as="geometry" />
+        </mxCell>
+        <mxCell id="model-st" value="«external component»" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=20;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#64748B;" vertex="1" parent="model" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="16" y="9" width="418" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="model-title" value="固定模型服务" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=29;fontColor=#25364D;fontStyle=1;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="model" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="16" y="39" width="418" height="38" as="geometry" />
+        </mxCell>
+        <mxCell id="model-body" value="系统调用既有模型服务，&#10;推理能力与配置保持不变。" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=27;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="model" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="16" y="85" width="418" height="75" as="geometry" />
+        </mxCell>
+        <mxCell id="dependency-client" value="" style="edgeStyle=none;rounded=0;html=1;strokeColor=#AD6C18;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=none;endArrow=open;startFill=1;endFill=1;startSize=12;endSize=11;dashed=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;" edge="1" parent="1" source="harness" target="client" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="dependency-tools" value="" style="edgeStyle=none;rounded=0;html=1;strokeColor=#167C77;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=none;endArrow=open;startFill=1;endFill=1;startSize=12;endSize=11;dashed=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;" edge="1" parent="1" source="harness" target="tools" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="dependency-gateway" value="" style="edgeStyle=none;rounded=0;html=1;strokeColor=#7957A7;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=none;endArrow=open;startFill=1;endFill=1;startSize=12;endSize=11;dashed=1;exitX=1;exitY=0.5;entryX=0;entryY=0.3880597014925373;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;" edge="1" parent="1" source="client" target="gateway" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="dependency-support1" value="" style="edgeStyle=none;rounded=0;html=1;strokeColor=#64748B;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=none;endArrow=open;startFill=1;endFill=1;startSize=12;endSize=11;dashed=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;" edge="1" parent="1" source="tools" target="support" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="dependency-support2" value="" style="edgeStyle=none;rounded=0;html=1;strokeColor=#64748B;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=none;endArrow=open;startFill=1;endFill=1;startSize=12;endSize=11;dashed=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;" edge="1" parent="1" source="client" target="support" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="dependency-support3" value="" style="edgeStyle=none;rounded=0;html=1;strokeColor=#64748B;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=none;endArrow=open;startFill=1;endFill=1;startSize=12;endSize=11;dashed=1;exitX=0.8;exitY=1;entryX=0.3;entryY=0;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;" edge="1" parent="1" source="harness" target="support" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="384" y="555" />
+              <mxPoint x="681.5" y="555" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="dependency-model" value="" style="edgeStyle=none;rounded=0;html=1;strokeColor=#64748B;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=none;endArrow=open;startFill=1;endFill=1;startSize=12;endSize=11;dashed=1;exitX=0.5;exitY=1;entryX=0.4777777777777778;entryY=0;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;" edge="1" parent="1" source="gateway" target="model" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

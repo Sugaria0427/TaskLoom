@@ -1,0 +1,42 @@
+[
+  {
+    "id": "X01_cf_purpose",
+    "url": "https://blog.cloudflare.com/ai-crawler-traffic-by-purpose-and-industry/",
+    "role": "Vendor traffic measurement; denominator and attribution inspection"
+  },
+  {
+    "id": "X02_cf_crawl_click",
+    "url": "https://blog.cloudflare.com/crawlers-click-ai-bots-training/",
+    "role": "Training vs search taxonomy; do not turn referrals into infrastructure causation"
+  },
+  {
+    "id": "X03_cf_accountable",
+    "url": "https://blog.cloudflare.com/accountable-mixed-use-ai-crawlers/",
+    "role": "2026-09 current policy, mixed-use crawlers"
+  },
+  {
+    "id": "X04_cf_attribution",
+    "url": "https://blog.cloudflare.com/attribution-business-insights/",
+    "role": "Purpose observability capability, not independent efficacy"
+  },
+  {
+    "id": "X05_commoncrawl_bot",
+    "url": "https://commoncrawl.org/ccbot",
+    "role": "Cooperative crawler policies and purpose"
+  },
+  {
+    "id": "X06_commoncrawl_hf",
+    "url": "https://commoncrawl.org/blog/getting-started-with-common-crawl-data-on-hugging-face",
+    "role": "Bulk reuse alternative; do not claim measured source savings"
+  },
+  {
+    "id": "X07_cf_past_binary",
+    "url": "https://blog.cloudflare.com/past-bots-and-humans/",
+    "role": "Counterevidence to all defenders binary label assumption"
+  },
+  {
+    "id": "X08_cf_founders",
+    "url": "https://blog.cloudflare.com/cloudflares-2026-annual-founders-letter/",
+    "role": "Newest vendor narrative; evaluate evidence vs marketing"
+  }
+]

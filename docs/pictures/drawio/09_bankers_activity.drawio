@@ -1,0 +1,121 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mxfile host="app.diagrams.net" version="29.0.0" agent="TaskLoom native draw.io authoring">
+  <diagram id="09_bankers_activity" name="TaskLoom · 银行家安全检查活动图">
+    <mxGraphModel dx="1600" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="900" math="0" shadow="0" background="#FAFBFE">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="canvas" value="" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=#FAFBFE;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;locked=1;" vertex="1" parent="1" data-role="neutral" data-uml-kind="decoration">
+          <mxGeometry x="0" y="0" width="1600" height="900" as="geometry" />
+        </mxCell>
+        <mxCell id="title" value="TaskLoom · 银行家安全检查活动图" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=42;fontColor=#25364D;fontStyle=1;align=left;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="1" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="50" y="30" width="1500" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="start" value="" style="shape=ellipse;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=#25364D;strokeColor=#25364D;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="1" data-role="neutral" data-uml-kind="initial-node">
+          <mxGeometry x="64" y="294.51748251748256" width="26" height="26.0" as="geometry" />
+        </mxCell>
+        <mxCell id="snapshot" value="读取申请量 R 与快照，&#10;保存当前版本号 v。" style="shape=rectangle;rounded=1;arcSize=14;whiteSpace=wrap;html=1;fillColor=#E4F4F0;strokeColor=#167C77;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="1" data-role="local" data-uml-kind="action">
+          <mxGeometry x="130" y="232.73601398601397" width="310" height="152.0979020979021" as="geometry" />
+        </mxCell>
+        <mxCell id="bounds" value="R ≤ Need&#10;且 R ≤ Available" style="shape=rhombus;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=#E4F4F0;strokeColor=#167C77;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=24;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="1" data-role="local" data-uml-kind="decision">
+          <mxGeometry x="485" y="213.7237762237762" width="230" height="190.12237762237763" as="geometry" />
+        </mxCell>
+        <mxCell id="trial" value="在副本上试分配资源，&#10;并运行安全性检查。" style="shape=rectangle;rounded=1;arcSize=14;whiteSpace=wrap;html=1;fillColor=#E4F4F0;strokeColor=#167C77;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="1" data-role="local" data-uml-kind="action">
+          <mxGeometry x="780" y="232.73601398601397" width="310" height="152.0979020979021" as="geometry" />
+        </mxCell>
+        <mxCell id="safe" value="存在安全&#10;序列？" style="shape=rhombus;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=#E4F4F0;strokeColor=#167C77;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="1" data-role="local" data-uml-kind="decision">
+          <mxGeometry x="1190" y="207.38636363636363" width="195" height="202.7972027972028" as="geometry" />
+        </mxCell>
+        <mxCell id="version" value="版本仍为&#10;v？" style="shape=rhombus;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=#E4F4F0;strokeColor=#167C77;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="1" data-role="local" data-uml-kind="decision">
+          <mxGeometry x="1190" y="543.2692307692307" width="195" height="202.7972027972028" as="geometry" />
+        </mxCell>
+        <mxCell id="commit" value="原子提交资源预留。&#10;随后允许申请者继续。" style="shape=rectangle;rounded=1;arcSize=14;whiteSpace=wrap;html=1;fillColor=#E4F4F0;strokeColor=#167C77;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="1" data-role="local" data-uml-kind="action">
+          <mxGeometry x="780" y="574.9562937062938" width="310" height="145.76048951048952" as="geometry" />
+        </mxCell>
+        <mxCell id="wait" value="保持真实账本不变。&#10;资源改变后重新申请。" style="shape=rectangle;rounded=1;arcSize=14;whiteSpace=wrap;html=1;fillColor=#FCEDEB;strokeColor=#B85550;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="1" data-role="risk" data-uml-kind="action">
+          <mxGeometry x="450" y="574.9562937062938" width="275" height="145.76048951048952" as="geometry" />
+        </mxCell>
+        <mxCell id="boundary-result" value="拒绝越界申请或暂缓。&#10;调整上限需重新核验。" style="shape=rectangle;rounded=1;arcSize=14;whiteSpace=wrap;html=1;fillColor=#FCEDEB;strokeColor=#B85550;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="1" data-role="risk" data-uml-kind="action">
+          <mxGeometry x="100" y="574.9562937062938" width="300" height="145.76048951048952" as="geometry" />
+        </mxCell>
+        <mxCell id="start-snapshot" value="" style="edgeStyle=none;rounded=0;html=1;strokeColor=#167C77;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=none;endArrow=open;startFill=1;endFill=1;startSize=12;endSize=11;dashed=0;exitX=1;exitY=0.5;entryX=0;entryY=0.5;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;" edge="1" parent="1" source="start" target="snapshot" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="snapshot-bounds" value="" style="edgeStyle=none;rounded=0;html=1;strokeColor=#167C77;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=none;endArrow=open;startFill=1;endFill=1;startSize=12;endSize=11;dashed=0;exitX=1;exitY=0.5;entryX=0;entryY=0.5;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;" edge="1" parent="1" source="snapshot" target="bounds" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="bounds-yes" value="[是]" style="edgeStyle=none;rounded=0;html=1;strokeColor=#167C77;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=none;endArrow=open;startFill=1;endFill=1;startSize=12;endSize=11;dashed=0;exitX=1;exitY=0.5;entryX=0;entryY=0.5;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;" edge="1" parent="1" source="bounds" target="trial" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="trial-safe" value="" style="edgeStyle=none;rounded=0;html=1;strokeColor=#167C77;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=none;endArrow=open;startFill=1;endFill=1;startSize=12;endSize=11;dashed=0;exitX=1;exitY=0.5;entryX=0;entryY=0.5;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;" edge="1" parent="1" source="trial" target="safe" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="bounds-no" value="[否]" style="edgeStyle=none;rounded=0;html=1;strokeColor=#B85550;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=none;endArrow=open;startFill=1;endFill=1;startSize=12;endSize=11;dashed=0;exitX=0.25;exitY=0.75;entryX=0.5;entryY=0;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;exitPerimeter=0;entryPerimeter=0;" edge="1" parent="1" source="bounds" target="boundary-result" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="485" y="460.88286713286715" />
+              <mxPoint x="250" y="460.88286713286715" />
+            </Array>
+            <mxPoint x="0" y="-17.744755244755247" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="safe-no" value="[否]" style="edgeStyle=none;rounded=0;html=1;strokeColor=#B85550;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=none;endArrow=open;startFill=1;endFill=1;startSize=12;endSize=11;dashed=0;exitX=0.25;exitY=0.75;entryX=0.5;entryY=0;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;exitPerimeter=0;entryPerimeter=0;" edge="1" parent="1" source="safe" target="wait" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1150" y="446.94055944055947" />
+              <mxPoint x="587.5" y="446.94055944055947" />
+            </Array>
+            <mxPoint x="0" y="-17.744755244755247" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="safe-yes" value="[是]" style="edgeStyle=none;rounded=0;html=1;strokeColor=#167C77;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=none;endArrow=open;startFill=1;endFill=1;startSize=12;endSize=11;dashed=0;exitX=0.5;exitY=1;entryX=0.5;entryY=0;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;" edge="1" parent="1" source="safe" target="version" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="30" y="0.0" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="version-yes" value="[是]" style="edgeStyle=none;rounded=0;html=1;strokeColor=#167C77;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=none;endArrow=open;startFill=1;endFill=1;startSize=12;endSize=11;dashed=0;exitX=0;exitY=0.5;entryX=1;entryY=0.5;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;" edge="1" parent="1" source="version" target="commit" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="version-no" value="" style="edgeStyle=none;rounded=0;html=1;strokeColor=#B85550;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=none;endArrow=open;startFill=1;endFill=1;startSize=12;endSize=11;dashed=0;exitX=1;exitY=0.5;entryX=0.5;entryY=0;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;" edge="1" parent="1" source="version" target="snapshot" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1500" y="644.6678321678322" />
+              <mxPoint x="1500" y="182.03671328671328" />
+              <mxPoint x="285" y="182.03671328671328" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="retry-snapshot" value="[版本已变] 重新读取快照，再检查申请边界。" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=22;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#B85550;" vertex="1" parent="1" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="610" y="125.0" width="770" height="45.62937062937063" as="geometry" />
+        </mxCell>
+        <mxCell id="reject-end" value="" style="shape=ellipse;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#B85550;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="1" data-role="neutral" data-uml-kind="activity-final">
+          <mxGeometry x="232" y="809.1853146853147" width="36" height="36.0" as="geometry" />
+        </mxCell>
+        <mxCell id="reject-end-dot" value="" style="shape=ellipse;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=#B85550;strokeColor=#B85550;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="1" data-role="neutral" data-uml-kind="decoration">
+          <mxGeometry x="240" y="817.1853146853147" width="20" height="20.0" as="geometry" />
+        </mxCell>
+        <mxCell id="reject-end-edge" value="" style="edgeStyle=none;rounded=0;html=1;strokeColor=#B85550;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=none;endArrow=open;startFill=1;endFill=1;startSize=12;endSize=11;dashed=0;exitX=0.5;exitY=1;entryX=0.5;entryY=0;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;" edge="1" parent="1" source="boundary-result" target="reject-end" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="wait-end" value="" style="shape=ellipse;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#B85550;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="1" data-role="neutral" data-uml-kind="activity-final">
+          <mxGeometry x="569.5" y="809.1853146853147" width="36" height="36.0" as="geometry" />
+        </mxCell>
+        <mxCell id="wait-end-dot" value="" style="shape=ellipse;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=#B85550;strokeColor=#B85550;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="1" data-role="neutral" data-uml-kind="decoration">
+          <mxGeometry x="577.5" y="817.1853146853147" width="20" height="20.0" as="geometry" />
+        </mxCell>
+        <mxCell id="wait-end-edge" value="" style="edgeStyle=none;rounded=0;html=1;strokeColor=#B85550;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=none;endArrow=open;startFill=1;endFill=1;startSize=12;endSize=11;dashed=0;exitX=0.5;exitY=1;entryX=0.5;entryY=0;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;" edge="1" parent="1" source="wait" target="wait-end" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="grant-end" value="" style="shape=ellipse;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#167C77;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="1" data-role="neutral" data-uml-kind="activity-final">
+          <mxGeometry x="917" y="809.1853146853147" width="36" height="36.0" as="geometry" />
+        </mxCell>
+        <mxCell id="grant-end-dot" value="" style="shape=ellipse;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=#167C77;strokeColor=#167C77;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="1" data-role="neutral" data-uml-kind="decoration">
+          <mxGeometry x="925" y="817.1853146853147" width="20" height="20.0" as="geometry" />
+        </mxCell>
+        <mxCell id="grant-end-edge" value="" style="edgeStyle=none;rounded=0;html=1;strokeColor=#167C77;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=none;endArrow=open;startFill=1;endFill=1;startSize=12;endSize=11;dashed=0;exitX=0.5;exitY=1;entryX=0.5;entryY=0;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;" edge="1" parent="1" source="commit" target="grant-end" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

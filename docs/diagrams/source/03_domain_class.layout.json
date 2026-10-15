@@ -1,0 +1,305 @@
+{
+  "key": "03_domain_class",
+  "width": 1950,
+  "height": 1430,
+  "shapes": [
+    {
+      "id": "Task",
+      "x": 70,
+      "y": 60,
+      "w": 380,
+      "h": 245,
+      "kind": "class",
+      "fill": "#EEEDF9",
+      "label": "用户任务\nTask"
+    },
+    {
+      "id": "Agent",
+      "x": 70,
+      "y": 450,
+      "w": 430,
+      "h": 225,
+      "kind": "class",
+      "fill": "#EEEDF9",
+      "label": "逻辑执行者\nAgentExecution"
+    },
+    {
+      "id": "Step",
+      "x": 670,
+      "y": 260,
+      "w": 460,
+      "h": 280,
+      "kind": "class",
+      "fill": "#EEEDF9",
+      "label": "执行步骤\nStep {abstract}"
+    },
+    {
+      "id": "Attempt",
+      "x": 1380,
+      "y": 240,
+      "w": 450,
+      "h": 315,
+      "kind": "class",
+      "fill": "#F5F7FA",
+      "label": "执行尝试\nAttempt"
+    },
+    {
+      "id": "Model",
+      "x": 515,
+      "y": 795,
+      "w": 405,
+      "h": 245,
+      "kind": "class",
+      "fill": "#EAF3FC",
+      "label": "模型步骤\nModelStep"
+    },
+    {
+      "id": "Tool",
+      "x": 1010,
+      "y": 795,
+      "w": 435,
+      "h": 245,
+      "kind": "class",
+      "fill": "#EBF6F2",
+      "label": "工具步骤\nToolStep"
+    },
+    {
+      "id": "Artifact",
+      "x": 1520,
+      "y": 870,
+      "w": 385,
+      "h": 270,
+      "kind": "class",
+      "fill": "#F5F7FA",
+      "label": "结果产物\nArtifact"
+    },
+    {
+      "id": "Claim",
+      "x": 1010,
+      "y": 1170,
+      "w": 435,
+      "h": 245,
+      "kind": "class",
+      "fill": "#EBF6F2",
+      "label": "阶段资源声明\nStageClaim"
+    }
+  ],
+  "edges": [
+    {
+      "source": "Task",
+      "target": "Agent",
+      "points": [
+        [
+          260,
+          305
+        ],
+        [
+          260,
+          450
+        ]
+      ],
+      "label": "包含",
+      "lx": 310,
+      "ly": 390,
+      "kind": "composition",
+      "ms": "1",
+      "mt": "0..*"
+    },
+    {
+      "source": "Task",
+      "target": "Step",
+      "points": [
+        [
+          450,
+          185
+        ],
+        [
+          570,
+          185
+        ],
+        [
+          570,
+          340
+        ],
+        [
+          670,
+          340
+        ]
+      ],
+      "label": "包含",
+      "lx": 585,
+      "ly": 224,
+      "kind": "composition",
+      "ms": "1",
+      "mt": "0..*"
+    },
+    {
+      "source": "Agent",
+      "target": "Step",
+      "points": [
+        [
+          500,
+          565
+        ],
+        [
+          600,
+          565
+        ],
+        [
+          600,
+          455
+        ],
+        [
+          670,
+          455
+        ]
+      ],
+      "label": "负责推进",
+      "lx": 520,
+      "ly": 430,
+      "kind": "assoc",
+      "ms": "1",
+      "mt": "0..*"
+    },
+    {
+      "source": "Step",
+      "target": "Attempt",
+      "points": [
+        [
+          1130,
+          380
+        ],
+        [
+          1380,
+          380
+        ]
+      ],
+      "label": "尝试历史",
+      "lx": 1260,
+      "ly": 347,
+      "kind": "composition",
+      "ms": "1",
+      "mt": "0..*"
+    },
+    {
+      "source": "Model",
+      "target": "Step",
+      "points": [
+        [
+          717,
+          795
+        ],
+        [
+          717,
+          665
+        ],
+        [
+          830,
+          665
+        ],
+        [
+          830,
+          540
+        ]
+      ],
+      "label": "",
+      "lx": null,
+      "ly": null,
+      "kind": "inherit",
+      "ms": "",
+      "mt": ""
+    },
+    {
+      "source": "Tool",
+      "target": "Step",
+      "points": [
+        [
+          1227,
+          795
+        ],
+        [
+          1227,
+          625
+        ],
+        [
+          960,
+          625
+        ],
+        [
+          960,
+          540
+        ]
+      ],
+      "label": "",
+      "lx": null,
+      "ly": null,
+      "kind": "inherit",
+      "ms": "",
+      "mt": ""
+    },
+    {
+      "source": "Attempt",
+      "target": "Artifact",
+      "points": [
+        [
+          1605,
+          555
+        ],
+        [
+          1605,
+          705
+        ],
+        [
+          1712,
+          705
+        ],
+        [
+          1712,
+          870
+        ]
+      ],
+      "label": "产生",
+      "lx": 1695,
+      "ly": 672,
+      "kind": "direct",
+      "ms": "1",
+      "mt": "0..*"
+    },
+    {
+      "source": "Attempt",
+      "target": "Claim",
+      "points": [
+        [
+          1440,
+          555
+        ],
+        [
+          1440,
+          675
+        ],
+        [
+          1470,
+          675
+        ],
+        [
+          1470,
+          1120
+        ],
+        [
+          1227,
+          1120
+        ],
+        [
+          1227,
+          1170
+        ]
+      ],
+      "label": "工具尝试的阶段",
+      "lx": 1318,
+      "ly": 1090,
+      "kind": "composition",
+      "ms": "1",
+      "mt": "0..*"
+    }
+  ]
+}

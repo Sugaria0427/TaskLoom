@@ -1,0 +1,270 @@
+[
+  {
+    "query": "AI crawlers",
+    "source": "HN Algolia discovery only",
+    "status": 200,
+    "results": [
+      {
+        "title": "Nepenthes is a tarpit to catch AI web crawlers",
+        "url": "https://zadzmo.org/code/nepenthes/",
+        "created_at": "2025-01-16T13:57:43Z"
+      },
+      {
+        "title": "Amazon's AI crawler is making my Git server unstable",
+        "url": "https://xeiaso.net/notes/2025/amazon-crawler/",
+        "created_at": "2025-01-18T18:48:51Z"
+      },
+      {
+        "title": "Devs say AI crawlers dominate traffic, forcing blocks on entire countries",
+        "url": "https://arstechnica.com/ai/2025/03/devs-say-ai-crawlers-dominate-traffic-forcing-blocks-on-entire-countries/",
+        "created_at": "2025-03-25T21:42:37Z"
+      },
+      {
+        "title": "AI crawlers, fetchers are blowing up websites; Meta, OpenAI are worst offenders",
+        "url": "https://www.theregister.com/2025/08/21/ai_crawler_traffic/",
+        "created_at": "2025-08-21T11:35:22Z"
+      },
+      {
+        "title": "AI crawlers need to be more respectful",
+        "url": "https://about.readthedocs.com/blog/2024/07/ai-crawlers-abuse/",
+        "created_at": "2024-07-25T19:39:46Z"
+      },
+      {
+        "title": "AI web crawlers are destroying websites in their never-ending content hunger",
+        "url": "https://www.theregister.com/2025/08/29/ai_web_crawlers_are_destroying/",
+        "created_at": "2025-09-02T16:24:44Z"
+      },
+      {
+        "title": "How I protect my Forgejo instance from AI web crawlers",
+        "url": "https://her.esy.fun/posts/0031-how-i-protect-my-forgejo-instance-from-ai-web-crawlers/index.html",
+        "created_at": "2025-12-21T14:46:53Z"
+      },
+      {
+        "title": "It seems like the AI crawlers learned how to solve the Anubis challenges",
+        "url": "https://social.anoxinon.de/@Codeberg/115033790447125787",
+        "created_at": "2025-08-15T17:01:40Z"
+      },
+      {
+        "title": "Anubis: Proof-of-work proxy to prevent AI crawlers",
+        "url": "https://anubis.techaro.lol/",
+        "created_at": "2025-03-20T19:16:22Z"
+      },
+      {
+        "title": "Nearly 90% of our AI crawler traffic is from ByteDance",
+        "url": "https://www.haproxy.com/blog/nearly-90-of-our-ai-crawler-traffic-is-from-tiktok-parent-bytedance-lessons-learned",
+        "created_at": "2024-10-31T18:09:18Z"
+      },
+      {
+        "title": "Wikipedia is struggling with voracious AI bot crawlers",
+        "url": "https://www.engadget.com/ai/wikipedia-is-struggling-with-voracious-ai-bot-crawlers-121546854.html",
+        "created_at": "2025-04-02T12:28:04Z"
+      },
+      {
+        "title": "With the rise of AI, web crawlers are suddenly controversial",
+        "url": "https://www.theverge.com/24067997/robots-txt-ai-text-file-web-crawlers-spiders",
+        "created_at": "2024-02-18T17:14:21Z"
+      },
+      {
+        "title": "AI crawlers haven't learned to play nice with websites",
+        "url": "https://www.theregister.com/2025/03/18/ai_crawlers_sourcehut/",
+        "created_at": "2025-03-18T12:53:00Z"
+      },
+      {
+        "title": "Proof-of-work to protect lore.kernel.org and git.kernel.org against AI crawlers",
+        "url": "https://social.kernel.org/notice/AsgziNL6zgmdbta3lY",
+        "created_at": "2025-04-02T21:59:25Z"
+      },
+      {
+        "title": "Only 8.9% of sites block AI crawlers, but 94.8% are never cited in AI answers",
+        "url": "https://website-auditor.io/ai-visibility-index",
+        "created_at": "2026-08-02T11:53:52Z"
+      }
+    ]
+  },
+  {
+    "query": "AI scrapers",
+    "source": "HN Algolia discovery only",
+    "status": 200,
+    "results": [
+      {
+        "title": "We can't have nice things because of AI scrapers",
+        "url": "https://blog.metabrainz.org/2025/12/11/we-cant-have-nice-things-because-of-ai-scrapers/",
+        "created_at": "2026-01-13T21:57:32Z"
+      },
+      {
+        "title": "Show HN: Stop AI scrapers from hammering your self-hosted blog (using porn)",
+        "url": "https://github.com/vivienhenz24/fuzzy-canary",
+        "created_at": "2025-12-16T20:42:38Z"
+      },
+      {
+        "title": "Miasma: A tool to trap AI web scrapers in an endless poison pit",
+        "url": "https://github.com/austin-weeks/miasma",
+        "created_at": "2026-03-29T10:10:12Z"
+      },
+      {
+        "title": "AI scrapers request commented scripts",
+        "url": "https://cryptography.dog/blog/AI-scrapers-request-commented-scripts/",
+        "created_at": "2025-10-31T15:44:19Z"
+      },
+      {
+        "title": "Guarding My Git Forge Against AI Scrapers",
+        "url": "https://vulpinecitrus.info/blog/guarding-git-forge-ai-scrapers/",
+        "created_at": "2025-12-12T07:51:04Z"
+      },
+      {
+        "title": "Gentoo bugzilla closed due AI bot scraper overload",
+        "url": "https://social.treehouse.systems/@mgorny/117058483039362779",
+        "created_at": "2026-08-08T13:55:42Z"
+      },
+      {
+        "title": "Show HN: I'm making an AI scraper called FetchFox",
+        "url": "https://fetchfoxai.com/",
+        "created_at": "2024-09-03T23:50:13Z"
+      },
+      {
+        "title": "Block AI bots, scrapers and crawlers with a single click",
+        "url": "https://blog.cloudflare.com/declaring-your-aindependence-block-ai-bots-scrapers-and-crawlers-with-a-single-click",
+        "created_at": "2024-07-03T13:10:31Z"
+      },
+      {
+        "title": "AI haters build tarpits to trap and trick AI scrapers that ignore robots.txt",
+        "url": "https://arstechnica.com/tech-policy/2025/01/ai-haters-build-tarpits-to-trap-and-trick-ai-scrapers-that-ignore-robots-txt/",
+        "created_at": "2025-01-28T22:18:39Z"
+      },
+      {
+        "title": "Block AI Scrapers with Anubis proof-of-work",
+        "url": "https://xeiaso.net/blog/2025/anubis/",
+        "created_at": "2025-03-20T13:22:29Z"
+      },
+      {
+        "title": "Cloudflare adds option to block AI scrapers and crawlers",
+        "url": "https://front-end.social/@chriscoyier/112688532313287480",
+        "created_at": "2024-06-27T19:38:21Z"
+      },
+      {
+        "title": "Stopping AI scrapers from taking down my server",
+        "url": "https://jade.ellis.link/blog/2025/05/18/actually-stopping-forgejo-ai-scraping",
+        "created_at": "2025-05-26T09:32:08Z"
+      },
+      {
+        "title": "LWN sluggish due to DDoS onslaughts from AI-scraper bots",
+        "url": "https://social.kernel.org/notice/AqJkUigsjad3gQc664",
+        "created_at": "2025-01-22T07:59:08Z"
+      },
+      {
+        "title": "Aggressive AI scrapers are making it kinda suck to run wikis",
+        "url": "https://weirdgloop.org/blog/clankers",
+        "created_at": "2026-03-13T16:19:54Z"
+      },
+      {
+        "title": "Artists can poison their pics with deadly Nightshade to deter AI scrapers",
+        "url": "https://www.theregister.com/2024/01/20/nightshade_ai_images/",
+        "created_at": "2024-01-21T16:43:18Z"
+      }
+    ]
+  },
+  {
+    "query": "ClaudeBot traffic",
+    "source": "HN Algolia discovery only",
+    "status": 200,
+    "results": [
+      {
+        "title": "Show HN: I indexed 8,643 BSides talks across 227 chapters and 6 continents",
+        "url": "https://allbsides.com/",
+        "created_at": "2026-05-04T22:10:21Z"
+      },
+      {
+        "title": "Reddit and Perplexity got us leads faster than Google ever did",
+        "url": null,
+        "created_at": "2025-07-30T18:15:35Z"
+      },
+      {
+        "title": "My website gets more attacks than human visitors",
+        "url": null,
+        "created_at": "2026-06-25T18:35:31Z"
+      }
+    ]
+  },
+  {
+    "query": "LLM crawler",
+    "source": "HN Algolia discovery only",
+    "status": 200,
+    "results": [
+      {
+        "title": "Blocking LLM crawlers without JavaScript",
+        "url": "https://www.owl.is/blogg/blocking-crawlers-without-javascript/",
+        "created_at": "2025-11-15T23:30:04Z"
+      },
+      {
+        "title": "LLM crawlers continue to DDoS Sourcehut",
+        "url": "https://status.sr.ht/issues/2025-03-17-git.sr.ht-llms/",
+        "created_at": "2025-03-17T11:11:21Z"
+      },
+      {
+        "title": "LLM crawlers continue to DDoS Sourcehut",
+        "url": "https://status.sr.ht/issues/2025-03-17-git.sr.ht-llms/",
+        "created_at": "2025-03-18T05:21:35Z"
+      },
+      {
+        "title": "SourceHut Disrupted by LLM Crawlers",
+        "url": "https://status.sr.ht/issues/2026-06-06-llms-again/",
+        "created_at": "2026-06-07T09:19:23Z"
+      },
+      {
+        "title": "Sourcehut Disrupted by LLM Crawlers",
+        "url": "https://status.sr.ht/issues/2026-06-06-llms-again/",
+        "created_at": "2026-06-18T12:33:19Z"
+      },
+      {
+        "title": "Git.sr.ht is being disrupted by aggressive LLM crawlers",
+        "url": "https://status.sr.ht/",
+        "created_at": "2026-08-17T09:01:40Z"
+      },
+      {
+        "title": "Show HN: Tokoro – open, signed event protocol with LLM crawler",
+        "url": "https://github.com/robertoranon/tokoro",
+        "created_at": "2026-05-19T10:47:46Z"
+      },
+      {
+        "title": "Built a tiny edge-based tracker for AI/LLM crawlers on my Astro blog",
+        "url": "https://xergioalex.com/blog/tracking-invisible-ai-bot-analytics/",
+        "created_at": "2026-03-05T02:26:23Z"
+      },
+      {
+        "title": "Ask HN: Is there a robots.txt equivalent for LLMs? like LICENSEME.txt?",
+        "url": null,
+        "created_at": "2024-03-08T13:54:08Z"
+      },
+      {
+        "title": "Show HN: Llms.md – a README.md for LLM-powered coding agents",
+        "url": null,
+        "created_at": "2025-08-31T18:01:33Z"
+      },
+      {
+        "title": "LLM Honeypots?",
+        "url": null,
+        "created_at": "2024-04-27T20:16:26Z"
+      },
+      {
+        "title": "Is anyone seeing results from LLMSTXT files, or is it just hype?",
+        "url": null,
+        "created_at": "2025-05-30T14:59:36Z"
+      },
+      {
+        "title": "Crawl4AI is an open-source, LLM-friendly web crawler and scraper",
+        "url": "https://github.com/unclecode/crawl4ai",
+        "created_at": "2025-04-29T01:49:19Z"
+      },
+      {
+        "title": "Using web crawlers and LLM agents to build a structured restaurant DBs",
+        "url": "https://phasellm.com/tutorial-structured-data-web-crawls",
+        "created_at": "2023-07-21T19:46:43Z"
+      },
+      {
+        "title": "Spyper: E-Commerce Crawler Using LLM for Competitor Insights",
+        "url": "https://spyper.ai/",
+        "created_at": "2023-10-12T09:01:07Z"
+      }
+    ]
+  }
+]

@@ -1,0 +1,61 @@
+{
+  "date": "2026-10-14",
+  "original_sources": 173,
+  "reused_os_sources": 4,
+  "current_sources": 177,
+  "themes": 16,
+  "reports_before": 7,
+  "reports_after": 3,
+  "original_file_count": 607,
+  "moved_evidence_files": 460,
+  "historical_snapshot_files": 147,
+  "external_link_updates": [
+    {
+      "path": "docs/references/final_citation_audit.md",
+      "change": "local reference targets only",
+      "backup": "materials/_archive/external_link_backups/docs/references/final_citation_audit.md"
+    },
+    {
+      "path": "docs/references/references_verified.json",
+      "change": "local reference targets only",
+      "backup": "materials/_archive/external_link_backups/docs/references/references_verified.json"
+    },
+    {
+      "path": "docs/references/source_selection.md",
+      "change": "local reference targets only",
+      "backup": "materials/_archive/external_link_backups/docs/references/source_selection.md"
+    },
+    {
+      "path": "docs/reviews/TaskLoom_PPT_20260930/审查意见.md",
+      "change": "local reference targets only",
+      "backup": "materials/_archive/external_link_backups/docs/reviews/TaskLoom_PPT_20260930/审查意见.md"
+    },
+    {
+      "path": "docs/TaskLoom_项目说明书_分层清晰版.md",
+      "change": "local reference targets only",
+      "backup": "materials/_archive/external_link_backups/docs/TaskLoom_项目说明书_分层清晰版.md"
+    }
+  ],
+  "layer_source_counts": {
+    "L1": 40,
+    "L2": 62,
+    "L3": 30,
+    "L4": 15
+  },
+  "scope_counts": {
+    "CORE": 113,
+    "ADJACENT": 15,
+    "METHOD": 18,
+    "BACKGROUND": 23,
+    "EXCLUDED": 2,
+    "ACCESS_FAILED": 6
+  },
+  "openclaw_supplement": {
+    "date": "2026-10-14",
+    "sources_added": 72,
+    "current_sources": 249,
+    "issues": 16,
+    "chapter": "reports/02_solutions_and_integration.md#5",
+    "report_count": 3
+  }
+}

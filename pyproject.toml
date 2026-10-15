@@ -1,0 +1,73 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "taskloom"
+version = "0.2.0"
+description = "Unified Agent client and account-based model service platform."
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "fastapi>=0.115,<1",
+  "httpx>=0.28,<1",
+  "pydantic>=2.10,<3",
+  "uvicorn>=0.34,<1",
+]
+
+[project.scripts]
+taskloom = "taskloom.cli:main"
+
+[dependency-groups]
+dev = [
+  "hatchling>=1.27,<2",
+  "import-linter>=2.3,<3",
+  "mypy>=1.15,<2",
+  "pytest>=8.3,<10",
+  "pytest-asyncio>=0.25,<2",
+  "ruff>=0.11,<1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/taskloom"]
+
+[tool.hatch.build.targets.sdist]
+include = ["/src", "/tests", "/tools", "/configs", "/pyproject.toml", "/uv.lock", "/README.md", "/AGENTS.md", "/.python-version"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["src/taskloom"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = ["linux: requires delegated cgroup or Linux daemon features"]
+
+[tool.importlinter]
+root_package = "taskloom"
+
+[[tool.importlinter.contracts]]
+name = "Domain and policies remain independent of services and adapters"
+type = "forbidden"
+source_modules = ["taskloom.domain", "taskloom.policies"]
+forbidden_modules = ["taskloom.client", "taskloom.gateway", "taskloom.execution", "taskloom.adapters", "taskloom.bootstrap", "taskloom.runtime", "taskloom.contracts"]
+
+[[tool.importlinter.contracts]]
+name = "Business modules use ports, not concrete adapters or composition roots"
+type = "forbidden"
+source_modules = ["taskloom.client", "taskloom.gateway", "taskloom.runtime"]
+forbidden_modules = ["taskloom.adapters", "taskloom.bootstrap"]
+
+[[tool.importlinter.contracts]]
+name = "Client and platform are separate services"
+type = "independence"
+modules = ["taskloom.client", "taskloom.gateway"]

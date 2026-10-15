@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2130" height="1410" viewBox="0 0 2130 1410"><title>TaskLoom 用例图</title><desc>明确用户目标与系统边界。连线表示参与关系，不代表调用顺序；工具与模型并非每个任务都必须调用。</desc><rect width="2130" height="1410" fill="#FCFDFE"/><rect x="42" y="36" width="5" height="102" rx="2" fill="#416C82"/><text x="65" y="58" font-family="Microsoft YaHei, sans-serif" font-size="18" font-weight="650" fill="#607B8E">TASKLOOM  /  SYSTEM MODELING</text><text x="65" y="108" font-family="Microsoft YaHei, sans-serif" font-size="37" font-weight="650" fill="#203144">用例图</text><text x="65" y="145" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#526C7D">明确用户目标与系统边界</text><text x="2065" y="69" text-anchor="end" font-family="Arial,sans-serif" font-size="35" font-weight="700" fill="#ADBFCC">01</text><text x="2065" y="106" text-anchor="end" font-family="Arial,sans-serif" font-size="17" fill="#607B8E">USE CASE</text><g transform="translate(65,180)">
+<defs><marker id="open" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M1,1 L10,6 L1,11" fill="none" stroke="#536779" stroke-width="1.5"/></marker><marker id="triangle" markerWidth="15" markerHeight="15" refX="13" refY="7.5" orient="auto"><path d="M1,1 L13,7.5 L1,14 Z" fill="white" stroke="#536779" stroke-width="1.4"/></marker><marker id="diamond" markerWidth="16" markerHeight="12" refX="1" refY="6" orient="auto"><path d="M1,6 L8,1 L15,6 L8,11 Z" fill="#536779"/></marker></defs>
+<rect x="430" y="35" width="1110" height="1020" rx="6" fill="#FAFCFE" stroke="#BCC9D4" stroke-width="1.5"/>
+<text x="455" y="73.0" font-family="Microsoft YaHei, sans-serif" font-size="25" font-weight="600" fill="#203144" text-anchor="start">TaskLoom 系统边界：个人端 ＋ 应用平台</text>
+<g fill="none" stroke="#536779" stroke-width="2.5"><circle cx="170.0" cy="422" r="15"/><path d="M170.0,437 V483 M140.0,454 H200.0 M170.0,483 L145.0,519 M170.0,483 L195.0,519"/></g>
+<text x="170.0" y="556.0" font-family="Microsoft YaHei, sans-serif" font-size="23" font-weight="400" fill="#203144" text-anchor="middle">项目用户</text>
+<g fill="none" stroke="#536779" stroke-width="2.5"><circle cx="1815.0" cy="782" r="15"/><path d="M1815.0,797 V843 M1785.0,814 H1845.0 M1815.0,843 L1790.0,879 M1815.0,843 L1840.0,879"/></g>
+<text x="1815.0" y="916.0" font-family="Microsoft YaHei, sans-serif" font-size="23" font-weight="400" fill="#203144" text-anchor="middle">平台管理员／实验人员</text>
+<g fill="none" stroke="#536779" stroke-width="2.5"><circle cx="1815.0" cy="107" r="15"/><path d="M1815.0,122 V168 M1785.0,139 H1845.0 M1815.0,168 L1790.0,204 M1815.0,168 L1840.0,204"/></g>
+<text x="1815.0" y="241.0" font-family="Microsoft YaHei, sans-serif" font-size="23" font-weight="400" fill="#203144" text-anchor="middle">固定模型 API 服务</text>
+<g fill="none" stroke="#536779" stroke-width="2.5"><circle cx="1815.0" cy="367" r="15"/><path d="M1815.0,382 V428 M1785.0,399 H1845.0 M1815.0,428 L1790.0,464 M1815.0,428 L1840.0,464"/></g>
+<text x="1815.0" y="501.0" font-family="Microsoft YaHei, sans-serif" font-size="23" font-weight="400" fill="#203144" text-anchor="middle">受控工具程序</text>
+<ellipse cx="717.5" cy="200.0" rx="217.5" ry="55.0" fill="#EAF3FC" stroke="#91A8BB" stroke-width="1.6"/>
+<text x="717.5" y="192.0" font-family="Microsoft YaHei, sans-serif" font-size="25" font-weight="400" fill="#203144" text-anchor="middle">提交并运行</text>
+<text x="717.5" y="226.5" font-family="Microsoft YaHei, sans-serif" font-size="25" font-weight="400" fill="#203144" text-anchor="middle">Agent 任务</text>
+<ellipse cx="717.5" cy="385.0" rx="217.5" ry="55.0" fill="#EAF3FC" stroke="#91A8BB" stroke-width="1.6"/>
+<text x="717.5" y="377.0" font-family="Microsoft YaHei, sans-serif" font-size="25" font-weight="400" fill="#203144" text-anchor="middle">查看任务进度</text>
+<text x="717.5" y="411.5" font-family="Microsoft YaHei, sans-serif" font-size="25" font-weight="400" fill="#203144" text-anchor="middle">与等待原因</text>
+<ellipse cx="717.5" cy="570.0" rx="217.5" ry="55.0" fill="#EAF3FC" stroke="#91A8BB" stroke-width="1.6"/>
+<text x="717.5" y="578.0" font-family="Microsoft YaHei, sans-serif" font-size="25" font-weight="400" fill="#203144" text-anchor="middle">取消任务</text>
+<ellipse cx="717.5" cy="755.0" rx="217.5" ry="55.0" fill="#EAF3FC" stroke="#91A8BB" stroke-width="1.6"/>
+<text x="717.5" y="763.0" font-family="Microsoft YaHei, sans-serif" font-size="25" font-weight="400" fill="#203144" text-anchor="middle">恢复可继续的任务</text>
+<ellipse cx="717.5" cy="940.0" rx="217.5" ry="55.0" fill="#EAF3FC" stroke="#91A8BB" stroke-width="1.6"/>
+<text x="717.5" y="932.0" font-family="Microsoft YaHei, sans-serif" font-size="25" font-weight="400" fill="#203144" text-anchor="middle">查看与导出</text>
+<text x="717.5" y="966.5" font-family="Microsoft YaHei, sans-serif" font-size="25" font-weight="400" fill="#203144" text-anchor="middle">已确认的结果</text>
+<ellipse cx="1260.0" cy="735.0" rx="220.0" ry="55.0" fill="#FBF2E1" stroke="#91A8BB" stroke-width="1.6"/>
+<text x="1260.0" y="743.0" font-family="Microsoft YaHei, sans-serif" font-size="25" font-weight="400" fill="#203144" text-anchor="middle">配置资源与额度策略</text>
+<ellipse cx="1260.0" cy="955.0" rx="220.0" ry="55.0" fill="#FBF2E1" stroke="#91A8BB" stroke-width="1.6"/>
+<text x="1260.0" y="947.0" font-family="Microsoft YaHei, sans-serif" font-size="25" font-weight="400" fill="#203144" text-anchor="middle">运行策略对照</text>
+<text x="1260.0" y="981.5" font-family="Microsoft YaHei, sans-serif" font-size="25" font-weight="400" fill="#203144" text-anchor="middle">与故障实验</text>
+<polyline points="205,455 370,200 500,200" fill="none" stroke="#536779" stroke-width="1.7"/>
+<polyline points="205,455 370,385 500,385" fill="none" stroke="#536779" stroke-width="1.7"/>
+<polyline points="205,455 370,570 500,570" fill="none" stroke="#536779" stroke-width="1.7"/>
+<polyline points="205,455 370,755 500,755" fill="none" stroke="#536779" stroke-width="1.7"/>
+<polyline points="205,455 370,940 500,940" fill="none" stroke="#536779" stroke-width="1.7"/>
+<polyline points="1780,815 1630,735 1480,735" fill="none" stroke="#536779" stroke-width="1.7"/>
+<polyline points="1780,835 1630,955 1480,955" fill="none" stroke="#536779" stroke-width="1.7"/>
+<polyline points="935,180 1630,180 1780,140" fill="none" stroke="#536779" stroke-width="1.7"/>
+<polyline points="935,218 1650,218 1650,400 1780,400" fill="none" stroke="#536779" stroke-width="1.7"/>
+</g><line x1="65" y1="1319" x2="2065" y2="1319" stroke="#D4DEE6"/><text x="65" y="1355" font-family="Microsoft YaHei, sans-serif" font-size="20" font-weight="400" fill="#526C7D">连线表示参与关系，不代表调用顺序；工具与模型并非每个任务都必须调用。</text><text x="2065" y="1386" text-anchor="end" font-family="Arial,sans-serif" font-size="15" fill="#899DAA">PROPOSED DESIGN  ·  v1.1  ·  2026-09-29</text></svg>

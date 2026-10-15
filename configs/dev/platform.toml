@@ -1,0 +1,9 @@
+pool_url = "http://127.0.0.1:8797"
+pool_kind = "simulated"
+model = "taskloom-fixed-model"
+pool_capacity = 2
+account_max_inflight = 1
+account_budget_units = 250000
+requests_per_window = 120
+tokens_per_window = 100000
+total_budget_units = 1000000

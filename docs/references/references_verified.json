@@ -1,0 +1,796 @@
+{
+  "purpose": "TaskLoom「织序」开题引用核验，不是已完成实验报告",
+  "selection_count": 26,
+  "numbering_policy": "selection_key仅作选材映射；最终主报告采用数字编号并按资料类别编排，29条映射见final_citation_audit.md",
+  "snapshot_date": "2026-09-29",
+  "references": [
+    {
+      "selection_key": "AIOS",
+      "final_reference_number": null,
+      "title": "AIOS: LLM Agent Operating System",
+      "authors": [
+        "Kai Mei",
+        "Xi Zhu",
+        "Wujiang Xu",
+        "Wenyue Hua",
+        "Mingyu Jin",
+        "Zelong Li",
+        "Shuyuan Xu",
+        "Ruosong Ye",
+        "Yingqiang Ge",
+        "Yongfeng Zhang"
+      ],
+      "organization": null,
+      "year": 2025,
+      "year_note": "v1为2024；引用所读v5为2025。作者序按2026-09-29补核arXiv citation元数据，正文HTML的Hua/Jin次序不同。",
+      "venue_or_publisher": "arXiv v5；arXiv comments声明发表于COLM 2025",
+      "identifier": "arXiv:2403.16971v5",
+      "url": "https://arxiv.org/abs/2403.16971v5",
+      "accessed": "2026-09-29",
+      "source_type": "academic_paper",
+      "supported_proposition": "已有Agent kernel/SDK、FIFO/RR及工具并发控制；TaskLoom不能宣称首次引入OS机制。",
+      "limitations": "arXiv元数据声明COLM，本轮未核正式会场页；效率条件含本地模型/高并发，不可把2.1倍当课设预期。",
+      "read_scope": "正文相关段落已核；未独立复现实验",
+      "local_material_paths": [
+        "E:/Project/OS-Project/research/agent-orchestrate/materials/L2_harness_tasks/P18/P18_raw.html",
+        "E:/Project/OS-Project/research/agent-orchestrate/materials/L2_harness_tasks/P18/P18_text.txt"
+      ],
+      "independently_reproduced": false,
+      "local_materials_exist": true,
+      "author_verification": "论文按原始书目/元数据核验；官方页无个人署名则authors留空，以organization标识发布者；issue不虚构真实姓名"
+    },
+    {
+      "selection_key": "LLMCOMPILER",
+      "final_reference_number": null,
+      "title": "An LLM Compiler for Parallel Function Calling",
+      "authors": [
+        "Sehoon Kim",
+        "Suhong Moon",
+        "Ryan Tabrizi",
+        "Nicholas Lee",
+        "Michael W. Mahoney",
+        "Kurt Keutzer",
+        "Amir Gholami"
+      ],
+      "organization": null,
+      "year": 2024,
+      "year_note": null,
+      "venue_or_publisher": "ICML 2024; PMLR 235:24370–24391",
+      "identifier": "PMLR v235/kim24y",
+      "url": "https://proceedings.mlr.press/v235/kim24y.html",
+      "accessed": "2026-09-29",
+      "source_type": "conference_paper",
+      "supported_proposition": "函数调用规划、任务获取与并行执行已有系统；依赖正确和可并行性属于既有基础。",
+      "limitations": "只据正式页摘要可支持三个组件和并行函数调用；资源有界、取消、配额联合控制不可从摘要推出；论文倍率不移植。",
+      "read_scope": "本次复核PMLR正式书目和摘要；旧库有全文提取，未在本次逐节复核",
+      "local_material_paths": [
+        "E:/Project/OS-Project/research/materials/web/2026-09-27/llmcompiler_pmlr.txt",
+        "E:/Project/OS-Project/research/materials/extracted/2026-09-27/llmcompiler.txt"
+      ],
+      "independently_reproduced": false,
+      "local_materials_exist": true,
+      "author_verification": "论文按原始书目/元数据核验；官方页无个人署名则authors留空，以organization标识发布者；issue不虚构真实姓名"
+    },
+    {
+      "selection_key": "PEAKBENCH",
+      "final_reference_number": null,
+      "title": "PeakBench: Benchmarking Resource-Aware Tool Invocation in LLM Agents",
+      "authors": [
+        "Zhi-Kai Chen",
+        "Xu-Xiang Zhong",
+        "Song-Yan Li",
+        "De-Chuan Zhan",
+        "Han-Jia Ye"
+      ],
+      "organization": null,
+      "year": 2026,
+      "year_note": null,
+      "venue_or_publisher": "arXiv预印本",
+      "identifier": "arXiv:2608.24509v1",
+      "url": "https://arxiv.org/abs/2608.24509",
+      "accessed": "2026-09-29",
+      "source_type": "preprint",
+      "supported_proposition": "逻辑依赖正确不自动保证资源容量可行；可以分别评价依赖规划与容量约束调度；成熟规则必须作为基线。",
+      "limitations": "真实profiling+调度模拟；给定核验DAG，非普通PC现场；Best Rule与所提策略部分指标接近，CVA不等真实OOM。",
+      "read_scope": "正文相关段落已核；未独立复现实验",
+      "local_material_paths": [
+        "E:/Project/OS-Project/research/agent-orchestrate/materials/L1_local_resources/L07/L07.txt",
+        "E:/Project/OS-Project/research/agent-orchestrate/materials/L1_local_resources/L07/L07.html"
+      ],
+      "independently_reproduced": false,
+      "local_materials_exist": true,
+      "author_verification": "论文按原始书目/元数据核验；官方页无个人署名则authors留空，以organization标识发布者；issue不虚构真实姓名"
+    },
+    {
+      "selection_key": "HIVEMIND",
+      "final_reference_number": null,
+      "title": "HiveMind: OS-Inspired Scheduling for Concurrent LLM Agent Workloads",
+      "authors": [
+        "Justice Owusu Agyemang",
+        "Jerry John Kponyo",
+        "Obed Kwasi Somuah",
+        "Elliot Amponsah",
+        "Godfred Manu Addo Boakye",
+        "Kwame Opuni-Boachie Obour Agyekum"
+      ],
+      "organization": null,
+      "year": 2026,
+      "year_note": null,
+      "venue_or_publisher": "arXiv预印本",
+      "identifier": "arXiv:2604.17111v1",
+      "url": "https://arxiv.org/abs/2604.17111",
+      "accessed": "2026-09-29",
+      "source_type": "preprint",
+      "supported_proposition": "客户端共享API已有准入、rate tracking、预算、priority/SJF/DAG和重试；须比较成熟组合。",
+      "limitations": "主要mock，重试主导；去准入一次消融仍全成功，本地direct/proxy皆无失败；不证明全新联合调度或工具资源收益。",
+      "read_scope": "正文相关段落已核；未独立复现实验",
+      "local_material_paths": [
+        "E:/Project/OS-Project/research/agent-orchestrate/materials/L3_client_requests/A06/A06.txt",
+        "E:/Project/OS-Project/research/agent-orchestrate/materials/L3_client_requests/A07/A07.html"
+      ],
+      "independently_reproduced": false,
+      "local_materials_exist": true,
+      "author_verification": "论文按原始书目/元数据核验；官方页无个人署名则authors留空，以organization标识发布者；issue不虚构真实姓名"
+    },
+    {
+      "selection_key": "TRACELAB",
+      "final_reference_number": null,
+      "title": "TraceLab: Characterizing Coding Agent Workloads for LLM Serving",
+      "authors": [
+        "Kan Zhu",
+        "Mathew Jacob",
+        "Chenxi Ma",
+        "Yi Pan",
+        "Stephanie Wang",
+        "Arvind Krishnamurthy",
+        "Baris Kasikci"
+      ],
+      "organization": null,
+      "year": 2026,
+      "year_note": null,
+      "venue_or_publisher": "arXiv预印本",
+      "identifier": "arXiv:2606.30560v2",
+      "url": "https://arxiv.org/abs/2606.30560v2",
+      "accessed": "2026-09-29",
+      "source_type": "preprint",
+      "supported_proposition": "真实coding agent traces包含长自主循环、重尾工具时长，可辅助构造负载分布而非凭空假设。",
+      "limitations": "无主机CPU/RAM轨迹，工具耗时含等待；去掉原始输入输出，不能直接重演语义或证明资源竞争；非课程实验数据。",
+      "read_scope": "正文相关段落已核；未独立复现实验",
+      "local_material_paths": [
+        "E:/Project/OS-Project/research/agent-orchestrate/materials/L2_harness_tasks/P14/P14_raw.html",
+        "E:/Project/OS-Project/research/agent-orchestrate/materials/L2_harness_tasks/P14/P15_text.txt"
+      ],
+      "independently_reproduced": false,
+      "local_materials_exist": true,
+      "author_verification": "论文按原始书目/元数据核验；官方页无个人署名则authors留空，以organization标识发布者；issue不虚构真实姓名"
+    },
+    {
+      "selection_key": "OPENAI_QUOTA",
+      "final_reference_number": null,
+      "title": "Rate limits",
+      "authors": [],
+      "organization": "OpenAI",
+      "year": null,
+      "year_note": "页面未核定出版年；2026为访问年，不伪造发表年。",
+      "venue_or_publisher": "OpenAI documentation",
+      "identifier": null,
+      "url": "https://developers.openai.com/api/docs/guides/rate-limits",
+      "accessed": "2026-09-29",
+      "source_type": "official_documentation",
+      "supported_proposition": "组织/project/模型共享速率域、RPM/TPM等限制与Retry-After；失败和多层重试需正确计账。",
+      "limitations": "动态文档；各模型合同不同，额度上限不是保证吞吐；客户端不能由此取得GPU调度权。",
+      "read_scope": "正文相关段落已核；未独立复现实验",
+      "local_material_paths": [
+        "E:/Project/OS-Project/research/agent-orchestrate/materials/L3_client_requests/A01/A01.html",
+        "E:/Project/OS-Project/research/agent-orchestrate/materials/L3_client_requests/A01/A01.txt"
+      ],
+      "independently_reproduced": false,
+      "local_materials_exist": true,
+      "author_verification": "论文按原始书目/元数据核验；官方页无个人署名则authors留空，以organization标识发布者；issue不虚构真实姓名"
+    },
+    {
+      "selection_key": "CLAUDE_QUOTA",
+      "final_reference_number": null,
+      "title": "Rate limits",
+      "authors": [],
+      "organization": "Anthropic",
+      "year": null,
+      "year_note": "动态官方文档，访问2026。",
+      "venue_or_publisher": "Claude API documentation",
+      "identifier": null,
+      "url": "https://platform.claude.com/docs/en/api/rate-limits",
+      "accessed": "2026-09-29",
+      "source_type": "official_documentation",
+      "supported_proposition": "请求/输入输出tokens分开；token bucket随时间补充；当前OTPM按实际输出，max_tokens不直接计OTPM。",
+      "limitations": "须固定模型/版本；不能套用其他provider预留规则；订阅五小时额度不是此API合同。",
+      "read_scope": "正文相关段落已核；未独立复现实验",
+      "local_material_paths": [
+        "E:/Project/OS-Project/research/agent-orchestrate/materials/L3_client_requests/A02/A02.html",
+        "E:/Project/OS-Project/research/agent-orchestrate/materials/L3_client_requests/A02/A02.txt"
+      ],
+      "independently_reproduced": false,
+      "local_materials_exist": true,
+      "author_verification": "论文按原始书目/元数据核验；官方页无个人署名则authors留空，以organization标识发布者；issue不虚构真实姓名"
+    },
+    {
+      "selection_key": "LITELLM_BUDGET",
+      "final_reference_number": null,
+      "title": "Budget Setup Options",
+      "authors": [],
+      "organization": "LiteLLM project",
+      "year": null,
+      "year_note": null,
+      "venue_or_publisher": "LiteLLM documentation",
+      "identifier": null,
+      "url": "https://docs.litellm.ai/docs/proxy/users",
+      "accessed": "2026-09-29",
+      "source_type": "official_documentation",
+      "supported_proposition": "已有个人/team/agent预算和最坏成本预留→实际结算；不能称网关都只事后统计。",
+      "limitations": "DB依赖、路径/版本差异；文档不等性能评测，预算作用域和在途残值仍需明确。",
+      "read_scope": "正文相关段落已核；未独立复现实验",
+      "local_material_paths": [
+        "E:/Project/OS-Project/research/agent-orchestrate/materials/L4_platform_requests/A05/A05.html",
+        "E:/Project/OS-Project/research/agent-orchestrate/materials/L4_platform_requests/A05/A05.txt"
+      ],
+      "independently_reproduced": false,
+      "local_materials_exist": true,
+      "author_verification": "论文按原始书目/元数据核验；官方页无个人署名则authors留空，以organization标识发布者；issue不虚构真实姓名"
+    },
+    {
+      "selection_key": "LITELLM_DYNAMIC",
+      "final_reference_number": null,
+      "title": "Dynamic TPM/RPM allocation",
+      "authors": [],
+      "organization": "LiteLLM project",
+      "year": null,
+      "year_note": null,
+      "venue_or_publisher": "LiteLLM documentation",
+      "identifier": null,
+      "url": "https://docs.litellm.ai/docs/proxy/dynamic_rate_limit",
+      "accessed": "2026-09-29",
+      "source_type": "official_documentation",
+      "supported_proposition": "已有priority reservation、闲置借用；特定后计TPM路径可在并发下overshoot，适合定义强基线和限制。",
+      "limitations": "部分Beta/Enterprise；不能外推所有LiteLLM路径；不把钱预留与此token窗口当同一问题。",
+      "read_scope": "正文相关段落已核；未独立复现实验",
+      "local_material_paths": [
+        "E:/Project/OS-Project/research/agent-orchestrate/materials/L4_platform_requests/A13/A13.html",
+        "E:/Project/OS-Project/research/agent-orchestrate/materials/L4_platform_requests/A13/A13.txt"
+      ],
+      "independently_reproduced": false,
+      "local_materials_exist": true,
+      "author_verification": "论文按原始书目/元数据核验；官方页无个人署名则authors留空，以organization标识发布者；issue不虚构真实姓名"
+    },
+    {
+      "selection_key": "TEMPORAL_FAIRNESS",
+      "final_reference_number": null,
+      "title": "Task Queue Priority and Fairness",
+      "authors": [],
+      "organization": "Temporal project",
+      "year": null,
+      "year_note": null,
+      "venue_or_publisher": "Temporal documentation",
+      "identifier": null,
+      "url": "https://docs.temporal.io/develop/task-queue-priority-fairness",
+      "accessed": "2026-09-29",
+      "source_type": "official_documentation",
+      "supported_proposition": "工作流/Activity/子工作流优先继承与同级加权公平已有；可作任务治理基线。",
+      "limitations": "优先保证分区内；fairness是派发比例不是token成本或整任务完成公平；配置/Cloud许可有条件。",
+      "read_scope": "正文相关段落已核；未独立复现实验",
+      "local_material_paths": [
+        "E:/Project/OS-Project/research/agent-orchestrate/materials/L4_platform_requests/A24/A24.html",
+        "E:/Project/OS-Project/research/agent-orchestrate/materials/L4_platform_requests/A24/A24.txt"
+      ],
+      "independently_reproduced": false,
+      "local_materials_exist": true,
+      "author_verification": "论文按原始书目/元数据核验；官方页无个人署名则authors留空，以organization标识发布者；issue不虚构真实姓名"
+    },
+    {
+      "selection_key": "TEMPORAL_RATE",
+      "final_reference_number": null,
+      "title": "Rate limit downstream APIs",
+      "authors": [
+        "Cecil Phillip"
+      ],
+      "organization": null,
+      "year": null,
+      "year_note": null,
+      "venue_or_publisher": "Temporal documentation",
+      "identifier": null,
+      "url": "https://docs.temporal.io/guides/rate-limit-downstream-apis",
+      "accessed": "2026-09-29",
+      "source_type": "official_documentation",
+      "supported_proposition": "可分API队列、全局Activity RPS、worker并发、Retry-After与重试策略，均非新功能。",
+      "limitations": "Activity次数不等token；一个activity多次调用需额外记账；教程举例额度不是当前真实套餐。",
+      "read_scope": "正文相关段落已核；未独立复现实验",
+      "local_material_paths": [
+        "E:/Project/OS-Project/research/agent-orchestrate/materials/L4_platform_requests/A25/A25.html",
+        "E:/Project/OS-Project/research/agent-orchestrate/materials/L4_platform_requests/A25/A25.txt"
+      ],
+      "independently_reproduced": false,
+      "local_materials_exist": true,
+      "author_verification": "论文按原始书目/元数据核验；官方页无个人署名则authors留空，以organization标识发布者；issue不虚构真实姓名"
+    },
+    {
+      "selection_key": "LANGGRAPH_CHECKPOINT",
+      "final_reference_number": null,
+      "title": "Checkpointers",
+      "authors": [],
+      "organization": "LangChain project",
+      "year": null,
+      "year_note": null,
+      "venue_or_publisher": "LangGraph documentation",
+      "identifier": null,
+      "url": "https://docs.langchain.com/oss/python/langgraph/checkpointers",
+      "accessed": "2026-09-29",
+      "source_type": "official_documentation",
+      "supported_proposition": "checkpoint及pending writes已有，成功步骤可在规则下复用；失败不必一律整任务重跑。",
+      "limitations": "不保存任意OS进程现场，不保证外部副作用exactly-once；依赖正确持久化与幂等边界。",
+      "read_scope": "正文相关段落已核；未独立复现实验",
+      "local_material_paths": [
+        "E:/Project/OS-Project/research/agent-orchestrate/materials/L2_harness_tasks/P24/P24_raw.html",
+        "E:/Project/OS-Project/research/agent-orchestrate/materials/L2_harness_tasks/P24/P24_text.txt"
+      ],
+      "independently_reproduced": false,
+      "local_materials_exist": true,
+      "author_verification": "论文按原始书目/元数据核验；官方页无个人署名则authors留空，以organization标识发布者；issue不虚构真实姓名"
+    },
+    {
+      "selection_key": "LANGCHAIN_INTERCEPT",
+      "final_reference_number": null,
+      "title": "Custom middleware",
+      "authors": [],
+      "organization": "LangChain project",
+      "year": null,
+      "year_note": null,
+      "venue_or_publisher": "LangChain documentation",
+      "identifier": null,
+      "url": "https://docs.langchain.com/oss/python/langchain/middleware/custom",
+      "accessed": "2026-09-29",
+      "source_type": "official_documentation",
+      "supported_proposition": "wrap_model_call/wrap_tool_call提供模型与工具handler前后控制点，受控adapter接入有实际接口依据。",
+      "limitations": "只证明接口存在；不能假装透明控制所有闭源harness或据此推断整DAG自动可见。",
+      "read_scope": "正文相关段落已核；未独立复现实验",
+      "local_material_paths": [
+        "E:/Project/OS-Project/research/agent-orchestrate/materials/L2_harness_tasks/R04/R04.html",
+        "E:/Project/OS-Project/research/agent-orchestrate/materials/L2_harness_tasks/R04/R04.txt"
+      ],
+      "independently_reproduced": false,
+      "local_materials_exist": true,
+      "author_verification": "论文按原始书目/元数据核验；官方页无个人署名则authors留空，以organization标识发布者；issue不虚构真实姓名"
+    },
+    {
+      "selection_key": "LANGCHAIN_RATE",
+      "final_reference_number": null,
+      "title": "Models — Rate limiting",
+      "authors": [],
+      "organization": "LangChain project",
+      "year": null,
+      "year_note": null,
+      "venue_or_publisher": "LangChain documentation",
+      "identifier": null,
+      "url": "https://docs.langchain.com/oss/python/langchain/models",
+      "accessed": "2026-09-29",
+      "source_type": "official_documentation",
+      "supported_proposition": "InMemoryRateLimiter线程安全且同进程可共享，但只限制请求次数、不限制请求大小。",
+      "limitations": "是该内存限流器的边界，不是整个LangChain没有token治理集成。",
+      "read_scope": "正文相关段落已核；未独立复现实验",
+      "local_material_paths": [
+        "E:/Project/OS-Project/research/agent-orchestrate/materials/L3_client_requests/A27/A27.html",
+        "E:/Project/OS-Project/research/agent-orchestrate/materials/L3_client_requests/A27/A27.txt"
+      ],
+      "independently_reproduced": false,
+      "local_materials_exist": true,
+      "author_verification": "论文按原始书目/元数据核验；官方页无个人署名则authors留空，以organization标识发布者；issue不虚构真实姓名"
+    },
+    {
+      "selection_key": "DEEPSEEK_TOOLS",
+      "final_reference_number": null,
+      "title": "Tools subsystem",
+      "authors": [],
+      "organization": "DeepSeek Harness project",
+      "year": null,
+      "year_note": null,
+      "venue_or_publisher": "DeepSeek Harness repository documentation",
+      "identifier": null,
+      "url": "https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/subsystems/tools.md",
+      "accessed": "2026-09-29",
+      "source_type": "official_documentation",
+      "supported_proposition": "已有tools/pre-execute、execute wrapper、result、signal、parallel/exclusive及协作quiescence契约；适配器不能忽略既有控制。",
+      "limitations": "master可变，本地snapshot可核；静态文档不等全链已运行验证；取消信号不自动终止不合作外部资源。",
+      "read_scope": "正文相关段落已核；未独立复现实验",
+      "local_material_paths": [
+        "E:/Project/OS-Project/research/agent-orchestrate/materials/L1_local_resources/R07/R07.html",
+        "E:/Project/OS-Project/research/agent-orchestrate/materials/L1_local_resources/R07/R07.txt"
+      ],
+      "independently_reproduced": false,
+      "local_materials_exist": true,
+      "author_verification": "论文按原始书目/元数据核验；官方页无个人署名则authors留空，以organization标识发布者；issue不虚构真实姓名"
+    },
+    {
+      "selection_key": "DEEPSEEK_SUBAGENT",
+      "final_reference_number": null,
+      "title": "Subagent subsystem",
+      "authors": [],
+      "organization": "DeepSeek Harness project",
+      "year": null,
+      "year_note": null,
+      "venue_or_publisher": "DeepSeek Harness repository documentation",
+      "identifier": null,
+      "url": "https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/subsystems/subagent.md",
+      "accessed": "2026-09-29",
+      "source_type": "official_documentation",
+      "supported_proposition": "子agent生命周期、所有权、启动/续接契约是已有runtime能力；可据此划分TaskLoom职责。",
+      "limitations": "本次选读静态master文档，未证发布版本或所有异常路径正确。",
+      "read_scope": "正文相关段落已核；未独立复现实验",
+      "local_material_paths": [
+        "E:/Project/OS-Project/research/agent-orchestrate/materials/L2_harness_tasks/DS_subagent_docs/source_subagent_docs.txt",
+        "E:/Project/OS-Project/research/agent-orchestrate/materials/L2_harness_tasks/DS_repo/source_checks.json"
+      ],
+      "independently_reproduced": false,
+      "local_materials_exist": true,
+      "author_verification": "论文按原始书目/元数据核验；官方页无个人署名则authors留空，以organization标识发布者；issue不虚构真实姓名"
+    },
+    {
+      "selection_key": "DEEPSEEK_LLM",
+      "final_reference_number": null,
+      "title": "LLM streaming subsystem",
+      "authors": [],
+      "organization": "DeepSeek Harness project",
+      "year": null,
+      "year_note": null,
+      "venue_or_publisher": "DeepSeek Harness repository documentation",
+      "identifier": null,
+      "url": "https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/subsystems/llm-streaming.md",
+      "accessed": "2026-09-29",
+      "source_type": "official_documentation",
+      "supported_proposition": "LLM adapter/stream包装、重试和取消链可提供客户端配额接入点。",
+      "limitations": "不能把结束可见等待当真实socket已取消；费用未知必须保留未知状态；master是快照。",
+      "read_scope": "正文相关段落已核；未独立复现实验",
+      "local_material_paths": [
+        "E:/Project/OS-Project/research/agent-orchestrate/materials/L3_client_requests/R06/R06.html",
+        "E:/Project/OS-Project/research/agent-orchestrate/materials/L3_client_requests/R06/R06.txt"
+      ],
+      "independently_reproduced": false,
+      "local_materials_exist": true,
+      "author_verification": "论文按原始书目/元数据核验；官方页无个人署名则authors留空，以organization标识发布者；issue不虚构真实姓名"
+    },
+    {
+      "selection_key": "CGROUP",
+      "final_reference_number": null,
+      "title": "Control Group v2",
+      "authors": [],
+      "organization": "The Linux Kernel project",
+      "year": null,
+      "year_note": null,
+      "venue_or_publisher": "The Linux Kernel documentation",
+      "identifier": null,
+      "url": "https://docs.kernel.org/admin-guide/cgroup-v2.html",
+      "accessed": "2026-09-29",
+      "source_type": "official_documentation",
+      "supported_proposition": "cpu.max/weight、memory.high/max、pids.max与资源组管理提供真实资源隔离控制。",
+      "limitations": "memory.high回收可能变慢，memory.max可能OOM；限制不是成功保证；要纳入真实后代并预留监督器资源。",
+      "read_scope": "正文相关段落已核；未独立复现实验",
+      "local_material_paths": [
+        "E:/Project/OS-Project/research/agent-orchestrate/materials/L1_local_resources/C03/C03.html",
+        "E:/Project/OS-Project/research/agent-orchestrate/materials/L1_local_resources/C03/C03.txt"
+      ],
+      "independently_reproduced": false,
+      "local_materials_exist": true,
+      "author_verification": "论文按原始书目/元数据核验；官方页无个人署名则authors留空，以organization标识发布者；issue不虚构真实姓名"
+    },
+    {
+      "selection_key": "JOB_OBJECTS",
+      "final_reference_number": null,
+      "title": "Job Objects",
+      "authors": [],
+      "organization": "Microsoft",
+      "year": null,
+      "year_note": null,
+      "venue_or_publisher": "Microsoft Learn",
+      "identifier": null,
+      "url": "https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects",
+      "accessed": "2026-09-29",
+      "source_type": "official_documentation",
+      "supported_proposition": "Windows Job Objects可管理进程组资源与kill-on-close等生命周期。",
+      "limitations": "Windows与Linux接口不等价；嵌套、继承、breakaway与权限必须按实际版本验证。",
+      "read_scope": "正文相关段落已核；未独立复现实验",
+      "local_material_paths": [
+        "E:/Project/OS-Project/research/agent-orchestrate/materials/L1_local_resources/C11/C11.html",
+        "E:/Project/OS-Project/research/agent-orchestrate/materials/L1_local_resources/C11/C11.txt"
+      ],
+      "independently_reproduced": false,
+      "local_materials_exist": true,
+      "author_verification": "论文按原始书目/元数据核验；官方页无个人署名则authors留空，以organization标识发布者；issue不虚构真实姓名"
+    },
+    {
+      "selection_key": "CLAUDE_SUBAGENTS",
+      "final_reference_number": null,
+      "title": "Create custom subagents",
+      "authors": [],
+      "organization": "Anthropic",
+      "year": null,
+      "year_note": null,
+      "venue_or_publisher": "Claude Code documentation",
+      "identifier": null,
+      "url": "https://code.claude.com/docs/en/sub-agents",
+      "accessed": "2026-09-29",
+      "source_type": "official_documentation",
+      "supported_proposition": "已有并发上限、maxTurns、partial output、resume、worktree等；TaskLoom应治理具体接入后的剩余问题。",
+      "limitations": "默认20不是所有入口硬cap；resume/workflow/team范围不同；官方能力不能自动保证每个版本无bug。",
+      "read_scope": "正文相关段落已核；未独立复现实验",
+      "local_material_paths": [
+        "E:/Project/OS-Project/research/agent-orchestrate/materials/L2_harness_tasks/CCD01/D01.raw",
+        "E:/Project/OS-Project/research/agent-orchestrate/materials/L2_harness_tasks/CCD01/D01.txt"
+      ],
+      "independently_reproduced": false,
+      "local_materials_exist": true,
+      "author_verification": "论文按原始书目/元数据核验；官方页无个人署名则authors留空，以organization标识发布者；issue不虚构真实姓名"
+    },
+    {
+      "selection_key": "CLAUDE_AUTOCONTINUE",
+      "final_reference_number": null,
+      "title": "Settings reference — autoContinueAtUsageLimit",
+      "authors": [],
+      "organization": "Anthropic",
+      "year": null,
+      "year_note": null,
+      "venue_or_publisher": "Claude Code documentation",
+      "identifier": null,
+      "url": "https://code.claude.com/docs/en/settings-reference#autocontinueatusagelimit",
+      "accessed": "2026-09-29",
+      "source_type": "official_documentation",
+      "supported_proposition": "2.1.234+已有默认true的订阅额度重置后自动继续，不能宣称不存在配额等待。",
+      "limitations": "适用claude.ai订阅/open session；不证明所有子agent恢复树自动完整；不能外推API RPM/TPM。",
+      "read_scope": "正文相关段落已核；未独立复现实验",
+      "local_material_paths": [
+        "E:/Project/OS-Project/research/agent-orchestrate/materials/L2_harness_tasks/CCD08/D08.raw",
+        "E:/Project/OS-Project/research/agent-orchestrate/materials/L2_harness_tasks/CCD08/D08.txt"
+      ],
+      "independently_reproduced": false,
+      "local_materials_exist": true,
+      "author_verification": "论文按原始书目/元数据核验；官方页无个人署名则authors留空，以organization标识发布者；issue不虚构真实姓名"
+    },
+    {
+      "selection_key": "ISSUE_RESUME",
+      "final_reference_number": null,
+      "title": "[FEATURE] Mark a subagent killed by a usage limit as resumable, and keep it listed after a session restart",
+      "authors": [],
+      "organization": "Issue author account WayneAl",
+      "year": 2026,
+      "year_note": null,
+      "venue_or_publisher": "anthropics/claude-code issue #94222",
+      "identifier": "anthropics/claude-code#94222",
+      "url": "https://github.com/anthropics/claude-code/issues/94222",
+      "accessed": "2026-09-29",
+      "source_type": "public_issue_report",
+      "supported_proposition": "用户报告SendMessage旧ID可恢复六子agent，支持区分恢复能力与恢复发现/状态可见性。",
+      "limitations": "用户自述非独立实证；单次token/findings差不作收益百分比；第三方插件评论不当维护者确认。",
+      "read_scope": "issue正文与公开评论已核，未运行",
+      "local_material_paths": [
+        "E:/Project/OS-Project/research/agent-orchestrate/materials/L2_harness_tasks/CC03/issue_94222.json",
+        "E:/Project/OS-Project/research/agent-orchestrate/materials/L2_harness_tasks/CC03/comments_94222.json",
+        "E:/Project/OS-Project/research/agent-orchestrate/materials/L2_harness_tasks/CC03/issue_94222.txt"
+      ],
+      "independently_reproduced": false,
+      "local_materials_exist": true,
+      "author_verification": "论文按原始书目/元数据核验；官方页无个人署名则authors留空，以organization标识发布者；issue不虚构真实姓名"
+    },
+    {
+      "selection_key": "ISSUE_SLOT",
+      "final_reference_number": null,
+      "title": "Scheduled-task sessions intermittently freeze permanently on first/second tool call, never releasing their concurrency slot",
+      "authors": [],
+      "organization": null,
+      "year": 2026,
+      "year_note": null,
+      "venue_or_publisher": "anthropics/claude-code issue #92753",
+      "identifier": null,
+      "url": "https://github.com/anthropics/claude-code/issues/92753",
+      "accessed": "2026-09-29",
+      "source_type": "public_issue_report",
+      "supported_proposition": "用户现场有长时间挂起占本地scheduled槽、其余任务global_limit拒绝的日志，作为监督和状态区分需求线索。",
+      "limitations": "根因审批等待/死锁未证；评论提出用户自加lease可能性；不是CPU/GPU拥塞实证，open不等无现成办法。",
+      "read_scope": "issue正文与公开评论已核，未运行",
+      "local_material_paths": [
+        "E:/Project/OS-Project/research/agent-orchestrate/materials/L2_harness_tasks/CC06/issue_92753.json",
+        "E:/Project/OS-Project/research/agent-orchestrate/materials/L2_harness_tasks/CC06/comments_92753.json",
+        "E:/Project/OS-Project/research/agent-orchestrate/materials/L2_harness_tasks/CC06/issue_92753.txt"
+      ],
+      "independently_reproduced": false,
+      "local_materials_exist": true,
+      "author_verification": "论文按原始书目/元数据核验；官方页无个人署名则authors留空，以organization标识发布者；issue不虚构真实姓名"
+    },
+    {
+      "selection_key": "FUNCTION_CALLING",
+      "final_reference_number": null,
+      "title": "Function calling",
+      "authors": [],
+      "organization": "OpenAI",
+      "year": null,
+      "year_note": null,
+      "venue_or_publisher": "OpenAI API documentation",
+      "identifier": null,
+      "url": "https://developers.openai.com/api/docs/guides/function-calling",
+      "accessed": "2026-09-29",
+      "source_type": "official_documentation",
+      "supported_proposition": "模型产生工具调用，应用执行工具并提交结果；说明调度控制点在runtime而不在模型文本本身。",
+      "limitations": "工具协议不提供完整任务DAG/未来耗时，不代表能任意暂停远端推理。",
+      "read_scope": "正文相关段落已核；未独立复现实验",
+      "local_material_paths": [
+        "E:/Project/OS-Project/research/agent-orchestrate/materials/L2_harness_tasks/R02/R02.html",
+        "E:/Project/OS-Project/research/agent-orchestrate/materials/L2_harness_tasks/R02/R02.txt"
+      ],
+      "independently_reproduced": false,
+      "local_materials_exist": true,
+      "author_verification": "论文按原始书目/元数据核验；官方页无个人署名则authors留空，以organization标识发布者；issue不虚构真实姓名"
+    },
+    {
+      "selection_key": "DRR",
+      "final_reference_number": null,
+      "title": "Efficient fair queuing using deficit round-robin",
+      "authors": [
+        "M. Shreedhar",
+        "G. Varghese"
+      ],
+      "organization": null,
+      "year": 1996,
+      "year_note": "Crossref出版元数据核验",
+      "venue_or_publisher": "IEEE/ACM Transactions on Networking",
+      "volume": "4",
+      "issue": "3",
+      "pages": "375-385",
+      "identifier": "doi:10.1109/90.502236",
+      "url": "https://doi.org/10.1109/90.502236",
+      "accessed": "2026-09-29",
+      "source_type": "journal_article",
+      "supported_proposition": "Deficit Round-Robin的经典算法出处；开题拟借用欠额累计思想，以服务成本而非单纯请求次数安排公平轮转。",
+      "limitations": "原工作面向网络包公平队列；本次核书目未阅读全文，不声称其复杂度/延迟界在未知成本、非抢占Agent中自动成立。",
+      "read_scope": "Crossref书目及所含摘要（DRR记录无摘要）；未阅读全文、未独立复现",
+      "local_material_paths": [
+        "E:/Project/OS-Project/docs/references/references_verified.json"
+      ],
+      "local_materials_exist": true,
+      "metadata_archive_note": "仅允许写本表两文件；本条Crossref元数据直接保存在本JSON的verified_metadata_excerpt，不另写快照。",
+      "verified_metadata_excerpt": {
+        "DOI": "10.1109/90.502236",
+        "title": [
+          "Efficient fair queuing using deficit round-robin"
+        ],
+        "author": [
+          {
+            "given": "M.",
+            "family": "Shreedhar",
+            "sequence": "first",
+            "affiliation": [],
+            "role": [
+              {
+                "vocabulary": "crossref",
+                "role": "author"
+              }
+            ]
+          },
+          {
+            "given": "G.",
+            "family": "Varghese",
+            "sequence": "additional",
+            "affiliation": [],
+            "role": [
+              {
+                "vocabulary": "crossref",
+                "role": "author"
+              }
+            ]
+          }
+        ],
+        "published": {
+          "date-parts": [
+            [
+              1996,
+              6
+            ]
+          ]
+        },
+        "container-title": [
+          "IEEE/ACM Transactions on Networking"
+        ],
+        "volume": "4",
+        "issue": "3",
+        "page": "375-385",
+        "URL": "https://doi.org/10.1109/90.502236",
+        "abstract": null
+      },
+      "metadata_source_url": "https://api.crossref.org/works/10.1109/90.502236",
+      "http_status": 200,
+      "metadata_response_sha256": "a725bab8ca6e84392b98bf30784c6bd51225ea970205d0414cecb1fc638cc377",
+      "independently_reproduced": false
+    },
+    {
+      "selection_key": "EDF",
+      "final_reference_number": null,
+      "title": "Scheduling Algorithms for Multiprogramming in a Hard-Real-Time Environment",
+      "authors": [
+        "C. L. Liu",
+        "James W. Layland"
+      ],
+      "organization": null,
+      "year": 1973,
+      "year_note": "Crossref出版元数据核验",
+      "venue_or_publisher": "Journal of the ACM",
+      "volume": "20",
+      "issue": "1",
+      "pages": "46-61",
+      "identifier": "doi:10.1145/321738.321743",
+      "url": "https://doi.org/10.1145/321738.321743",
+      "accessed": "2026-09-29",
+      "source_type": "journal_article",
+      "supported_proposition": "动态按当前deadline赋优先级的经典单处理器实时调度依据；开题可用EDF作明确截止时限任务的对照。",
+      "limitations": "摘要研究单处理器实时模型；未知执行时长、外部不可抢占API、依赖DAG与多资源不满足原定理前提，不能宣称Agent deadline全部保证。",
+      "read_scope": "Crossref书目及所含摘要（DRR记录无摘要）；未阅读全文、未独立复现",
+      "local_material_paths": [
+        "E:/Project/OS-Project/docs/references/references_verified.json"
+      ],
+      "local_materials_exist": true,
+      "metadata_archive_note": "仅允许写本表两文件；本条Crossref元数据直接保存在本JSON的verified_metadata_excerpt，不另写快照。",
+      "verified_metadata_excerpt": {
+        "DOI": "10.1145/321738.321743",
+        "title": [
+          "Scheduling Algorithms for Multiprogramming in a Hard-Real-Time Environment"
+        ],
+        "author": [
+          {
+            "given": "C. L.",
+            "family": "Liu",
+            "sequence": "first",
+            "affiliation": [
+              {
+                "name": "Department of Computer Science, University of Illinois at Urbana-Champaign, Urbana, IL and Project MAC, Massachusetts Institute of Technology"
+              }
+            ],
+            "role": [
+              {
+                "vocabulary": "crossref",
+                "role": "author"
+              }
+            ]
+          },
+          {
+            "given": "James W.",
+            "family": "Layland",
+            "sequence": "additional",
+            "affiliation": [
+              {
+                "name": "Jet Propulsion Laboratory, California Institute of Technology, 4800 Oak Grove Drive, Pasadena, CA"
+              }
+            ],
+            "role": [
+              {
+                "vocabulary": "crossref",
+                "role": "author"
+              }
+            ]
+          }
+        ],
+        "published": {
+          "date-parts": [
+            [
+              1973,
+              1
+            ]
+          ]
+        },
+        "container-title": [
+          "Journal of the ACM"
+        ],
+        "volume": "20",
+        "issue": "1",
+        "page": "46-61",
+        "URL": "https://doi.org/10.1145/321738.321743",
+        "abstract": "<jats:p>The problem of multiprogram scheduling on a single processor is studied from the viewpoint of the characteristics peculiar to the program functions that need guaranteed service. It is shown that an optimum fixed priority scheduler possesses an upper bound to processor utilization which may be as low as 70 percent for large task sets. It is also shown that full processor utilization can be achieved by dynamically assigning priorities on the basis of their current deadlines. A combination of these two scheduling techniques is also discussed.</jats:p>"
+      },
+      "metadata_source_url": "https://api.crossref.org/works/10.1145/321738.321743",
+      "http_status": 200,
+      "metadata_response_sha256": "b4d4814c86ae5be0bff2f295af66e1774bc394d8498aacef56a93484bec0bcd0",
+      "independently_reproduced": false
+    }
+  ]
+}

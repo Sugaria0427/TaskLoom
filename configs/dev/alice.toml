@@ -1,0 +1,9 @@
+profile = "alice"
+client_port = 8795
+platform_url = "http://127.0.0.1:8796"
+coordinated = true
+max_inflight = 2
+tool_slots = 2
+memory_budget_mib = 512
+artifact_budget_mib = 64
+max_steps = 12

@@ -1,0 +1,3 @@
+capacity = 2
+latency_seconds = 0.05
+model = "taskloom-fixed-model"

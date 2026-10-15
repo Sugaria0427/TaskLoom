@@ -1,0 +1,129 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mxfile host="app.diagrams.net" version="24.7.17">
+  <diagram name="01_use_case" id="01_use_case">
+    <mxGraphModel dx="2000" dy="1110" grid="1" page="1" pageWidth="2000" pageHeight="1110">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="System" value="TaskLoom 系统边界：个人端 ＋ 应用平台" style="whiteSpace=wrap;html=0;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#203144;fillColor=#FAFCFE;strokeColor=#9AB0C2;strokeWidth=1.5;rounded=0;verticalAlign=top;align=left;spacing=18;" vertex="1" parent="1">
+          <mxGeometry x="430" y="35" width="1110" height="1020" as="geometry" />
+        </mxCell>
+        <mxCell id="User" value="项目用户" style="whiteSpace=wrap;html=0;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#203144;fillColor=#F5F7FA;strokeColor=#9AB0C2;strokeWidth=1.5;shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="135" y="405" width="70" height="114" as="geometry" />
+        </mxCell>
+        <mxCell id="Admin" value="平台管理员／实验人员" style="whiteSpace=wrap;html=0;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#203144;fillColor=#F5F7FA;strokeColor=#9AB0C2;strokeWidth=1.5;shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="1780" y="765" width="70" height="114" as="geometry" />
+        </mxCell>
+        <mxCell id="Model" value="固定模型 API 服务" style="whiteSpace=wrap;html=0;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#203144;fillColor=#F5F7FA;strokeColor=#9AB0C2;strokeWidth=1.5;shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="1780" y="90" width="70" height="114" as="geometry" />
+        </mxCell>
+        <mxCell id="Tool" value="受控工具程序" style="whiteSpace=wrap;html=0;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#203144;fillColor=#F5F7FA;strokeColor=#9AB0C2;strokeWidth=1.5;shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="1780" y="350" width="70" height="114" as="geometry" />
+        </mxCell>
+        <mxCell id="Run" value="提交并运行&#10;Agent 任务" style="whiteSpace=wrap;html=0;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#203144;fillColor=#EAF3FC;strokeColor=#9AB0C2;strokeWidth=1.5;ellipse;" vertex="1" parent="1">
+          <mxGeometry x="500" y="145" width="435" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="Observe" value="查看任务进度&#10;与等待原因" style="whiteSpace=wrap;html=0;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#203144;fillColor=#EAF3FC;strokeColor=#9AB0C2;strokeWidth=1.5;ellipse;" vertex="1" parent="1">
+          <mxGeometry x="500" y="330" width="435" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="Cancel" value="取消任务" style="whiteSpace=wrap;html=0;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#203144;fillColor=#EAF3FC;strokeColor=#9AB0C2;strokeWidth=1.5;ellipse;" vertex="1" parent="1">
+          <mxGeometry x="500" y="515" width="435" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="Resume" value="恢复可继续的任务" style="whiteSpace=wrap;html=0;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#203144;fillColor=#EAF3FC;strokeColor=#9AB0C2;strokeWidth=1.5;ellipse;" vertex="1" parent="1">
+          <mxGeometry x="500" y="700" width="435" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="Result" value="查看与导出&#10;已确认的结果" style="whiteSpace=wrap;html=0;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#203144;fillColor=#EAF3FC;strokeColor=#9AB0C2;strokeWidth=1.5;ellipse;" vertex="1" parent="1">
+          <mxGeometry x="500" y="885" width="435" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="Config" value="配置资源与额度策略" style="whiteSpace=wrap;html=0;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#203144;fillColor=#FBF2E1;strokeColor=#9AB0C2;strokeWidth=1.5;ellipse;" vertex="1" parent="1">
+          <mxGeometry x="1040" y="680" width="440" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="Evaluate" value="运行策略对照&#10;与故障实验" style="whiteSpace=wrap;html=0;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#203144;fillColor=#FBF2E1;strokeColor=#9AB0C2;strokeWidth=1.5;ellipse;" vertex="1" parent="1">
+          <mxGeometry x="1040" y="900" width="440" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="e0" style="edgeStyle=none;html=0;rounded=0;strokeColor=#536779;strokeWidth=1.7;endArrow=none;exitX=1.0;exitY=0.4166666666666667;entryX=0.0;entryY=0.5;" edge="1" parent="1" source="User" target="Run">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="205" y="455" as="sourcePoint" />
+            <mxPoint x="500" y="200" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="370" y="200" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e1" style="edgeStyle=none;html=0;rounded=0;strokeColor=#536779;strokeWidth=1.7;endArrow=none;exitX=1.0;exitY=0.4166666666666667;entryX=0.0;entryY=0.5;" edge="1" parent="1" source="User" target="Observe">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="205" y="455" as="sourcePoint" />
+            <mxPoint x="500" y="385" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="370" y="385" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e2" style="edgeStyle=none;html=0;rounded=0;strokeColor=#536779;strokeWidth=1.7;endArrow=none;exitX=1.0;exitY=0.4166666666666667;entryX=0.0;entryY=0.5;" edge="1" parent="1" source="User" target="Cancel">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="205" y="455" as="sourcePoint" />
+            <mxPoint x="500" y="570" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="370" y="570" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e3" style="edgeStyle=none;html=0;rounded=0;strokeColor=#536779;strokeWidth=1.7;endArrow=none;exitX=1.0;exitY=0.4166666666666667;entryX=0.0;entryY=0.5;" edge="1" parent="1" source="User" target="Resume">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="205" y="455" as="sourcePoint" />
+            <mxPoint x="500" y="755" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="370" y="755" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e4" style="edgeStyle=none;html=0;rounded=0;strokeColor=#536779;strokeWidth=1.7;endArrow=none;exitX=1.0;exitY=0.4166666666666667;entryX=0.0;entryY=0.5;" edge="1" parent="1" source="User" target="Result">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="205" y="455" as="sourcePoint" />
+            <mxPoint x="500" y="940" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="370" y="940" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5" style="edgeStyle=none;html=0;rounded=0;strokeColor=#536779;strokeWidth=1.7;endArrow=none;exitX=0.0;exitY=0.4166666666666667;entryX=1.0;entryY=0.5;" edge="1" parent="1" source="Admin" target="Config">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1780" y="815" as="sourcePoint" />
+            <mxPoint x="1480" y="735" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="1630" y="735" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e6" style="edgeStyle=none;html=0;rounded=0;strokeColor=#536779;strokeWidth=1.7;endArrow=none;exitX=0.0;exitY=0.5833333333333334;entryX=1.0;entryY=0.5;" edge="1" parent="1" source="Admin" target="Evaluate">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1780" y="835" as="sourcePoint" />
+            <mxPoint x="1480" y="955" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="1630" y="955" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e7" style="edgeStyle=none;html=0;rounded=0;strokeColor=#536779;strokeWidth=1.7;endArrow=none;exitX=1.0;exitY=0.3181818181818182;entryX=0.0;entryY=0.4166666666666667;" edge="1" parent="1" source="Run" target="Model">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="935" y="180" as="sourcePoint" />
+            <mxPoint x="1780" y="140" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="1630" y="180" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e8" style="edgeStyle=none;html=0;rounded=0;strokeColor=#536779;strokeWidth=1.7;endArrow=none;exitX=1.0;exitY=0.6636363636363637;entryX=0.0;entryY=0.4166666666666667;" edge="1" parent="1" source="Run" target="Tool">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="935" y="218" as="sourcePoint" />
+            <mxPoint x="1780" y="400" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="1650" y="218" />
+              <mxPoint x="1650" y="400" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

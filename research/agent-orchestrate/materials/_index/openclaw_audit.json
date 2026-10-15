@@ -1,0 +1,1049 @@
+{
+  "date": "2026-10-14",
+  "research_question": "OpenClaw作为TaskLoom个人端基底，现有四层相关机制、真实剩余与可控制边界是什么？",
+  "scope": "个人端资源、任务、模型请求及对接受控L4；固定模型推理配置。",
+  "versions": {
+    "release_tag": "v2026.10.3",
+    "release_ref": "59cb44796b0f1f0daa0e37af8b1495abb45d9bc1",
+    "main_ref": "6a64431a10b638958cdeccc782f2b36074274776",
+    "main_commit_time": "2026-10-14T06:32:35Z"
+  },
+  "sources_added": 72,
+  "document_records": 24,
+  "source_code_records": 24,
+  "issue_records": 16,
+  "pull_request_records": 7,
+  "searches_planned": 12,
+  "searches_with_results": 7,
+  "search_failures": [
+    {
+      "query": "repo:openclaw/openclaw is:issue cron starvation updated:>=2026-09-01",
+      "total_count": null,
+      "returned": 0,
+      "error": "API rate limit exceeded for 59.64.129.148. (But here's the good news: Authenticated requests get a higher rate limit. Check out the documentation for more details.)"
+    },
+    {
+      "query": "repo:openclaw/openclaw is:issue 429 retry updated:>=2026-09-01",
+      "total_count": null,
+      "returned": 0,
+      "error": "API rate limit exceeded for 59.64.129.148. (But here's the good news: Authenticated requests get a higher rate limit. Check out the documentation for more details.)"
+    },
+    {
+      "query": "repo:openclaw/openclaw is:issue memory leak updated:>=2026-09-01",
+      "total_count": null,
+      "returned": 0,
+      "error": "API rate limit exceeded for 59.64.129.148. (But here's the good news: Authenticated requests get a higher rate limit. Check out the documentation for more details.)"
+    },
+    {
+      "query": "repo:openclaw/openclaw is:issue before_tool_call timeout updated:>=2026-09-01",
+      "total_count": null,
+      "returned": 0,
+      "error": "API rate limit exceeded for 59.64.129.148. (But here's the good news: Authenticated requests get a higher rate limit. Check out the documentation for more details.)"
+    },
+    {
+      "query": "repo:openclaw/openclaw is:issue head of line updated:>=2026-09-01",
+      "total_count": null,
+      "returned": 0,
+      "error": "API rate limit exceeded for 59.64.129.148. (But here's the good news: Authenticated requests get a higher rate limit. Check out the documentation for more details.)"
+    }
+  ],
+  "unique_screened_candidates": 103,
+  "comments_obtained": 75,
+  "checks": [
+    "按官方文档定位源码边界",
+    "将stable与main分别固定",
+    "只以机器人意见发现线索，回到源码和人工记录",
+    "区分同机制、旧版本、归因不明及已修复",
+    "保存失败检索与分页范围"
+  ],
+  "source_reading": "取得公开响应，阅读相关正文、评论、反证和源码片段；未对每份文件做全文逐行审读。",
+  "runtime_reproduction": false,
+  "installation_performed": false,
+  "cases": [
+    {
+      "source_id": "OC-I161050",
+      "number": 161050,
+      "state": "open",
+      "comments_obtained": 3,
+      "resolution": "T",
+      "evidence_grade": "E3",
+      "remaining_severity": "H",
+      "rationale": "数量限制合规时仍出现内存压力的条件案例；报告者补充10GB VM、claude-cli及重工具并行的数据。普通embedded运行时需要本地画像，具体OOM数据未独立复现。",
+      "version_status": [
+        {
+          "ref": "2026.9.6",
+          "resolution": "T",
+          "basis": "用户现场记录"
+        },
+        {
+          "ref": "6a64431a10b638958cdeccc782f2b36074274776",
+          "resolution": "T",
+          "basis": "已查配置约束是名额，sandbox资源限额是独立能力"
+        }
+      ]
+    },
+    {
+      "source_id": "OC-I95506",
+      "number": 95506,
+      "state": "open",
+      "comments_obtained": 3,
+      "resolution": "T",
+      "evidence_grade": "E2",
+      "remaining_severity": "M",
+      "rationale": "当前MCP manager的静态runtime使用sessionId作为runtimeKey；旧现场8会话/8连接由用户测试提供。重复成本与会话隔离是取舍，状态型服务共享需明确所有权。",
+      "version_status": [
+        {
+          "ref": "6a64431a10b638958cdeccc782f2b36074274776",
+          "resolution": "T",
+          "basis": "已查manager静态会话key与用户对照，保留现有租约、回收及最大活跃runtime上限"
+        }
+      ]
+    },
+    {
+      "source_id": "OC-I65983",
+      "number": 65983,
+      "state": "open",
+      "comments_obtained": 4,
+      "resolution": "U",
+      "evidence_grade": "E3",
+      "remaining_severity": "NA",
+      "rationale": "后台PTY在突然owner丢失后存活的案例保留；当前supervisor已有真实extinction与合作清理，旧reconcileOrphans描述不能直接套用当前版本。",
+      "version_status": [
+        {
+          "ref": "6a64431a10b638958cdeccc782f2b36074274776",
+          "resolution": "U",
+          "basis": "内存registry与突然退出风险可分辨，但当前路径未本地故障复现"
+        }
+      ]
+    },
+    {
+      "source_id": "OC-I164294",
+      "number": 164294,
+      "state": "open",
+      "comments_obtained": 13,
+      "resolution": "U",
+      "evidence_grade": "E3",
+      "remaining_severity": "NA",
+      "rationale": "多主机包括10.3报告WAL checkpoint停滞；最新10.3样本仍健康，具体native reader尚未定位，作为原生存储诊断线索。",
+      "version_status": [
+        {
+          "ref": "v2026.10.3",
+          "resolution": "U",
+          "basis": "用户新现场记录，未确定完整native持有者"
+        }
+      ]
+    },
+    {
+      "source_id": "OC-I79589",
+      "number": 79589,
+      "state": "open",
+      "comments_obtained": 4,
+      "resolution": "D",
+      "evidence_grade": "E1",
+      "remaining_severity": "NA",
+      "rationale": "原题无优先级已由已合并静态优先级修复；最新main已有15/30秒有界超越。稳定10.3仍是严格三类优先，按版本记录，Aging不列新贡献。",
+      "version_status": [
+        {
+          "ref": "v2026.10.3",
+          "resolution": "P",
+          "basis": "release queue state严格foreground→normal→background"
+        },
+        {
+          "ref": "6a64431a10b638958cdeccc782f2b36074274776",
+          "resolution": "D",
+          "basis": "PR167683合并记录与当前compareQueueEntries源码"
+        }
+      ]
+    },
+    {
+      "source_id": "OC-I54488",
+      "number": 54488,
+      "state": "open",
+      "comments_obtained": 7,
+      "resolution": "U",
+      "evidence_grade": "E3",
+      "remaining_severity": "NA",
+      "rationale": "旧版同会话followup长等待与当前steer/优先级需分开；保留FIFO消息语义，当前原始20–30分钟现象未独立复现。",
+      "version_status": [
+        {
+          "ref": "2026.3.23-2及旧版",
+          "resolution": "P",
+          "basis": "用户日志"
+        },
+        {
+          "ref": "6a64431a10b638958cdeccc782f2b36074274776",
+          "resolution": "U",
+          "basis": "已有steer与有界优先；原现场现象未当前复现"
+        }
+      ]
+    },
+    {
+      "source_id": "OC-I161506",
+      "number": 161506,
+      "state": "open",
+      "comments_obtained": 3,
+      "resolution": "U",
+      "evidence_grade": "E3",
+      "remaining_severity": "NA",
+      "rationale": "activeAhead在入队取值，activeNow在出队取值，二者组合不是泄漏指纹。保留零派发超时、总期限与执行期限分离的需求，完整持有根因未确认。",
+      "version_status": [
+        {
+          "ref": "2026.9.4",
+          "resolution": "U",
+          "basis": "报告与反证控制，当前完整持有链未本地确认"
+        }
+      ]
+    },
+    {
+      "source_id": "OC-I165950",
+      "number": 165950,
+      "state": "open",
+      "comments_obtained": 1,
+      "resolution": "P",
+      "evidence_grade": "E2",
+      "remaining_severity": "M",
+      "rationale": "稳定10.3等待preparation容量的FIFO可阻挡后续控制RPC；当前main允许部分独立读与跨连接工作先行，同连接health/status没有independentRead资格仍有条件阻塞。",
+      "version_status": [
+        {
+          "ref": "v2026.10.3",
+          "resolution": "P",
+          "basis": "release request-start的逐项等待与pending.shift"
+        },
+        {
+          "ref": "6a64431a10b638958cdeccc782f2b36074274776",
+          "resolution": "P",
+          "basis": "findIndex与independentRead白名单缓解部分路径，保留同连接顺序"
+        }
+      ]
+    },
+    {
+      "source_id": "OC-I171366",
+      "number": 171366,
+      "state": "closed",
+      "comments_obtained": 2,
+      "resolution": "D",
+      "evidence_grade": "E2",
+      "remaining_severity": "NA",
+      "rationale": "Code Mode合法等子结果被归入stalled的10.3案例，PR171570在10月14日合并，当前main使用外层工具生命周期wrapper；稳定10.3的版本缺口另记。",
+      "version_status": [
+        {
+          "ref": "v2026.10.3",
+          "resolution": "P",
+          "basis": "用户run-ID关联现场与修复PR说明"
+        },
+        {
+          "ref": "6a64431a10b638958cdeccc782f2b36074274776",
+          "resolution": "D",
+          "basis": "PR171570已合并，固定main在其之后"
+        }
+      ]
+    },
+    {
+      "source_id": "OC-I155119",
+      "number": 155119,
+      "state": "open",
+      "comments_obtained": 7,
+      "resolution": "U",
+      "evidence_grade": "E3",
+      "remaining_severity": "NA",
+      "rationale": "结果截断、重复settle与pending是不同子问题；10.2 Windows有重复风暴报告，Linux12组复现未重现无限循环。部分结果修复已有合并，剩余根因与适用性分开跟踪。",
+      "version_status": [
+        {
+          "ref": "v2026.10.2",
+          "resolution": "U",
+          "basis": "正反复现环境和行为不同"
+        },
+        {
+          "ref": "6a64431a10b638958cdeccc782f2b36074274776",
+          "resolution": "U",
+          "basis": "有负复现及修复记录，尚无项目复现"
+        }
+      ]
+    },
+    {
+      "source_id": "OC-I152360",
+      "number": 152360,
+      "state": "open",
+      "comments_obtained": 2,
+      "resolution": "P",
+      "evidence_grade": "E2",
+      "remaining_severity": "M",
+      "rationale": "当前插件direct-provider路径选择一次prepared凭证并执行一次，再返回stopReason；未统一agent-turn的profile失败与轮换。PR152489仍open。535/535空结果属于9.4历史样本，当前已有stopReason。",
+      "version_status": [
+        {
+          "ref": "6a64431a10b638958cdeccc782f2b36074274776",
+          "resolution": "P",
+          "basis": "runtime-llm.runtime与simple-completion-execution选读，未合并修复PR"
+        }
+      ]
+    },
+    {
+      "source_id": "OC-I164545",
+      "number": 164545,
+      "state": "open",
+      "comments_obtained": 1,
+      "resolution": "T",
+      "evidence_grade": "E1",
+      "remaining_severity": "M",
+      "rationale": "runtime.gateway.request保留bundled/trustedOfficialInstall准入；这是权限与扩展能力边界。TaskLoom需要独立认证RPC控制适配器，保持原有用户权限。",
+      "version_status": [
+        {
+          "ref": "6a64431a10b638958cdeccc782f2b36074274776",
+          "resolution": "T",
+          "basis": "server-plugins与server-plugin-subagent-runtime明确判断及官方SDK文档"
+        }
+      ]
+    },
+    {
+      "source_id": "OC-I84647",
+      "number": 84647,
+      "state": "closed",
+      "comments_obtained": 3,
+      "resolution": "U",
+      "evidence_grade": "E3",
+      "remaining_severity": "NA",
+      "rationale": "由stale bot因不活跃关闭，closed不构成已修复依据；当前事件循环让出与优先机制已有改进，旧8分钟场景未复测。",
+      "version_status": [
+        {
+          "ref": "6a64431a10b638958cdeccc782f2b36074274776",
+          "resolution": "U",
+          "basis": "关闭原因与现行机制分开保存"
+        }
+      ]
+    },
+    {
+      "source_id": "OC-I97616",
+      "number": 97616,
+      "state": "closed",
+      "comments_obtained": 19,
+      "resolution": "D",
+      "evidence_grade": "E2",
+      "remaining_severity": "NA",
+      "rationale": "10月13日关闭说明引用stock9.8负复现与当前proc-safe scoped reaper、Linux subreaper。live idle app-server驻留属于另题，不与僵尸回收合并。",
+      "version_status": [
+        {
+          "ref": "6a64431a10b638958cdeccc782f2b36074274776",
+          "resolution": "D",
+          "basis": "关闭说明、重测与两个reaper源码"
+        }
+      ]
+    },
+    {
+      "source_id": "OC-I116227",
+      "number": 116227,
+      "state": "closed",
+      "comments_obtained": 1,
+      "resolution": "D",
+      "evidence_grade": "E1",
+      "remaining_severity": "NA",
+      "rationale": "PR116286于7月30日合并，registry热路径增量写与更新缓存已覆盖全量重写问题。旧倍率只作为修复证据，退出未解决问题排序。",
+      "version_status": [
+        {
+          "ref": "6a64431a10b638958cdeccc782f2b36074274776",
+          "resolution": "D",
+          "basis": "已合并PR与固定源码架构"
+        }
+      ]
+    },
+    {
+      "source_id": "OC-I169777",
+      "number": 169777,
+      "state": "closed",
+      "comments_obtained": 2,
+      "resolution": "D",
+      "evidence_grade": "E1",
+      "remaining_severity": "NA",
+      "rationale": "PR170493于10月13日合并，引入5秒收尾宽限、取消与native终止并保持租约恢复。部署分支适用性单独核对。",
+      "version_status": [
+        {
+          "ref": "6a64431a10b638958cdeccc782f2b36074274776",
+          "resolution": "D",
+          "basis": "已合并PR170493；稳定版覆盖未在本轮断言"
+        }
+      ]
+    }
+  ],
+  "material_moves": [
+    {
+      "fetch_name": "comments_116227",
+      "path": "materials/L2_harness_tasks/OC-I116227/comments.json",
+      "sha256": "041aa8af09f608bd2eabe3dcde5427adcef44cb9f4cb30c6f5e2e77834c7b416",
+      "bytes": 12979
+    },
+    {
+      "fetch_name": "comments_152360",
+      "path": "materials/L3_client_requests/OC-I152360/comments.json",
+      "sha256": "aa21aa59dac518d579eee7de3e1f7a4282756175aadbd68f9492beec8984ed96",
+      "bytes": 12488
+    },
+    {
+      "fetch_name": "comments_155119",
+      "path": "materials/L2_harness_tasks/OC-I155119/comments.json",
+      "sha256": "bbb590bf4bb467e9f0613e2ab3e41bbceff6542d71a21bae52c67b9cb60f8015",
+      "bytes": 42128
+    },
+    {
+      "fetch_name": "comments_161050",
+      "path": "materials/L1_local_resources/OC-I161050/comments.json",
+      "sha256": "fc9bee8fd032236b46673c68910cb244be0c598169a59bd9c44af7e7ec1aba7a",
+      "bytes": 19231
+    },
+    {
+      "fetch_name": "comments_161506",
+      "path": "materials/L2_harness_tasks/OC-I161506/comments.json",
+      "sha256": "a82ef54247eca4c7c3e40d2fbd11b62c98c7f497358f522b75fdc76a080605bb",
+      "bytes": 24176
+    },
+    {
+      "fetch_name": "comments_164294",
+      "path": "materials/L1_local_resources/OC-I164294/comments.json",
+      "sha256": "9666b395fb62de6c7cec636adbf53bda38c9eb76e8384e6e9c3a64795c6dfaae",
+      "bytes": 77096
+    },
+    {
+      "fetch_name": "comments_164545",
+      "path": "materials/L2_harness_tasks/OC-I164545/comments.json",
+      "sha256": "b00934b3e0d75011d911798c90ad398d606f022dc495a8bb9005485b4d12b221",
+      "bytes": 12137
+    },
+    {
+      "fetch_name": "comments_165950",
+      "path": "materials/L2_harness_tasks/OC-I165950/comments.json",
+      "sha256": "90057d9ed764de327fdd85b1d3a50396097970c36fea25814c43b6099d4bb6fd",
+      "bytes": 11927
+    },
+    {
+      "fetch_name": "comments_169777",
+      "path": "materials/L2_harness_tasks/OC-I169777/comments.json",
+      "sha256": "f45676fc03270274233462828f74e1798e09698b94238874204fa04783dcf68f",
+      "bytes": 13361
+    },
+    {
+      "fetch_name": "comments_171366",
+      "path": "materials/L2_harness_tasks/OC-I171366/comments.json",
+      "sha256": "84885205cc15b6e8d4e5f2407dd1466dd9ae343c7268413ffc40a8a4c68d6edc",
+      "bytes": 15085
+    },
+    {
+      "fetch_name": "comments_54488",
+      "path": "materials/L2_harness_tasks/OC-I54488/comments.json",
+      "sha256": "4ed18836acf0173ca6bb91ae116eedf52e6442cdd94b78fc32629676115655a2",
+      "bytes": 39790
+    },
+    {
+      "fetch_name": "comments_65983",
+      "path": "materials/L1_local_resources/OC-I65983/comments.json",
+      "sha256": "7313b54fa904f101cecbd3e2ec0baa9f5452209ad1e16ebb790d2d4c0a5a2d89",
+      "bytes": 21024
+    },
+    {
+      "fetch_name": "comments_79589",
+      "path": "materials/L2_harness_tasks/OC-I79589/comments.json",
+      "sha256": "8ff487126d2824b2949ed30dea4d0490e00c8ff973d3021ccfeeb70425cb0fef",
+      "bytes": 20094
+    },
+    {
+      "fetch_name": "comments_84647",
+      "path": "materials/L2_harness_tasks/OC-I84647/comments.json",
+      "sha256": "50d71d43dfa65e72a78b0081ec0de593eeab0223339942ebe31df4a7551611dc",
+      "bytes": 19603
+    },
+    {
+      "fetch_name": "comments_95506",
+      "path": "materials/L1_local_resources/OC-I95506/comments.json",
+      "sha256": "702b4871992ad3dcba4fa705e2f654db71e1607bcc0ac54db220e3a2fb4d5a41",
+      "bytes": 32108
+    },
+    {
+      "fetch_name": "comments_97616",
+      "path": "materials/L1_local_resources/OC-I97616/comments.json",
+      "sha256": "9c0ea9fbfa09d96e0f91abccc7a8686629fec3cbd7157b52886735f62d6a85e2",
+      "bytes": 72698
+    },
+    {
+      "fetch_name": "extra_01",
+      "path": "materials/L2_harness_tasks/OC-S01/command-queue.ts",
+      "sha256": "81b9b09bec67b7950b00d7c8844c5f0420dd71a46343123dfc11c6de40072121",
+      "bytes": 27626
+    },
+    {
+      "fetch_name": "extra_02",
+      "path": "materials/L2_harness_tasks/OC-S02/command-queue.types.ts",
+      "sha256": "fac0b886afbaf5a57707e4627fc631e201223cad99809d68dc7407e99b1a9ae6",
+      "bytes": 2597
+    },
+    {
+      "fetch_name": "extra_03",
+      "path": "materials/L2_harness_tasks/OC-S03/command-queue.capacity-groups.ts",
+      "sha256": "b79b4d34f979adf7305cb98bc6e271e8aebe80fc2434610da6ef019da7272be3",
+      "bytes": 9375
+    },
+    {
+      "fetch_name": "extra_04",
+      "path": "materials/L2_harness_tasks/OC-S04/command-queue.state.ts",
+      "sha256": "7a689d44fc0f5743460b7c40fdc0d46a68b647c02ad27ae8e294c943cbaed181",
+      "bytes": 5229
+    },
+    {
+      "fetch_name": "extra_05",
+      "path": "materials/L2_harness_tasks/OC-S05/hooks.ts",
+      "sha256": "9856db79cf655421a9738c679678a18fa7d7455b525eb0efe2957a3914433b61",
+      "bytes": 46987
+    },
+    {
+      "fetch_name": "extra_06",
+      "path": "materials/L2_harness_tasks/OC-S06/hook-types.ts",
+      "sha256": "50f44ec5dec631480a4951781dd11073e9a4750380d7f42dbf68aa5a0dc60b41",
+      "bytes": 31303
+    },
+    {
+      "fetch_name": "extra_08",
+      "path": "materials/L1_local_resources/OC-S19/hook-before-tool-call-result.ts",
+      "sha256": "b18c40dd7f668e7f358b01863627f1a9c069798d853e3d2a8f20d0ed42842b5a",
+      "bytes": 947
+    },
+    {
+      "fetch_name": "extra_09",
+      "path": "materials/L1_local_resources/OC-S07/agent-tools.before-tool-call.policy.ts",
+      "sha256": "0b3673eb625256bfb4e19b83e088092b0a88b095ff47b0a8cafa61a7795bf5f8",
+      "bytes": 16597
+    },
+    {
+      "fetch_name": "extra_11",
+      "path": "materials/L2_harness_tasks/OC-S15/server-plugins.ts",
+      "sha256": "c929f6e8a8857461aa6e9e2430ebba6ad40d134fe24f0acfefc94fa60fc6d131",
+      "bytes": 21253
+    },
+    {
+      "fetch_name": "extra_12",
+      "path": "materials/L2_harness_tasks/OC-S17/request-start.ts",
+      "sha256": "0f3e91cf0fca29312875426d6bbda04479c684a23ea15b2241ca9bcf799d4f6c",
+      "bytes": 7236
+    },
+    {
+      "fetch_name": "extra_13",
+      "path": "materials/L1_local_resources/OC-S09/supervisor.ts",
+      "sha256": "2a5405d2ef5e59cd9fdb6209efb0f1894e4ecf3f99c4e43d0f77619c2f28b98f",
+      "bytes": 27259
+    },
+    {
+      "fetch_name": "extra_15",
+      "path": "materials/L2_harness_tasks/OC-S23/subagent-spawn-lifecycle.ts",
+      "sha256": "ade57248b39a12dccc97617250500c0bb9e5b4edbc8fb0ba410bdd614345241e",
+      "bytes": 5019
+    },
+    {
+      "fetch_name": "extra_17",
+      "path": "materials/L2_harness_tasks/OC-D22/sdk-runtime.md",
+      "sha256": "8eb2d3f4f9065f9ea49c52e82025c487f3d2a40bf509e131f579d59f6d7bb2be",
+      "bytes": 48460
+    },
+    {
+      "fetch_name": "extra_18",
+      "path": "materials/L1_local_resources/OC-D23/exec.md",
+      "sha256": "7e3390d4c2913227182808a815bd42103e6130b025b9bfac583d22e70ec393b3",
+      "bytes": 41317
+    },
+    {
+      "fetch_name": "file_02",
+      "path": "materials/L2_harness_tasks/OC-M01/package.json",
+      "sha256": "7f8954ec6b5f2417e64d401e6ec2dd11e40981e303484de5052e14cbf559b5fc",
+      "bytes": 148488
+    },
+    {
+      "fetch_name": "file_03",
+      "path": "materials/L2_harness_tasks/OC-D01/architecture.md",
+      "sha256": "c37da86de08eb864ff7ae8269bd6099e74f56027b3bdcf41ce7c791360b645c4",
+      "bytes": 7885
+    },
+    {
+      "fetch_name": "file_04",
+      "path": "materials/L2_harness_tasks/OC-D02/agent-loop.md",
+      "sha256": "0621cef3a4fcd9063483cf5b1e2e4e06253b1acce15989aa3f6f1f88e4b17117",
+      "bytes": 42112
+    },
+    {
+      "fetch_name": "file_05",
+      "path": "materials/L2_harness_tasks/OC-D03/agent-runtimes.md",
+      "sha256": "72f27eac3f7347488d35d5bb1fd79f57abcd72332c1e7eda570895e9ecf3b217",
+      "bytes": 19828
+    },
+    {
+      "fetch_name": "file_06",
+      "path": "materials/L2_harness_tasks/OC-D04/agent.md",
+      "sha256": "fdecb15a6da12f675f1510082f61fdc045651e21d030f7d7da609a26d553e842",
+      "bytes": 8167
+    },
+    {
+      "fetch_name": "file_07",
+      "path": "materials/L2_harness_tasks/OC-D05/multi-agent.md",
+      "sha256": "1ac1817f818de15fa963333e736747da241cb5d72b2d268664b3a9e1be75355f",
+      "bytes": 33468
+    },
+    {
+      "fetch_name": "file_08",
+      "path": "materials/L2_harness_tasks/OC-D06/queue.md",
+      "sha256": "38db427f97484741d313740b4eb305d51afdf28a9e599a02ce86eb751c0cab65",
+      "bytes": 20819
+    },
+    {
+      "fetch_name": "file_09",
+      "path": "materials/L2_harness_tasks/OC-D07/subagent-yield-handoff.md",
+      "sha256": "6b23c0a729e0eb3aa0bfab9fc090f015420511d952356dd6d4214e612f3eb237",
+      "bytes": 15245
+    },
+    {
+      "fetch_name": "file_10",
+      "path": "materials/L2_harness_tasks/OC-D08/subagents.md",
+      "sha256": "2aa68bf0d186effb546e895324952baa1062dc8009612966880c2e8e73cb3fbf",
+      "bytes": 13071
+    },
+    {
+      "fetch_name": "file_11",
+      "path": "materials/L2_harness_tasks/OC-D09/nesting.md",
+      "sha256": "800a18926af7b74eaa65058ca7aebd390f6955150fe62d0e6f2316c3df227948",
+      "bytes": 7949
+    },
+    {
+      "fetch_name": "file_12",
+      "path": "materials/L2_harness_tasks/OC-D10/operations.md",
+      "sha256": "e881c006a745ae8f728c84f1d51b56cb8d9394b994a3ec151757cf52c29f2060",
+      "bytes": 18634
+    },
+    {
+      "fetch_name": "file_13",
+      "path": "materials/L2_harness_tasks/OC-D11/tool-reference.md",
+      "sha256": "c334e0e50e8c394b6f28458839b44d5311e2e6bb200787843dc46af7e3f7a278",
+      "bytes": 38609
+    },
+    {
+      "fetch_name": "file_14",
+      "path": "materials/L2_harness_tasks/OC-D12/sessions-and-subagents.md",
+      "sha256": "b87176203bd83d7aa90cba94f6aa9765b8bd39e4b0a1941439d255ad2d57b0bb",
+      "bytes": 13401
+    },
+    {
+      "fetch_name": "file_15",
+      "path": "materials/L1_local_resources/OC-D13/sandbox.md",
+      "sha256": "01dedd2991eac5d2290b2b6bba71eadd44b78f2b5d3471667f9f2c4fd1aefe4d",
+      "bytes": 11062
+    },
+    {
+      "fetch_name": "file_16",
+      "path": "materials/L1_local_resources/OC-D14/docker-backend.md",
+      "sha256": "6583fa5ed50061bbf020125337ea657682fc484b87fdd5fbb71df24e6b9450c2",
+      "bytes": 7665
+    },
+    {
+      "fetch_name": "file_17",
+      "path": "materials/L3_client_requests/OC-D15/custom-providers.md",
+      "sha256": "66a34299e621a1aedf9a96a8392e3cea8260a7cbf817c664fb1ab14247085f8a",
+      "bytes": 19908
+    },
+    {
+      "fetch_name": "file_18",
+      "path": "materials/L3_client_requests/OC-D16/model-failover.md",
+      "sha256": "30197342d687c8b361a367d855c936dd401228bfa03de40759b7dae79b2244e6",
+      "bytes": 44518
+    },
+    {
+      "fetch_name": "file_19",
+      "path": "materials/L3_client_requests/OC-D17/retry.md",
+      "sha256": "8d02312a32bc388b80f1595e6f443e0b959aa2df57dbc0159a28feff7c0a8583",
+      "bytes": 12008
+    },
+    {
+      "fetch_name": "file_20",
+      "path": "materials/L2_harness_tasks/OC-D18/reference.md",
+      "sha256": "e043d0f10357c97a6de775a8ddf6398f4c088cc6f8949992de048f8727e80db4",
+      "bytes": 22488
+    },
+    {
+      "fetch_name": "file_21",
+      "path": "materials/L1_local_resources/OC-D19/tool-policy.md",
+      "sha256": "4004d167826df7f9cdc99bbc18c56b1a33c5b7f83746fa7a5247df10f4ac926c",
+      "bytes": 15416
+    },
+    {
+      "fetch_name": "file_22",
+      "path": "materials/L2_harness_tasks/OC-D20/lifecycle.md",
+      "sha256": "a6130e50328f162ea5fbee10f35db7f1a42d83a17fc55b7b545179c59acad579",
+      "bytes": 10235
+    },
+    {
+      "fetch_name": "file_23",
+      "path": "materials/L3_client_requests/OC-D21/runtime-hooks.md",
+      "sha256": "2e2a3ef6b15331eb626ccd96b0d48633a1f05997d4e21eacf143babe12b4e1ba",
+      "bytes": 24657
+    },
+    {
+      "fetch_name": "file_26",
+      "path": "materials/L1_local_resources/OC-S10/bash-process-registry.ts",
+      "sha256": "4da694a337640a9d2092d0e4e626f73c1fa6f206213f4a30f1dedf7dd88cc47a",
+      "bytes": 19944
+    },
+    {
+      "fetch_name": "file_27",
+      "path": "materials/L2_harness_tasks/OC-S08/lane-controller.ts",
+      "sha256": "3d3fec075a6074b56702deb25e9f614d45f503fc0152c2569213e1dea0e68d77",
+      "bytes": 18095
+    },
+    {
+      "fetch_name": "file_28",
+      "path": "materials/L2_harness_tasks/OC-S22/lane-runtime.ts",
+      "sha256": "8e8173e0f887921db531eaf0f56d6195de3bd6fee30a647baa1a81492d143d8d",
+      "bytes": 2314
+    },
+    {
+      "fetch_name": "focus_01",
+      "path": "materials/L1_local_resources/OC-S11/agent-bundle-mcp-runtime.ts",
+      "sha256": "f1e5ed81e083ae544ccb9fa970320de22c984cfedadd83842e6ca1503127c7b9",
+      "bytes": 41340
+    },
+    {
+      "fetch_name": "focus_03",
+      "path": "materials/L1_local_resources/OC-S24/agent-bundle-mcp-runtime-shared.ts",
+      "sha256": "c722b3860ad83a1c97870646d6fa96049bbf23819f5d29b69c2bab8da3aa73c3",
+      "bytes": 2446
+    },
+    {
+      "fetch_name": "focus_04",
+      "path": "materials/L3_client_requests/OC-S13/runtime-llm.runtime.ts",
+      "sha256": "36433c95d3d23d7a9b2a0ec9562dd16ad64dc38844542c64b522a20afb43fd2b",
+      "bytes": 25859
+    },
+    {
+      "fetch_name": "focus_05",
+      "path": "materials/L3_client_requests/OC-S14/simple-completion-execution.ts",
+      "sha256": "40b52386fef24d3459a65b13d8e9305ee7d2cf1edf1842bc920308c0dfb8163f",
+      "bytes": 6342
+    },
+    {
+      "fetch_name": "focus_06",
+      "path": "materials/L2_harness_tasks/OC-S16/server-plugin-subagent-runtime.ts",
+      "sha256": "82ebd663380aff3c8ce09ce594f11b7fdd0eef55a17278d2e41d1f4b51d7ea52",
+      "bytes": 27185
+    },
+    {
+      "fetch_name": "focus_09",
+      "path": "materials/L1_local_resources/OC-S20/scoped-child-reaper.ts",
+      "sha256": "59d6df1f24f8d4ac9acd9ac97b3339592360ff53b443696638f3aa69f39b78eb",
+      "bytes": 3261
+    },
+    {
+      "fetch_name": "focus_10",
+      "path": "materials/L1_local_resources/OC-S21/linux-child-subreaper.ts",
+      "sha256": "4ea614ed23c1d78b8e8ff705437ee8baa7da291e868fc23a632d9a62b4659385",
+      "bytes": 4064
+    },
+    {
+      "fetch_name": "focus_12",
+      "path": "materials/L2_harness_tasks/OC-S18/hook-agent-context.types.ts",
+      "sha256": "7b45100de12acf107e8a27a8654e112cb475be3e092a3dbded368bc4e4a0322a",
+      "bytes": 3122
+    },
+    {
+      "fetch_name": "focus_15",
+      "path": "materials/L2_harness_tasks/OC-D24/transport.md",
+      "sha256": "1f32e6c2bd3be9686bbcc9d0f83158e5d61d29fbea6eaea6650643e176b3b69d",
+      "bytes": 16682
+    },
+    {
+      "fetch_name": "head",
+      "path": "materials/L2_harness_tasks/OC-M01/head.json",
+      "sha256": "e7dc162573694349fa1c047ff8d399274b79f70f92130264fb2bc3c970834b26",
+      "bytes": 369033
+    },
+    {
+      "fetch_name": "issue_116227",
+      "path": "materials/L2_harness_tasks/OC-I116227/issue.json",
+      "sha256": "a8cda9860ec705efcdc46bb3399e669c9b7113aa8695085d3f923d9db4cf6b68",
+      "bytes": 11485
+    },
+    {
+      "fetch_name": "issue_152360",
+      "path": "materials/L3_client_requests/OC-I152360/issue.json",
+      "sha256": "9e8798458381ef2916af8a9448ecde020af2ca6e8ca84ca57549bde21fedad73",
+      "bytes": 11361
+    },
+    {
+      "fetch_name": "issue_155119",
+      "path": "materials/L2_harness_tasks/OC-I155119/issue.json",
+      "sha256": "b18fc1a0d815fdd15df195e7e67b699ab92dccac90e952cf54eb9efe77c9a3f5",
+      "bytes": 6274
+    },
+    {
+      "fetch_name": "issue_161050",
+      "path": "materials/L1_local_resources/OC-I161050/issue.json",
+      "sha256": "7b2101f6c437f1c658f5d94e3bc12216278617667c7805f9ae516bbc7e2a0976",
+      "bytes": 6322
+    },
+    {
+      "fetch_name": "issue_161506",
+      "path": "materials/L2_harness_tasks/OC-I161506/issue.json",
+      "sha256": "02e596215ddde48d8106003c2c36eed1b00c730e3ee19966aa2a1850ae191956",
+      "bytes": 16290
+    },
+    {
+      "fetch_name": "issue_164294",
+      "path": "materials/L1_local_resources/OC-I164294/issue.json",
+      "sha256": "b5c29f24c306846a92f30939833aff6c3bff427b6ab139209afe36c9bdd0c385",
+      "bytes": 6871
+    },
+    {
+      "fetch_name": "issue_164545",
+      "path": "materials/L2_harness_tasks/OC-I164545/issue.json",
+      "sha256": "131d0c376268d688e1b65f930d6e895bd754e94fe6452619ed940d27ad6e7c61",
+      "bytes": 10221
+    },
+    {
+      "fetch_name": "issue_165950",
+      "path": "materials/L2_harness_tasks/OC-I165950/issue.json",
+      "sha256": "f6eb1c29da5b356e2b36de610c6cf66e4eaef35e391672a19b21324cf5b26e1b",
+      "bytes": 7830
+    },
+    {
+      "fetch_name": "issue_169777",
+      "path": "materials/L2_harness_tasks/OC-I169777/issue.json",
+      "sha256": "d72156815032842480f6df2897cfeb4a35f810744376a722a6e4100dcabe8008",
+      "bytes": 11622
+    },
+    {
+      "fetch_name": "issue_171366",
+      "path": "materials/L2_harness_tasks/OC-I171366/issue.json",
+      "sha256": "5f279abc0f5350bb5fa357f6b4ceccfd1c1d78490bdba50963c88965ed024444",
+      "bytes": 8544
+    },
+    {
+      "fetch_name": "issue_54488",
+      "path": "materials/L2_harness_tasks/OC-I54488/issue.json",
+      "sha256": "e891093d9c9fbc18630ef41eae6fe57355da08185a7e1ba5ec0999b4906eb11f",
+      "bytes": 9173
+    },
+    {
+      "fetch_name": "issue_65983",
+      "path": "materials/L1_local_resources/OC-I65983/issue.json",
+      "sha256": "7e8c03ae18d4afc81697a7132741bd0eaea13c858d9bc1852bd729996ac3eccf",
+      "bytes": 10893
+    },
+    {
+      "fetch_name": "issue_79589",
+      "path": "materials/L2_harness_tasks/OC-I79589/issue.json",
+      "sha256": "e47347ecc6b10c4aa8e522dcdbec0d7f863c77b4c3ddf2cdac8a5ce471c84060",
+      "bytes": 5900
+    },
+    {
+      "fetch_name": "issue_84647",
+      "path": "materials/L2_harness_tasks/OC-I84647/issue.json",
+      "sha256": "2e0591aa124eb45964e5579e9de91c3f264a47728e7a6cff430fca1d16a7dff9",
+      "bytes": 12965
+    },
+    {
+      "fetch_name": "issue_95506",
+      "path": "materials/L1_local_resources/OC-I95506/issue.json",
+      "sha256": "80e9e1cff44013a7b701231057aa87016e1b8f453317c7ac9c98f0fd00b32a2c",
+      "bytes": 10499
+    },
+    {
+      "fetch_name": "issue_97616",
+      "path": "materials/L1_local_resources/OC-I97616/issue.json",
+      "sha256": "8c1e7d76e7e8a86507b7c733ab503c495290712b3f628a26b69eb75cde869c58",
+      "bytes": 15153
+    },
+    {
+      "fetch_name": "latest_release",
+      "path": "materials/L2_harness_tasks/OC-M01/latest_release.json",
+      "sha256": "f1eb91153d4e9407f93b59f31296e0ed2f09d55236e4495954acc45d12a2c219",
+      "bytes": 41970
+    },
+    {
+      "fetch_name": "mcp_manager_mirror",
+      "path": "materials/L1_local_resources/OC-S12/agent-bundle-mcp-manager.ts",
+      "sha256": "1709d829f5c26fc68a9ba062b1d47a3c1a05233cc506a0fbb311b4b3d7cc92e4",
+      "bytes": 18073
+    },
+    {
+      "fetch_name": "pr_116286",
+      "path": "materials/L2_harness_tasks/OC-P116286/pull_request.json",
+      "sha256": "2b63cc7f0847b06a5576361abc988531a22db9c00b201afe2a1b4c8d235b1778",
+      "bytes": 24840
+    },
+    {
+      "fetch_name": "pr_122764",
+      "path": "materials/L2_harness_tasks/OC-P122764/pull_request.json",
+      "sha256": "52bbdb2471b9a600f78359ec44e30d8d74673923022792f792d4b53e6d5de48d",
+      "bytes": 26854
+    },
+    {
+      "fetch_name": "pr_152489",
+      "path": "materials/L3_client_requests/OC-P152489/pull_request.json",
+      "sha256": "e56cd14a82acb2c7bffdf611cedbaa00b900cc35bee44500649610a668c84cfd",
+      "bytes": 20169
+    },
+    {
+      "fetch_name": "pr_167683",
+      "path": "materials/L2_harness_tasks/OC-P167683/pull_request.json",
+      "sha256": "e1c161b52e4f03166890b4f697187f1dfc78b3ef1d11840cd6daf47dcfaef5ac",
+      "bytes": 26833
+    },
+    {
+      "fetch_name": "pr_170493",
+      "path": "materials/L2_harness_tasks/OC-P170493/pull_request.json",
+      "sha256": "e92f38680e4fa83fa764dadcdbe6fc708b3c5fabcf15398ce401e9287bd715f3",
+      "bytes": 25306
+    },
+    {
+      "fetch_name": "pr_171570",
+      "path": "materials/L2_harness_tasks/OC-P171570/pull_request.json",
+      "sha256": "dafcf5a6506db1a96c6beb384fcfddd6a66e3e121534c7f86f05a6ddce4e0018",
+      "bytes": 21460
+    },
+    {
+      "fetch_name": "pr_82765",
+      "path": "materials/L2_harness_tasks/OC-P82765/pull_request.json",
+      "sha256": "48936f52ad88cad875729658c7cd2055622f9b1a6c600c4f8516515015d04d25",
+      "bytes": 30206
+    },
+    {
+      "fetch_name": "release_queue",
+      "path": "materials/L2_harness_tasks/OC-S01/release_command-queue.ts",
+      "sha256": "d851f058012dde285478ecb134f7bbc2ccc1a8643142bc907ac93ce0358997cb",
+      "bytes": 26270
+    },
+    {
+      "fetch_name": "release_queue_doc",
+      "path": "materials/L2_harness_tasks/OC-D06/release_queue.md",
+      "sha256": "f07d9b399ec22a28130d045d32aeea3336425030e7b08a831ee29ea3daee1402",
+      "bytes": 18224
+    },
+    {
+      "fetch_name": "release_queue_state",
+      "path": "materials/L2_harness_tasks/OC-S04/release_command-queue.state.ts",
+      "sha256": "4e7f7af60ece22a256faf1ef0a79b3f16de7ac48c70a322db15e8e42842be10d",
+      "bytes": 4947
+    },
+    {
+      "fetch_name": "release_ref",
+      "path": "materials/L2_harness_tasks/OC-M01/release_ref.json",
+      "sha256": "282d2a052cf7df5ce5f9947b0000f1cc0e128dfce7f7c7a2774659fb272d2ae8",
+      "bytes": 343
+    },
+    {
+      "fetch_name": "release_request_start",
+      "path": "materials/L2_harness_tasks/OC-S17/release_request-start.ts",
+      "sha256": "6d4a0a29519013b4218cd27779453d045cfac04a3de589966e8188c18b53c0b7",
+      "bytes": 5121
+    },
+    {
+      "fetch_name": "release_tag",
+      "path": "materials/L2_harness_tasks/OC-M01/release_tag.json",
+      "sha256": "57a32512716a9d9f9e9c95f06469cafcf0d87c635320a59403b05cffd1d191a8",
+      "bytes": 2624
+    },
+    {
+      "fetch_name": "repository",
+      "path": "materials/L2_harness_tasks/OC-M01/repository.json",
+      "sha256": "607c03f1487485438bad3bf104ec3b591237a014f32807d362a620a039dba284",
+      "bytes": 6278
+    },
+    {
+      "fetch_name": "timeline_116227",
+      "path": "materials/L2_harness_tasks/OC-I116227/timeline.json",
+      "sha256": "8114860170ea6955f0d5286d68915b34568f3d84c4c3ac5b4c78ec85c81ea8f4",
+      "bytes": 47080
+    },
+    {
+      "fetch_name": "timeline_152360",
+      "path": "materials/L3_client_requests/OC-I152360/timeline.json",
+      "sha256": "7bd2eba0a6985620cf9dd4ce701a01a773865525cbd1bb40e7148303ee06333d",
+      "bytes": 107112
+    },
+    {
+      "fetch_name": "timeline_155119",
+      "path": "materials/L2_harness_tasks/OC-I155119/timeline.json",
+      "sha256": "06ed597f7129caa2ff55207a893d875f11e813a3e3fc14b1547f0b63dd6caab0",
+      "bytes": 162431
+    },
+    {
+      "fetch_name": "timeline_161050",
+      "path": "materials/L1_local_resources/OC-I161050/timeline.json",
+      "sha256": "b9a73ab4ed14701636acd056c69e849779eba93fa74ccb79657f670d93ad0a70",
+      "bytes": 36011
+    },
+    {
+      "fetch_name": "timeline_161506",
+      "path": "materials/L2_harness_tasks/OC-I161506/timeline.json",
+      "sha256": "5644a65eade7b5a72a0fda7a8cf5f086aeafaf07b795c036ebf1bfd05e59ba91",
+      "bytes": 89087
+    },
+    {
+      "fetch_name": "timeline_164294",
+      "path": "materials/L1_local_resources/OC-I164294/timeline.json",
+      "sha256": "4767d2e0f467d3d8466b602d4513b379bec2aa9a304477c8d486eae2fbb5e0d6",
+      "bytes": 475690
+    },
+    {
+      "fetch_name": "timeline_164545",
+      "path": "materials/L2_harness_tasks/OC-I164545/timeline.json",
+      "sha256": "eab12b1ef0707f657390b2b6fbb7a9691fa54b8bc4da25ec8cdf81cd3e93baad",
+      "bytes": 72096
+    },
+    {
+      "fetch_name": "timeline_165950",
+      "path": "materials/L2_harness_tasks/OC-I165950/timeline.json",
+      "sha256": "e555def915c60b5cc90369f6d3d7b5b5e4b988406c9219aee7d8ed5ba8e89dee",
+      "bytes": 56425
+    },
+    {
+      "fetch_name": "timeline_169777",
+      "path": "materials/L2_harness_tasks/OC-I169777/timeline.json",
+      "sha256": "fa76fdd043fb3e6cabe765781b4a6e7936e68928ebaa564608447ef02cfa42c3",
+      "bytes": 46283
+    },
+    {
+      "fetch_name": "timeline_171366",
+      "path": "materials/L2_harness_tasks/OC-I171366/timeline.json",
+      "sha256": "3d85e8ade94f0cccfe26dcf40bed3829edff4b3d8f506a6a31c567a9757d6a0e",
+      "bytes": 40400
+    },
+    {
+      "fetch_name": "timeline_54488",
+      "path": "materials/L2_harness_tasks/OC-I54488/timeline.json",
+      "sha256": "8a7139ce7dbf1757ed29be0380b5247fda6d0bdc4a465e1c5fa2aa25efd43884",
+      "bytes": 1243195
+    },
+    {
+      "fetch_name": "timeline_65983",
+      "path": "materials/L1_local_resources/OC-I65983/timeline.json",
+      "sha256": "765f8e596657c34957d1f2184fe8140ab33fce026acaf804231b0c8274a3d3b3",
+      "bytes": 221455
+    },
+    {
+      "fetch_name": "timeline_79589",
+      "path": "materials/L2_harness_tasks/OC-I79589/timeline.json",
+      "sha256": "a1e18212203fc275256ad931e031a4ae1a11a48044d92f14b393a50e1f264e2f",
+      "bytes": 209890
+    },
+    {
+      "fetch_name": "timeline_84647",
+      "path": "materials/L2_harness_tasks/OC-I84647/timeline.json",
+      "sha256": "2b6054a772cca06e342d67dc55ff0d1142c5c17de35834750dcf5dc1dff13a5a",
+      "bytes": 136198
+    },
+    {
+      "fetch_name": "timeline_95506",
+      "path": "materials/L1_local_resources/OC-I95506/timeline.json",
+      "sha256": "d8ffd687eff89dbd1b1caed31789b6dce6c8999c5fd543cfbae36b997d11bab6",
+      "bytes": 230577
+    },
+    {
+      "fetch_name": "timeline_97616",
+      "path": "materials/L1_local_resources/OC-I97616/timeline.json",
+      "sha256": "ba45bca25d84645092d3cb3b6860906dc51b528a74709216ef8d21c9fda640a1",
+      "bytes": 1407931
+    }
+  ],
+  "pre_extension_backup": "materials/_archive/openclaw_20261014/before_openclaw_update.zip",
+  "current_index_sources": 249,
+  "current_report_count": 3
+}

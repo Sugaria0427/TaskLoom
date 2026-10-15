@@ -1,0 +1,54 @@
+@startmindmap
+!include _theme.iuml
+<style>
+mindmapDiagram {
+  node {
+    FontName Microsoft YaHei
+    FontSize 20
+    FontColor #203144
+    BackgroundColor #F4F7FA
+    LineColor #9AABBB
+    RoundCorner 10
+    Padding 15
+    Margin 13
+  }
+  rootNode {
+    FontSize 30
+    FontStyle bold
+    BackgroundColor #E4EDF4
+    LineColor #4B6B86
+  }
+  leafNode {
+    FontSize 18
+    BackgroundColor #FFFFFF
+    LineColor #CBD4DD
+  }
+  arrow {
+    LineColor #8A9EAF
+    LineThickness 1.6
+  }
+}
+</style>
+* TaskLoom「织序」\n让有限资源支持完整任务交付
+**[#EEEDF9] 问题与目标
+*** 工具资源紧张\n按需求控制启动与回收
+*** 任务状态脱节\n关联完成、取消与实际占用
+*** 模型额度有限\n公平安排发送与重试
+*** 多用户服务失衡\n按用户与根任务分配机会
+**[#EAF3FC] 两个场景 · 四个层次
+*** 个人端 L1\n本地资源与工具执行
+*** 个人端 L2\nHarness 与 Agent 任务管理
+*** 个人端 L3\n客户端模型请求调度
+*** 平台端 L4\n多用户接纳与派发
+left side
+**[#EBF6F2] OS 方法
+*** 调度与公平\n列表调度／DRR／老化
+*** 资源安全\n原子准入／阶段银行家检查
+*** 协作与恢复\n互斥／IPC／检查点／守护
+*** 状态与反馈\n真实释放／有界队列／背压
+**[#FBF2E1] 验证与交付
+*** 公平对照\n独立优化与协同增量分开
+*** 完整任务指标\n合格完成／尾延迟／费用
+*** 故障与长期运行\n取消恢复／校准30天仿真
+*** 交付边界\n可运行原型；模型推理固定
+@endmindmap

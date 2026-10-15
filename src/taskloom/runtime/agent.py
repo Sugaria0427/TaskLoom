@@ -1,0 +1,94 @@
+import json
+
+from taskloom.contracts.models import Checkpoint, JsonObject, TaskCreate
+from taskloom.domain.model import DomainError
+from taskloom.runtime.ports import AgentHost
+
+FILE_STATS_TOOL: JsonObject = {
+    "type": "function",
+    "function": {
+        "name": "file_stats",
+        "description": "Read the task's staged files and return verified file/word statistics.",
+        "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
+    },
+}
+
+
+async def run_agent(
+    host: AgentHost, specification: TaskCreate, checkpoint: Checkpoint, max_steps: int
+) -> JsonObject:
+    state = checkpoint.model_copy(deep=True)
+    if not state.messages:
+        state.messages = [
+            {
+                "role": "system",
+                "content": (
+                    "Analyze the staged documents using file_stats, then return only JSON "
+                    "with files, words, and summary. Tools are executed by the host."
+                ),
+            },
+            {
+                "role": "user",
+                "content": json.dumps(
+                    {
+                        "title": specification.title,
+                        "instruction": specification.instruction,
+                        "files": list(specification.documents),
+                    },
+                    ensure_ascii=False,
+                ),
+            },
+        ]
+        await host.checkpoint(state)
+    while state.model_round + len(state.completed_tools) < max_steps:
+        if state.pending_tools:
+            call = state.pending_tools[0]
+            if call.name != "file_stats" or call.arguments:
+                raise DomainError("INVALID_TOOL", "The model requested an unsupported tool")
+            result = await host.tool(call)
+            state.completed_tools[call.call_id] = result
+            state.messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": call.call_id,
+                    "content": json.dumps(result, ensure_ascii=False),
+                }
+            )
+            state.pending_tools.pop(0)
+            await host.checkpoint(state)
+            continue
+        reply = await host.model(state.messages, state.model_round)
+        state.model_round += 1
+        assistant: JsonObject = {"role": "assistant", "content": reply.content or None}
+        if reply.tool_calls:
+            assistant["tool_calls"] = [
+                {
+                    "id": call.call_id,
+                    "type": "function",
+                    "function": {
+                        "name": call.name,
+                        "arguments": json.dumps(call.arguments),
+                    },
+                }
+                for call in reply.tool_calls
+            ]
+        state.messages.append(assistant)
+        state.pending_tools = reply.tool_calls
+        if reply.tool_calls:
+            await host.checkpoint(state)
+            continue
+        try:
+            final: JsonObject = json.loads(reply.content)
+        except (ValueError, TypeError):
+            raise DomainError("INVALID_RESULT", "Expected a structured JSON result") from None
+        if not state.completed_tools:
+            raise DomainError("UNVERIFIED_RESULT", "No verified tool result is available")
+        last = next(reversed(state.completed_tools.values()))
+        if final.get("files") != last["files"] or final.get("words") != last["words"]:
+            raise DomainError(
+                "RESULT_MISMATCH", "Model summary disagrees with verified tool output"
+            )
+        final["input_files"] = list(specification.documents)
+        await host.checkpoint(state)
+        return final
+    raise DomainError("STEP_LIMIT", "The bounded Agent loop reached its step limit")

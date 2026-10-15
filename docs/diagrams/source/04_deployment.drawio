@@ -1,0 +1,178 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mxfile host="app.diagrams.net" version="24.7.17">
+  <diagram name="04_deployment" id="04_deployment">
+    <mxGraphModel dx="2120" dy="1200" grid="1" page="1" pageWidth="2120" pageHeight="1200">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="PC" value="个人电脑 [1..N]&#10;各用户独立部署" style="whiteSpace=wrap;html=0;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#203144;fillColor=#FAFCFE;strokeColor=#9AB0C2;strokeWidth=1.5;shape=cube;size=12;verticalAlign=top;align=left;spacing=18;" vertex="1" parent="1">
+          <mxGeometry x="40" y="60" width="1250" height="1070" as="geometry" />
+        </mxCell>
+        <mxCell id="OS" value="Linux／WSL2 执行环境" style="whiteSpace=wrap;html=0;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#203144;fillColor=#F8FAFC;strokeColor=#9AB0C2;strokeWidth=1.5;shape=cube;size=12;verticalAlign=top;align=left;spacing=18;" vertex="1" parent="1">
+          <mxGeometry x="85" y="280" width="1160" height="805" as="geometry" />
+        </mxCell>
+        <mxCell id="UI" value="本地浏览器&#10;Web 界面" style="whiteSpace=wrap;html=0;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#203144;fillColor=#F5F7FA;strokeColor=#9AB0C2;strokeWidth=1.5;shape=cube;size=9;align=center;" vertex="1" parent="1">
+          <mxGeometry x="120" y="155" width="355" height="105" as="geometry" />
+        </mxCell>
+        <mxCell id="App" value="个人端应用进程&#10;L2 任务协调 ＋ L3 请求调度" style="whiteSpace=wrap;html=0;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#203144;fillColor=#EEEDF9;strokeColor=#9AB0C2;strokeWidth=1.5;shape=cube;size=9;align=center;" vertex="1" parent="1">
+          <mxGeometry x="130" y="370" width="440" height="135" as="geometry" />
+        </mxCell>
+        <mxCell id="RM" value="L1 资源管理进程" style="whiteSpace=wrap;html=0;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#203144;fillColor=#EBF6F2;strokeColor=#9AB0C2;strokeWidth=1.5;shape=cube;size=9;align=center;" vertex="1" parent="1">
+          <mxGeometry x="730" y="380" width="390" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="Group" value="受管工具资源组&#10;cgroup v2／进程组" style="whiteSpace=wrap;html=0;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#203144;fillColor=#EDF7F3;strokeColor=#9AB0C2;strokeWidth=1.5;shape=cube;size=12;verticalAlign=top;align=left;spacing=18;" vertex="1" parent="1">
+          <mxGeometry x="700" y="580" width="440" height="210" as="geometry" />
+        </mxCell>
+        <mxCell id="W" value="工具 worker [0..N]&#10;及其自有后代" style="whiteSpace=wrap;html=0;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#203144;fillColor=#EBF6F2;strokeColor=#9AB0C2;strokeWidth=1.5;shape=cube;size=9;align=center;" vertex="1" parent="1">
+          <mxGeometry x="745" y="675" width="350" height="95" as="geometry" />
+        </mxCell>
+        <mxCell id="D" value="独立监督守护进程" style="whiteSpace=wrap;html=0;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#203144;fillColor=#F5F7FA;strokeColor=#9AB0C2;strokeWidth=1.5;shape=cube;size=9;align=center;" vertex="1" parent="1">
+          <mxGeometry x="730" y="900" width="390" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="Disk" value="本地磁盘&#10;SQLite WAL／任务产物" style="whiteSpace=wrap;html=0;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#203144;fillColor=#F5F7FA;strokeColor=#9AB0C2;strokeWidth=1.5;rounded=1;arcSize=5;" vertex="1" parent="1">
+          <mxGeometry x="130" y="900" width="440" height="140" as="geometry" />
+        </mxCell>
+        <mxCell id="Platform" value="应用平台服务器&#10;首版单实例" style="whiteSpace=wrap;html=0;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#203144;fillColor=#FEFCF7;strokeColor=#9AB0C2;strokeWidth=1.5;shape=cube;size=12;verticalAlign=top;align=left;spacing=18;" vertex="1" parent="1">
+          <mxGeometry x="1390" y="60" width="590" height="740" as="geometry" />
+        </mxCell>
+        <mxCell id="Gateway" value="L4 接入与派发进程" style="whiteSpace=wrap;html=0;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#203144;fillColor=#FBF2E1;strokeColor=#9AB0C2;strokeWidth=1.5;shape=cube;size=9;align=center;" vertex="1" parent="1">
+          <mxGeometry x="1440" y="185" width="470" height="135" as="geometry" />
+        </mxCell>
+        <mxCell id="Q" value="平台持久账本&#10;共享额度与请求状态" style="whiteSpace=wrap;html=0;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#203144;fillColor=#F5F7FA;strokeColor=#9AB0C2;strokeWidth=1.5;rounded=1;arcSize=5;" vertex="1" parent="1">
+          <mxGeometry x="1440" y="415" width="470" height="145" as="geometry" />
+        </mxCell>
+        <mxCell id="PD" value="平台监督服务进程" style="whiteSpace=wrap;html=0;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#203144;fillColor=#F5F7FA;strokeColor=#9AB0C2;strokeWidth=1.5;shape=cube;size=9;align=center;" vertex="1" parent="1">
+          <mxGeometry x="1440" y="645" width="470" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="External" value="外部固定模型服务&#10;执行条件固定" style="whiteSpace=wrap;html=0;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#203144;fillColor=#F8FAFC;strokeColor=#9AB0C2;strokeWidth=1.5;shape=cube;size=12;verticalAlign=top;align=left;spacing=18;" vertex="1" parent="1">
+          <mxGeometry x="1390" y="910" width="590" height="245" as="geometry" />
+        </mxCell>
+        <mxCell id="API" value="既有模型 API 运行环境" style="whiteSpace=wrap;html=0;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#203144;fillColor=#F5F7FA;strokeColor=#9AB0C2;strokeWidth=1.5;shape=cube;size=9;align=center;" vertex="1" parent="1">
+          <mxGeometry x="1440" y="1030" width="470" height="95" as="geometry" />
+        </mxCell>
+        <mxCell id="e0" style="edgeStyle=none;html=0;rounded=0;strokeColor=#536779;strokeWidth=1.7;endArrow=none;exitX=1.0;exitY=0.49523809523809526;entryX=0.38636363636363635;entryY=0.0;" edge="1" parent="1" source="UI" target="App">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="475" y="207" as="sourcePoint" />
+            <mxPoint x="300" y="370" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="605" y="207" />
+              <mxPoint x="605" y="335" />
+              <mxPoint x="300" y="335" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e1" style="edgeStyle=none;html=0;rounded=0;strokeColor=#536779;strokeWidth=1.7;endArrow=none;exitX=1.0;exitY=0.4444444444444444;entryX=0.0;entryY=0.4166666666666667;" edge="1" parent="1" source="App" target="RM">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="570" y="430" as="sourcePoint" />
+            <mxPoint x="730" y="430" as="targetPoint" />
+            <Array as="points" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e2" style="edgeStyle=none;html=0;rounded=0;strokeColor=#536779;strokeWidth=1.7;endArrow=none;exitX=0.7948717948717948;exitY=1.0;entryX=1.0;entryY=0.5052631578947369;" edge="1" parent="1" source="RM" target="W">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1040" y="500" as="sourcePoint" />
+            <mxPoint x="1095" y="723" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="1040" y="550" />
+              <mxPoint x="1105" y="550" />
+              <mxPoint x="1105" y="723" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e3" style="edgeStyle=none;html=0;rounded=0;strokeColor=#536779;strokeWidth=1.7;dashed=1;endArrow=open;exitX=0.4772727272727273;exitY=1.0;entryX=0.4772727272727273;entryY=0.0;" edge="1" parent="1" source="App" target="Disk">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="340" y="505" as="sourcePoint" />
+            <mxPoint x="340" y="900" as="targetPoint" />
+            <Array as="points" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e4" style="edgeStyle=none;html=0;rounded=0;strokeColor=#536779;strokeWidth=1.7;endArrow=none;exitX=1.0;exitY=0.5;entryX=1.0;entryY=0.5;" edge="1" parent="1" source="D" target="RM">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1120" y="960" as="sourcePoint" />
+            <mxPoint x="1120" y="440" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="1200" y="960" />
+              <mxPoint x="1200" y="440" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5" style="edgeStyle=none;html=0;rounded=0;strokeColor=#536779;strokeWidth=1.7;endArrow=none;exitX=0.5;exitY=0.0;entryX=0.5113636363636364;entryY=1.0;" edge="1" parent="1" source="D" target="Group">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="925" y="900" as="sourcePoint" />
+            <mxPoint x="925" y="790" as="targetPoint" />
+            <Array as="points" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e6" style="edgeStyle=none;html=0;rounded=0;strokeColor=#536779;strokeWidth=1.7;dashed=1;endArrow=open;exitX=0.5;exitY=1.0;entryX=0.5;entryY=0.0;" edge="1" parent="1" source="Gateway" target="Q">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1675" y="320" as="sourcePoint" />
+            <mxPoint x="1675" y="415" as="targetPoint" />
+            <Array as="points" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e7" style="edgeStyle=none;html=0;rounded=0;strokeColor=#536779;strokeWidth=1.7;endArrow=none;exitX=0.0;exitY=0.5;entryX=0.0;entryY=0.4962962962962963;" edge="1" parent="1" source="PD" target="Gateway">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1440" y="695" as="sourcePoint" />
+            <mxPoint x="1440" y="252" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="1410" y="695" />
+              <mxPoint x="1410" y="252" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e8" style="edgeStyle=none;html=0;rounded=0;strokeColor=#536779;strokeWidth=1.7;endArrow=none;exitX=1.0;exitY=0.14814814814814814;entryX=0.0;entryY=0.4962962962962963;" edge="1" parent="1" source="App" target="Gateway">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="570" y="390" as="sourcePoint" />
+            <mxPoint x="1440" y="252" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="640" y="390" />
+              <mxPoint x="640" y="185" />
+              <mxPoint x="1310" y="185" />
+              <mxPoint x="1310" y="252" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e9" style="edgeStyle=none;html=0;rounded=0;strokeColor=#536779;strokeWidth=1.7;endArrow=none;exitX=1.0;exitY=0.4962962962962963;entryX=1.0;entryY=0.49473684210526314;" edge="1" parent="1" source="Gateway" target="API">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1910" y="252" as="sourcePoint" />
+            <mxPoint x="1910" y="1077" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="2040" y="252" />
+              <mxPoint x="2040" y="1077" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="label15" value="本机 HTTP／事件" style="text;html=0;align=center;verticalAlign=middle;fillColor=#FFFFFF;fontFamily=Microsoft YaHei;fontSize=21;fontColor=#4B6172;" vertex="1" parent="1">
+          <mxGeometry x="357.575" y="333" width="184.85" height="32" as="geometry" />
+        </mxCell>
+        <mxCell id="label16" value="本地 IPC" style="text;html=0;align=center;verticalAlign=middle;fillColor=#FFFFFF;fontFamily=Microsoft YaHei;fontSize=21;fontColor=#4B6172;" vertex="1" parent="1">
+          <mxGeometry x="595.06" y="381" width="109.88" height="32" as="geometry" />
+        </mxCell>
+        <mxCell id="label17" value="许可／状态" style="text;html=0;align=center;verticalAlign=middle;fillColor=#FFFFFF;fontFamily=Microsoft YaHei;fontSize=21;fontColor=#4B6172;" vertex="1" parent="1">
+          <mxGeometry x="937.5" y="519" width="125" height="32" as="geometry" />
+        </mxCell>
+        <mxCell id="label18" value="状态与索引" style="text;html=0;align=center;verticalAlign=middle;fillColor=#FFFFFF;fontFamily=Microsoft YaHei;fontSize=21;fontColor=#4B6172;" vertex="1" parent="1">
+          <mxGeometry x="374.5" y="711" width="125" height="32" as="geometry" />
+        </mxCell>
+        <mxCell id="label19" value="监督／对账" style="text;html=0;align=center;verticalAlign=middle;fillColor=#FFFFFF;fontFamily=Microsoft YaHei;fontSize=21;fontColor=#4B6172;" vertex="1" parent="1">
+          <mxGeometry x="1127.5" y="810" width="125" height="32" as="geometry" />
+        </mxCell>
+        <mxCell id="label20" value="核对／清理" style="text;html=0;align=center;verticalAlign=middle;fillColor=#FFFFFF;fontFamily=Microsoft YaHei;fontSize=21;fontColor=#4B6172;" vertex="1" parent="1">
+          <mxGeometry x="977.5" y="828" width="125" height="32" as="geometry" />
+        </mxCell>
+        <mxCell id="label21" value="单一权威写入" style="text;html=0;align=center;verticalAlign=middle;fillColor=#FFFFFF;fontFamily=Microsoft YaHei;fontSize=21;fontColor=#4B6172;" vertex="1" parent="1">
+          <mxGeometry x="1714.0" y="358" width="146" height="32" as="geometry" />
+        </mxCell>
+        <mxCell id="label22" value="健康／重启" style="text;html=0;align=center;verticalAlign=middle;fillColor=#FFFFFF;fontFamily=Microsoft YaHei;fontSize=21;fontColor=#4B6172;" vertex="1" parent="1">
+          <mxGeometry x="1387.5" y="576" width="125" height="32" as="geometry" />
+        </mxCell>
+        <mxCell id="label23" value="HTTPS／流式响应" style="text;html=0;align=center;verticalAlign=middle;fillColor=#FFFFFF;fontFamily=Microsoft YaHei;fontSize=21;fontColor=#4B6172;" vertex="1" parent="1">
+          <mxGeometry x="907.575" y="142" width="184.85" height="32" as="geometry" />
+        </mxCell>
+        <mxCell id="label24" value="HTTPS" style="text;html=0;align=center;verticalAlign=middle;fillColor=#FFFFFF;fontFamily=Microsoft YaHei;fontSize=21;fontColor=#4B6172;" vertex="1" parent="1">
+          <mxGeometry x="2000.075" y="828" width="79.85" height="32" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -1,0 +1,27 @@
+[
+  {
+    "id": "X09_haproxy",
+    "url": "https://www.haproxy.com/blog/nearly-90-of-our-ai-crawler-traffic-is-from-tiktok-parent-bytedance-lessons-learned",
+    "role": "Operator measurement and effective mitigation, sample caveats"
+  },
+  {
+    "id": "X10_forgejo_jade",
+    "url": "https://jade.ellis.link/blog/2025/05/18/actually-stopping-forgejo-ai-scraping",
+    "role": "Self-hosted first-person incident and successful controls; independent attribution limited"
+  },
+  {
+    "id": "X11_ars_cases",
+    "url": "https://arstechnica.com/ai/2025/03/devs-say-ai-crawlers-dominate-traffic-forcing-blocks-on-entire-countries/",
+    "role": "Independent secondary reporting; trace first-party links"
+  },
+  {
+    "id": "X12_register",
+    "url": "https://www.theregister.com/2025/08/29/ai_web_crawlers_are_destroying/",
+    "role": "Secondary reporting to crosscheck original cases; do not duplicate counts"
+  },
+  {
+    "id": "X13_amazon_git",
+    "url": "https://xeiaso.net/notes/2025/amazon-crawler/",
+    "role": "First-person incident; training attribution may be mixed-use"
+  }
+]

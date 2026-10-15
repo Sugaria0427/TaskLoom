@@ -1,0 +1,44 @@
+@startuml
+!include _theme.iuml
+skinparam conditionStyle insideDiamond
+start
+:接收受控阶段的资源申请 Request;
+:读取同一资源域的快照与版本；\n后续边界判断和试算均使用该快照;
+note right
+前提：最大需求可信，申请可拦截；
+阶段可独立结束并归还本域资源。
+end note
+:逐项比较 Request 与 Need;
+if (未超过声明？) then (是)
+else (否)
+  :进入上限变更协议；\n不得直接扩大 Max 后放行;
+  stop
+endif
+:逐项比较 Request 与 Available;
+if (当前空闲量足够？) then (是)
+else (否)
+  :保留原账目，等待资源变化;
+  stop
+endif
+:在该快照上试分配；\n更新 Available、Allocation 与 Need;
+:Work = 试分配后的 Available；\n所有 Finish[i] = false;
+while (仍有未完成阶段？) is (是)
+  :查找 Finish[i] = false\n且 Need[i] 逐项 ≤ Work 的阶段 i;
+  if (找到可完成的阶段？) then (是)
+    :假设该阶段完成；\nWork = Work + Allocation[i]；\nFinish[i] = true;
+  else (否)
+    :无法找到安全完成顺序；\n丢弃试算，暂缓本次分配;
+    note right
+不安全不等于已经死锁；
+真实账本没有因试算改变。
+    end note
+    stop
+  endif
+endwhile (否)
+if (提交时账本版本仍一致？) then (是)
+  :原子提交真实预留；\n返回分配许可及安全序列;
+else (否)
+  :不提交旧结论，返回 RECHECK；\n调用方以最新快照重新发起检查;
+endif
+stop
+@enduml

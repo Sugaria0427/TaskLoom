@@ -1,0 +1,31 @@
+@startuml
+!include _theme.iuml
+left to right direction
+skinparam linetype polyline
+package "个人端：每位用户各有一套" {
+  component "任务与资源界面" as UI #F5F7FA
+  component "L2 任务协调器\nHarness ＋ Agent 管理\n依赖／状态／结果" as L2 #EEEDF9
+  component "L1 工具资源管理器\n准入／互斥／安全检查" as L1 #EBF6F2
+  component "受控工具执行器\nworker 与进程树" as Workers #EBF6F2
+  component "L3 客户端请求调度器\n任务公平／发送／重试" as L3 #EAF3FC
+  component "本地持久记录\n步骤／尝试／产物索引" as LocalDB <<repository>> #F5F7FA
+  component "独立守护进程\n存活核对／受控清理" as Watch #F5F7FA
+  UI ..> L2 : 提交、取消、查询
+  L2 ..> L1 : 就绪工具步骤
+  L1 ..> Workers : 许可与执行指令
+  Workers ..> L2 : 结果／状态事件
+  L2 ..> L3 : 就绪模型步骤
+  L3 ..> L2 : 响应／等待事件
+  L2 ..> LocalDB : 状态与结果引用
+  Watch ..> Workers : 心跳与实际回收
+}
+package "应用平台：汇集多个用户" {
+  component "L4 多用户请求调度\n认证／用户 → 根任务公平\n接纳／派发／压力反馈" as L4 #FBF2E1
+  component "共享额度权威账本\n预留／实际用量／待核对" as PlatformDB <<repository>> #F5F7FA
+  L4 ..> PlatformDB : 原子准入与结算
+}
+component "固定模型 API\n推理能力与配置保持不变" as Model <<external>> #F2F3F5
+L3 ..> L4 : HTTPS：请求＋任务摘要
+L4 ..> L3 : 结果／用量／有效期反馈
+L4 ..> Model : 已获许可的模型调用
+@enduml

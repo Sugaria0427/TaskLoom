@@ -1,0 +1,65 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mxfile host="app.diagrams.net" version="29.0.0" agent="TaskLoom native draw.io authoring">
+  <diagram id="07_cancel_recovery_sequence" name="TaskLoom · 本地取消与核对时序图">
+    <mxGraphModel dx="1600" dy="1100" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1100" math="0" shadow="0" background="#FAFBFE">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="canvas" value="" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=#FAFBFE;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;locked=1;" vertex="1" parent="1" data-role="neutral" data-uml-kind="decoration">
+          <mxGeometry x="0" y="0" width="1600" height="1100" as="geometry" />
+        </mxCell>
+        <mxCell id="title" value="TaskLoom · 本地取消与核对时序图" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=42;fontColor=#25364D;fontStyle=1;align=left;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="1" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="50" y="30" width="1500" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="h" value="任务管理器&#10;L2 Harness" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;size=70;fontFamily=Microsoft YaHei;fontSize=24;fontColor=#25364D;strokeWidth=2;labelBackgroundColor=#FAFBFE;fillColor=#EAF0FD;strokeColor=#416BB4;fontStyle=1;fontSize=25;labelBackgroundColor=none;" vertex="1" parent="1" data-uml-kind="lifeline">
+          <mxGeometry x="105.0" y="125.0" width="265" height="925.0" as="geometry" />
+        </mxCell>
+        <mxCell id="e" value="操作系统管理接口&#10;进程组与 cgroup v2" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;size=70;fontFamily=Microsoft YaHei;fontSize=24;fontColor=#25364D;strokeWidth=2;labelBackgroundColor=#FAFBFE;fillColor=#E4F4F0;strokeColor=#167C77;fontStyle=1;fontSize=25;labelBackgroundColor=none;" vertex="1" parent="1" data-uml-kind="lifeline">
+          <mxGeometry x="485.0" y="125.0" width="265" height="925.0" as="geometry" />
+        </mxCell>
+        <mxCell id="d" value="独立守护进程&#10;Reconciler Daemon" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;size=70;fontFamily=Microsoft YaHei;fontSize=24;fontColor=#25364D;strokeWidth=2;labelBackgroundColor=#FAFBFE;fillColor=#FCEDEB;strokeColor=#B85550;fontStyle=1;fontSize=25;labelBackgroundColor=none;" vertex="1" parent="1" data-uml-kind="lifeline">
+          <mxGeometry x="865.0" y="125.0" width="265" height="925.0" as="geometry" />
+        </mxCell>
+        <mxCell id="l" value="状态与资源账本&#10;Persistent Ledger" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;size=70;fontFamily=Microsoft YaHei;fontSize=24;fontColor=#25364D;strokeWidth=2;labelBackgroundColor=#FAFBFE;fillColor=#EDF1F6;strokeColor=#64748B;fontStyle=1;fontSize=25;labelBackgroundColor=none;" vertex="1" parent="1" data-uml-kind="lifeline">
+          <mxGeometry x="1245.0" y="125.0" width="265" height="925.0" as="geometry" />
+        </mxCell>
+        <mxCell id="m0" value="记录取消代次，禁止旧尝试覆盖当前任务结果。" style="html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;exitX=0.5;exitY=0.1932;entryX=0.5;entryY=0.1932;fontFamily=Microsoft YaHei;fontSize=24;fontColor=#25364D;strokeWidth=2;labelBackgroundColor=#FAFBFE;spacingBottom=7;" edge="1" parent="1" source="h" target="l" data-uml-kind="message">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="m1" value="经执行器发起终止，&#10;停止自有工具进程树。" style="html=1;verticalAlign=bottom;endArrow=open;dashed=0;curved=0;rounded=0;exitX=0.5;exitY=0.3027;entryX=0.5;entryY=0.3027;fontFamily=Microsoft YaHei;fontSize=24;fontColor=#25364D;strokeWidth=2;labelBackgroundColor=#FAFBFE;spacingBottom=7;" edge="1" parent="1" source="h" target="e" data-uml-kind="message">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="m2" value="核验工具及后代&#10;是否已经实际退出。" style="html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;exitX=0.5;exitY=0.4122;entryX=0.5;entryY=0.4122;fontFamily=Microsoft YaHei;fontSize=24;fontColor=#25364D;strokeWidth=2;labelBackgroundColor=#FAFBFE;spacingBottom=7;" edge="1" parent="1" source="d" target="e" data-uml-kind="message">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="m3" value="返回能够核验的执行状态。" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;curved=0;rounded=0;strokeColor=#999999;fontColor=#999999;exitX=0.5;exitY=0.5217;entryX=0.5;entryY=0.5217;fontFamily=Microsoft YaHei;fontSize=24;fontColor=#25364D;strokeWidth=2;labelBackgroundColor=#FAFBFE;spacingBottom=7;" edge="1" parent="1" source="e" target="d" data-uml-kind="message">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="m5" value="幂等归还已释放的工具许可。" style="html=1;verticalAlign=bottom;endArrow=open;dashed=0;curved=0;rounded=0;exitX=0.5;exitY=0.6876;entryX=0.5;entryY=0.6876;fontFamily=Microsoft YaHei;fontSize=24;fontColor=#25364D;strokeWidth=2;labelBackgroundColor=#FAFBFE;spacingBottom=7;" edge="1" parent="1" source="d" target="l" data-uml-kind="message">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="m7" value="保留占用，记录待核实状态。" style="html=1;verticalAlign=bottom;endArrow=open;dashed=0;curved=0;rounded=0;exitX=0.5;exitY=0.8535;entryX=0.5;entryY=0.8535;fontFamily=Microsoft YaHei;fontSize=24;fontColor=#25364D;strokeWidth=2;labelBackgroundColor=#FAFBFE;spacingBottom=7;" edge="1" parent="1" source="d" target="l" data-uml-kind="message">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="m8" value="分别更新任务取消结果与实际清理状态。" style="html=1;verticalAlign=bottom;endArrow=open;dashed=0;curved=0;rounded=0;exitX=0.5;exitY=0.963;entryX=0.5;entryY=0.963;fontFamily=Microsoft YaHei;fontSize=24;fontColor=#25364D;strokeWidth=2;labelBackgroundColor=#FAFBFE;spacingBottom=7;" edge="1" parent="1" source="l" target="h" data-uml-kind="message">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="alt-frame" value="" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#B85550;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="1" data-role="risk" data-uml-kind="interaction-fragment">
+          <mxGeometry x="935" y="641.8679549114331" width="560" height="317.27053140096615" as="geometry" />
+        </mxCell>
+        <mxCell id="alt-title" value="alt  [已经确认工具退出]" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=22;fontColor=#25364D;fontStyle=1;align=left;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#B85550;" vertex="1" parent="1" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="952" y="644.8470209339774" width="520" height="44.68599033816425" as="geometry" />
+        </mxCell>
+        <mxCell id="alt-divider" value="" style="html=1;strokeColor=#B85550;strokeWidth=2;startArrow=none;endArrow=none;dashed=1;" edge="1" parent="1" data-uml-kind="decoration">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="935" y="793.8003220611917" as="sourcePoint" />
+            <mxPoint x="1495" y="793.8003220611917" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="alt-second" value="[仍然无法确认工具退出]" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=22;fontColor=#25364D;fontStyle=0;align=left;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#B85550;" vertex="1" parent="1" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="952" y="796.7793880837359" width="520" height="44.68599033816425" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

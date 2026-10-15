@@ -1,0 +1,148 @@
+[
+  {
+    "id": "agentix-2026",
+    "title": "Agentix: An Efficient Serving Engine for LLM Agents as General Programs",
+    "authors": "Michael Luo et al.",
+    "year": 2026,
+    "venue": "USENIX NSDI 2026",
+    "type": "peer-reviewed conference paper / official open-access page",
+    "url": "https://www.usenix.org/conference/nsdi26/presentation/luo",
+    "pdf": "https://www.usenix.org/system/files/nsdi26-luo.pdf",
+    "evidence": "The paper treats agentic programs as dynamic workflows of LLM calls and external interrupts. It reports call-level and program-level head-of-line blocking, and reports 4–15x program-throughput improvement at the same latency versus vLLM in its evaluated workloads.",
+    "relevance": "Confirms that program-level context matters; rules out presenting a generic LLM-call scheduler as new. Its scheduler primarily schedules LLM calls; tool-resource ownership, cancellation and durable recovery remain outside the central evaluated mechanism."
+  },
+  {
+    "id": "jitserve-2026",
+    "title": "JITServe: SLO-aware LLM Serving with Imprecise Request Information",
+    "authors": "Wei Zhang et al.",
+    "year": 2026,
+    "venue": "USENIX NSDI 2026",
+    "type": "peer-reviewed conference paper / official open-access page",
+    "url": "https://www.usenix.org/conference/nsdi26/presentation/zhang-wei",
+    "pdf": "https://www.usenix.org/system/files/nsdi26-zhang-wei.pdf",
+    "evidence": "The abstract identifies latency-sensitive, deadline-sensitive and compound requests with evolving dependencies; it reports 1.4–6.3x service-goodput improvement or 28.5–83.2% resource savings across chat, deep-research and agentic workloads. The paper notes workload shifts and prediction errors as limitations.",
+    "relevance": "Shows that end-to-end SLOs are a current service problem, not just GPU utilization. A course project should use deadline/SLO metrics, but should not claim to invent SLO-aware LLM scheduling."
+  },
+  {
+    "id": "llumnix-2024",
+    "title": "Llumnix: Dynamic Scheduling for Large Language Model Serving",
+    "authors": "Biao Sun et al.",
+    "year": 2024,
+    "venue": "USENIX OSDI 2024",
+    "type": "peer-reviewed conference paper / official open-access page",
+    "url": "https://www.usenix.org/conference/osdi24/presentation/sun-biao",
+    "evidence": "The paper describes heterogeneous and unpredictable request resource/latency requirements, severe queueing delays, poor tail latency and SLO violations; it uses runtime rescheduling and live migration across model instances.",
+    "relevance": "Established baseline for dynamic LLM request scheduling. Any proposed project must distinguish itself from GPU/model-instance rescheduling."
+  },
+  {
+    "id": "parrot-2024",
+    "title": "Parrot: Efficient Serving of LLM-based Applications with Semantic Variable",
+    "authors": "Chaofan Lin et al.",
+    "year": 2024,
+    "venue": "USENIX OSDI 2024",
+    "type": "peer-reviewed conference paper / official open-access page",
+    "url": "https://www.usenix.org/conference/osdi24/presentation/lin-chaofan",
+    "evidence": "LLM applications/agents may contain complex workflows with multiple LLM requests. The paper argues that request-level public APIs hide application-level relationships and can produce suboptimal end-to-end performance.",
+    "relevance": "Confirms that application/workflow context is necessary. A project cannot claim that simply adding workflow metadata is a new contribution."
+  },
+  {
+    "id": "orla-2026",
+    "title": "Orla: A Library for Serving LLM-Based Multi-Agent Systems",
+    "authors": "Authors listed on arXiv record",
+    "year": 2026,
+    "venue": "arXiv preprint",
+    "type": "preprint",
+    "url": "https://arxiv.org/abs/2603.13605",
+    "evidence": "Orla separates stage mapping, workflow orchestration and memory management; workflows combine multiple LLM steps, tool calls and heterogeneous infrastructure. The abstract reports latency/cost improvements from stage mapping and lower time-to-first-token from workflow-level cache management.",
+    "relevance": "Shows that workflow orchestration and tool-aware stages are already an active systems direction. It is a strong related work, not evidence that the space is empty."
+  },
+  {
+    "id": "arch-2026",
+    "title": "Architectural Implications of Agentic AI Workflows",
+    "authors": "Banruo Liu et al.",
+    "year": 2026,
+    "venue": "arXiv preprint; production-scale Microsoft Azure characterization reported",
+    "type": "preprint with production study",
+    "url": "https://arxiv.org/abs/2608.04458",
+    "evidence": "The study characterizes agentic workflows as fragmented, heterogeneous sequences of LLM inference, tool invocation and orchestration that cross CPU–GPU boundaries. It reports CPU critical-path pressure, bursty/imbalanced load, stranded CPU/GPU capacity and locality/coordination costs; the Agora prototype uses role-aware CPU affinity and adaptive resource reclamation.",
+    "relevance": "Directly validates the OS-level resource problem. It also means a project should not claim that CPU/GPU role-aware scheduling is unexplored; the feasible gap is a smaller tool-resource and failure-aware runtime on commodity OS resources."
+  },
+  {
+    "id": "coding-2026",
+    "title": "Agentic Coding in the Wild: Characterizing GitHub Copilot Traces at Production Scale",
+    "authors": "Banruo Liu et al.",
+    "year": 2026,
+    "venue": "arXiv preprint; production-scale trace characterization",
+    "type": "preprint with large production trace",
+    "url": "https://arxiv.org/abs/2608.00101",
+    "evidence": "The abstract reports 3.2M users, 13M sessions, 761M LLM calls and 95T tokens in sampled June 2026 traces. Coding-agent turns interleave LLM calls and tool execution; token use, session duration and tool calls are long-tailed. The paper reports average within-turn KV-cache hit rate of 90%, falling to 55% across turn boundaries. Its full paper reports that around 9% of turns can trigger retry-driven compute amplification up to 4x, and that mutation/command tools have long-tailed runtimes and lower success rates than read/search tools.",
+    "relevance": "Provides concrete production pain beyond abstract LLM serving: tool execution is frequent, heterogeneous, failure-prone and responsible for tail latency. The authors explicitly list quality-aware scheduling and server-side resource metrics as limitations/future work."
+  },
+  {
+    "id": "saga-2026",
+    "title": "SAGA: Workflow-Atomic Scheduling for AI Agent Inference on GPU Clusters",
+    "authors": "Dongxin Guo, Jikun Wu, Siu Ming Yiu",
+    "year": 2026,
+    "venue": "arXiv preprint",
+    "type": "preprint",
+    "url": "https://arxiv.org/abs/2605.00528",
+    "evidence": "SAGA treats a full agent workflow as a scheduling unit, reports 1.64x lower task completion time, 1.22x GPU memory utilization and 99.2% SLO attainment on SWE-bench/WebArena workloads, but also reports about 30% lower peak throughput than throughput-optimal batching.",
+    "relevance": "Strong counter-evidence: workflow-level scheduling is already being actively solved at the GPU-cluster level. It motivates selecting host-side tool contention/failure recovery rather than reproducing GPU scheduling."
+  },
+  {
+    "id": "osdi-fair-2024",
+    "title": "Fairness in Serving Large Language Models",
+    "authors": "Ying Sheng et al.",
+    "year": 2024,
+    "venue": "USENIX OSDI 2024",
+    "type": "peer-reviewed conference paper / official open-access page",
+    "url": "https://www.usenix.org/conference/osdi24/presentation/sheng",
+    "evidence": "The paper argues that request-rate limits are a crude fairness mechanism because request lengths differ; it defines token-cost-aware service fairness and proposes VTC for continuous batching.",
+    "relevance": "Useful fairness baseline. Do not use token fairness alone as the project novelty."
+  },
+  {
+    "id": "sarathi-2024",
+    "title": "Taming Throughput-Latency Tradeoff in LLM Inference with Sarathi-Serve",
+    "authors": "Amey Agrawal et al.",
+    "year": 2024,
+    "venue": "USENIX OSDI 2024",
+    "type": "peer-reviewed conference paper / official open-access page",
+    "url": "https://www.usenix.org/conference/osdi24/presentation/agrawal",
+    "evidence": "The paper identifies prefill/decode interference and reports higher serving capacity under tail-latency constraints using chunked prefills and stall-free schedules.",
+    "relevance": "Establishes that low latency versus throughput is a solved-but-still-active serving tradeoff at the inference-engine layer; this should be a baseline, not the whole project."
+  },
+  {
+    "id": "exoflow-2023",
+    "title": "ExoFlow: A Universal Workflow System for Exactly-Once DAGs",
+    "authors": "OSDI 2023 authors",
+    "year": 2023,
+    "venue": "USENIX OSDI 2023",
+    "type": "peer-reviewed conference paper / official open-access page",
+    "url": "https://www.usenix.org/conference/osdi23/presentation/zhuang",
+    "evidence": "ExoFlow separates execution from recovery and lets workflow tasks specify execution semantics, addressing the runtime/recovery-overhead tradeoff for heterogeneous pipelines.",
+    "relevance": "Supports durable task state and checkpoint/recovery as legitimate system concerns, but exactly-once workflow systems are established; the course project should use a scoped at-least-once/idempotent model."
+  },
+  {
+    "id": "mas-survey-2024",
+    "title": "A survey on LLM-based multi-agent systems: workflow, infrastructure, and challenges",
+    "authors": "Xinyi Li et al.",
+    "year": 2024,
+    "venue": "Vicinagearth / Springer",
+    "type": "peer-reviewed survey",
+    "doi": "10.1007/s44336-024-00009-2",
+    "url": "https://doi.org/10.1007/s44336-024-00009-2",
+    "evidence": "The survey organizes LLM multi-agent systems around profile, perception, self-action, interaction and evolution, and discusses infrastructure and current challenges.",
+    "relevance": "Useful overview source; not evidence for a specific performance gap by itself."
+  },
+  {
+    "id": "osworld-2024",
+    "title": "OSWorld: Benchmarking Multimodal Agents for Open-Ended Tasks in Real Computer Environments",
+    "authors": "Shuyan Yang et al.",
+    "year": 2024,
+    "venue": "arXiv/benchmark paper",
+    "type": "benchmark/preprint record",
+    "url": "https://arxiv.org/abs/2404.07972",
+    "evidence": "OSWorld evaluates 369 real computer tasks across web/desktop apps and reports a large gap between human and agent success in its evaluation. It makes tool use and OS file I/O part of the benchmark workload.",
+    "relevance": "Supports realistic tool-workflow evaluation, but task success is not the same as serving performance; use it only to motivate workload construction."
+  }
+]

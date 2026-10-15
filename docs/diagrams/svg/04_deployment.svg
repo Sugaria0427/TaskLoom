@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2250" height="1500" viewBox="0 0 2250 1500"><title>TaskLoom 部署图</title><desc>模块部署在哪里，哪些资源真正共享。拟议的Linux／WSL2部署；守护进程位于工具资源组之外，外部模型配置保持固定。</desc><rect width="2250" height="1500" fill="#FCFDFE"/><rect x="42" y="36" width="5" height="102" rx="2" fill="#416C82"/><text x="65" y="58" font-family="Microsoft YaHei, sans-serif" font-size="18" font-weight="650" fill="#607B8E">TASKLOOM  /  SYSTEM MODELING</text><text x="65" y="108" font-family="Microsoft YaHei, sans-serif" font-size="37" font-weight="650" fill="#203144">部署图</text><text x="65" y="145" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#526C7D">模块部署在哪里，哪些资源真正共享</text><text x="2185" y="69" text-anchor="end" font-family="Arial,sans-serif" font-size="35" font-weight="700" fill="#ADBFCC">04</text><text x="2185" y="106" text-anchor="end" font-family="Arial,sans-serif" font-size="17" fill="#607B8E">DEPLOYMENT</text><g transform="translate(65,180)">
+<defs><marker id="open" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M1,1 L10,6 L1,11" fill="none" stroke="#536779" stroke-width="1.5"/></marker><marker id="triangle" markerWidth="15" markerHeight="15" refX="13" refY="7.5" orient="auto"><path d="M1,1 L13,7.5 L1,14 Z" fill="white" stroke="#536779" stroke-width="1.4"/></marker><marker id="diamond" markerWidth="16" markerHeight="12" refX="1" refY="6" orient="auto"><path d="M1,6 L8,1 L15,6 L8,11 Z" fill="#536779"/></marker></defs>
+<rect x="40" y="60" width="1250" height="1070" rx="0" fill="#FAFCFE" stroke="#BCC9D4" stroke-width="1.5"/>
+<path d="M40,60 l12,-12 h1250 v1070 l-12,12 M1290,60 l12,-12" fill="none" stroke="#BCC9D4" stroke-width="1.4"/>
+<text x="65" y="98.0" font-family="Microsoft YaHei, sans-serif" font-size="25" font-weight="600" fill="#203144" text-anchor="start">个人电脑 [1..N]</text>
+<text x="65" y="132.5" font-family="Microsoft YaHei, sans-serif" font-size="25" font-weight="600" fill="#203144" text-anchor="start">各用户独立部署</text>
+<rect x="85" y="280" width="1160" height="805" rx="0" fill="#F8FAFC" stroke="#BCC9D4" stroke-width="1.5"/>
+<path d="M85,280 l12,-12 h1160 v805 l-12,12 M1245,280 l12,-12" fill="none" stroke="#BCC9D4" stroke-width="1.4"/>
+<text x="110" y="318.0" font-family="Microsoft YaHei, sans-serif" font-size="25" font-weight="600" fill="#203144" text-anchor="start">Linux／WSL2 执行环境</text>
+<rect x="120" y="155" width="355" height="105" rx="6" fill="#F5F7FA" stroke="#9AB0C2" stroke-width="1.5"/>
+<path d="M120,155 l9,-9 h355 v105 l-9,9 M475,155 l9,-9" fill="none" stroke="#9AB0C2" stroke-width="1.4"/>
+<text x="297.5" y="199.5" font-family="Microsoft YaHei, sans-serif" font-size="23" font-weight="400" fill="#203144" text-anchor="middle">本地浏览器</text>
+<text x="297.5" y="231.24" font-family="Microsoft YaHei, sans-serif" font-size="23" font-weight="400" fill="#203144" text-anchor="middle">Web 界面</text>
+<rect x="130" y="370" width="440" height="135" rx="6" fill="#EEEDF9" stroke="#9AB0C2" stroke-width="1.5"/>
+<path d="M130,370 l9,-9 h440 v135 l-9,9 M570,370 l9,-9" fill="none" stroke="#9AB0C2" stroke-width="1.4"/>
+<text x="350.0" y="429.5" font-family="Microsoft YaHei, sans-serif" font-size="23" font-weight="400" fill="#203144" text-anchor="middle">个人端应用进程</text>
+<text x="350.0" y="461.24" font-family="Microsoft YaHei, sans-serif" font-size="23" font-weight="400" fill="#203144" text-anchor="middle">L2 任务协调 ＋ L3 请求调度</text>
+<rect x="730" y="380" width="390" height="120" rx="6" fill="#EBF6F2" stroke="#9AB0C2" stroke-width="1.5"/>
+<path d="M730,380 l9,-9 h390 v120 l-9,9 M1120,380 l9,-9" fill="none" stroke="#9AB0C2" stroke-width="1.4"/>
+<text x="925.0" y="448.0" font-family="Microsoft YaHei, sans-serif" font-size="23" font-weight="400" fill="#203144" text-anchor="middle">L1 资源管理进程</text>
+<rect x="700" y="580" width="440" height="210" rx="0" fill="#EDF7F3" stroke="#BCC9D4" stroke-width="1.5"/>
+<path d="M700,580 l12,-12 h440 v210 l-12,12 M1140,580 l12,-12" fill="none" stroke="#BCC9D4" stroke-width="1.4"/>
+<text x="725" y="618.0" font-family="Microsoft YaHei, sans-serif" font-size="25" font-weight="600" fill="#203144" text-anchor="start">受管工具资源组</text>
+<text x="725" y="652.5" font-family="Microsoft YaHei, sans-serif" font-size="25" font-weight="600" fill="#203144" text-anchor="start">cgroup v2／进程组</text>
+<rect x="745" y="675" width="350" height="95" rx="6" fill="#EBF6F2" stroke="#9AB0C2" stroke-width="1.5"/>
+<path d="M745,675 l9,-9 h350 v95 l-9,9 M1095,675 l9,-9" fill="none" stroke="#9AB0C2" stroke-width="1.4"/>
+<text x="920.0" y="714.5" font-family="Microsoft YaHei, sans-serif" font-size="23" font-weight="400" fill="#203144" text-anchor="middle">工具 worker [0..N]</text>
+<text x="920.0" y="746.24" font-family="Microsoft YaHei, sans-serif" font-size="23" font-weight="400" fill="#203144" text-anchor="middle">及其自有后代</text>
+<rect x="730" y="900" width="390" height="120" rx="6" fill="#F5F7FA" stroke="#9AB0C2" stroke-width="1.5"/>
+<path d="M730,900 l9,-9 h390 v120 l-9,9 M1120,900 l9,-9" fill="none" stroke="#9AB0C2" stroke-width="1.4"/>
+<text x="925.0" y="968.0" font-family="Microsoft YaHei, sans-serif" font-size="23" font-weight="400" fill="#203144" text-anchor="middle">独立监督守护进程</text>
+<rect x="130" y="900" width="440" height="140" rx="6" fill="#F5F7FA" stroke="#9AB0C2" stroke-width="1.5"/>
+<path d="M544,914 h11 l7,7 v18 h-18 z M555,914 v7 h7" fill="white" stroke="#91A8BB"/>
+<text x="350.0" y="962.0" font-family="Microsoft YaHei, sans-serif" font-size="23" font-weight="400" fill="#203144" text-anchor="middle">本地磁盘</text>
+<text x="350.0" y="993.74" font-family="Microsoft YaHei, sans-serif" font-size="23" font-weight="400" fill="#203144" text-anchor="middle">SQLite WAL／任务产物</text>
+<rect x="1390" y="60" width="590" height="740" rx="0" fill="#FEFCF7" stroke="#BCC9D4" stroke-width="1.5"/>
+<path d="M1390,60 l12,-12 h590 v740 l-12,12 M1980,60 l12,-12" fill="none" stroke="#BCC9D4" stroke-width="1.4"/>
+<text x="1415" y="98.0" font-family="Microsoft YaHei, sans-serif" font-size="25" font-weight="600" fill="#203144" text-anchor="start">应用平台服务器</text>
+<text x="1415" y="132.5" font-family="Microsoft YaHei, sans-serif" font-size="25" font-weight="600" fill="#203144" text-anchor="start">首版单实例</text>
+<rect x="1440" y="185" width="470" height="135" rx="6" fill="#FBF2E1" stroke="#9AB0C2" stroke-width="1.5"/>
+<path d="M1440,185 l9,-9 h470 v135 l-9,9 M1910,185 l9,-9" fill="none" stroke="#9AB0C2" stroke-width="1.4"/>
+<text x="1675.0" y="260.5" font-family="Microsoft YaHei, sans-serif" font-size="23" font-weight="400" fill="#203144" text-anchor="middle">L4 接入与派发进程</text>
+<rect x="1440" y="415" width="470" height="145" rx="6" fill="#F5F7FA" stroke="#9AB0C2" stroke-width="1.5"/>
+<path d="M1884,429 h11 l7,7 v18 h-18 z M1895,429 v7 h7" fill="white" stroke="#91A8BB"/>
+<text x="1675.0" y="479.5" font-family="Microsoft YaHei, sans-serif" font-size="23" font-weight="400" fill="#203144" text-anchor="middle">平台持久账本</text>
+<text x="1675.0" y="511.24" font-family="Microsoft YaHei, sans-serif" font-size="23" font-weight="400" fill="#203144" text-anchor="middle">共享额度与请求状态</text>
+<rect x="1440" y="645" width="470" height="100" rx="6" fill="#F5F7FA" stroke="#9AB0C2" stroke-width="1.5"/>
+<path d="M1440,645 l9,-9 h470 v100 l-9,9 M1910,645 l9,-9" fill="none" stroke="#9AB0C2" stroke-width="1.4"/>
+<text x="1675.0" y="703.0" font-family="Microsoft YaHei, sans-serif" font-size="23" font-weight="400" fill="#203144" text-anchor="middle">平台监督服务进程</text>
+<rect x="1390" y="910" width="590" height="245" rx="0" fill="#F8FAFC" stroke="#BCC9D4" stroke-width="1.5"/>
+<path d="M1390,910 l12,-12 h590 v245 l-12,12 M1980,910 l12,-12" fill="none" stroke="#BCC9D4" stroke-width="1.4"/>
+<text x="1415" y="948.0" font-family="Microsoft YaHei, sans-serif" font-size="25" font-weight="600" fill="#203144" text-anchor="start">外部固定模型服务</text>
+<text x="1415" y="982.5" font-family="Microsoft YaHei, sans-serif" font-size="25" font-weight="600" fill="#203144" text-anchor="start">执行条件固定</text>
+<rect x="1440" y="1030" width="470" height="95" rx="6" fill="#F5F7FA" stroke="#9AB0C2" stroke-width="1.5"/>
+<path d="M1440,1030 l9,-9 h470 v95 l-9,9 M1910,1030 l9,-9" fill="none" stroke="#9AB0C2" stroke-width="1.4"/>
+<text x="1675.0" y="1085.5" font-family="Microsoft YaHei, sans-serif" font-size="23" font-weight="400" fill="#203144" text-anchor="middle">既有模型 API 运行环境</text>
+<polyline points="475,207 605,207 605,335 300,335 300,370" fill="none" stroke="#536779" stroke-width="1.7"/>
+<rect x="358.575" y="336.0" width="182.85" height="29" rx="4" fill="white" fill-opacity=".96"/>
+<text x="450" y="357.0" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#203144" text-anchor="middle">本机 HTTP／事件</text>
+<polyline points="570,430 730,430" fill="none" stroke="#536779" stroke-width="1.7"/>
+<rect x="596.06" y="384.0" width="107.88" height="29" rx="4" fill="white" fill-opacity=".96"/>
+<text x="650" y="405.0" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#203144" text-anchor="middle">本地 IPC</text>
+<polyline points="1040,500 1040,550 1105,550 1105,723 1095,723" fill="none" stroke="#536779" stroke-width="1.7"/>
+<rect x="938.5" y="522.0" width="123" height="29" rx="4" fill="white" fill-opacity=".96"/>
+<text x="1000" y="543.0" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#203144" text-anchor="middle">许可／状态</text>
+<polyline points="340,505 340,900" fill="none" stroke="#536779" stroke-width="1.7" stroke-dasharray="7 6" marker-end="url(#open)"/>
+<rect x="375.5" y="714.0" width="123" height="29" rx="4" fill="white" fill-opacity=".96"/>
+<text x="437" y="735.0" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#203144" text-anchor="middle">状态与索引</text>
+<polyline points="1120,960 1200,960 1200,440 1120,440" fill="none" stroke="#536779" stroke-width="1.7"/>
+<rect x="1128.5" y="813.0" width="123" height="29" rx="4" fill="white" fill-opacity=".96"/>
+<text x="1190" y="834.0" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#203144" text-anchor="middle">监督／对账</text>
+<polyline points="925,900 925,790" fill="none" stroke="#536779" stroke-width="1.7"/>
+<rect x="978.5" y="831.0" width="123" height="29" rx="4" fill="white" fill-opacity=".96"/>
+<text x="1040" y="852.0" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#203144" text-anchor="middle">核对／清理</text>
+<polyline points="1675,320 1675,415" fill="none" stroke="#536779" stroke-width="1.7" stroke-dasharray="7 6" marker-end="url(#open)"/>
+<rect x="1715.0" y="361.0" width="144" height="29" rx="4" fill="white" fill-opacity=".96"/>
+<text x="1787" y="382.0" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#203144" text-anchor="middle">单一权威写入</text>
+<polyline points="1440,695 1410,695 1410,252 1440,252" fill="none" stroke="#536779" stroke-width="1.7"/>
+<rect x="1388.5" y="579.0" width="123" height="29" rx="4" fill="white" fill-opacity=".96"/>
+<text x="1450" y="600.0" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#203144" text-anchor="middle">健康／重启</text>
+<polyline points="570,390 640,390 640,185 1310,185 1310,252 1440,252" fill="none" stroke="#536779" stroke-width="1.7"/>
+<rect x="908.575" y="145.0" width="182.85" height="29" rx="4" fill="white" fill-opacity=".96"/>
+<text x="1000" y="166.0" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#203144" text-anchor="middle">HTTPS／流式响应</text>
+<polyline points="1910,252 2040,252 2040,1077 1910,1077" fill="none" stroke="#536779" stroke-width="1.7"/>
+<rect x="2001.075" y="831.0" width="77.85" height="29" rx="4" fill="white" fill-opacity=".96"/>
+<text x="2040" y="852.0" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#203144" text-anchor="middle">HTTPS</text>
+</g><line x1="65" y1="1409" x2="2185" y2="1409" stroke="#D4DEE6"/><text x="65" y="1445" font-family="Microsoft YaHei, sans-serif" font-size="20" font-weight="400" fill="#526C7D">拟议的Linux／WSL2部署；守护进程位于工具资源组之外，外部模型配置保持固定。</text><text x="2185" y="1476" text-anchor="end" font-family="Arial,sans-serif" font-size="15" fill="#899DAA">PROPOSED DESIGN  ·  v1.1  ·  2026-09-29</text></svg>

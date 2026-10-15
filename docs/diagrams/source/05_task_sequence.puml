@@ -1,0 +1,40 @@
+@startuml
+!include _theme.iuml
+hide footbox
+autonumber "<b>00</b>"
+actor "用户" as U
+box "个人端" #F8F9FC
+participant "L2\n任务协调器" as H #EEEDF9
+participant "L1\n资源管理／工具执行" as T #EBF6F2
+participant "L3\n客户端请求调度" as C #EAF3FC
+end box
+participant "L4\n应用平台" as P #FBF2E1
+participant "固定\n模型 API" as M #F2F3F5
+U -> H : 提交任务、目标与预算
+H -> H : 建立根任务与当前已知步骤
+loop 每个已经就绪的步骤；未来步骤按结果动态产生
+  alt 当前步骤需要模型
+    H -> C : 登记模型请求＋根任务信息
+    C -> C : 公平排序／预算检查／发送窗口
+    C -> P : 提交请求与必要任务摘要
+    P -> P : 用户→根任务排队；原子额度准入
+    P -> M : 取得许可后派发
+    M --> P : 模型结果＋实际用量
+    P -> P : 结算本次调用，更新共享账本
+    P --> C : 结果／用量／有期限拥塞反馈
+    C --> H : 归还当前步骤的模型结果
+  else 当前步骤需要本地工具
+    H -> T : 提交就绪工具步骤与受控资源声明
+    T -> T : 排序＋准入；必要时银行家安全检查
+    T -> T : 执行工具，核对结果与实际占用
+    T --> H : 工具结果＋已确认的资源状态
+  end
+  H -> H : 保存已确认结果；更新依赖与下一步
+end
+H -> H : 按任务验收规则检查完整结果
+H --> U : 交付合格结果与用量说明
+note over H,T
+工具结果与物理清理分别记录；
+未确认释放的对象继续计入实际占用。
+end note
+@enduml

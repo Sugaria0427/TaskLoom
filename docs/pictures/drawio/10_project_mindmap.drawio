@@ -1,0 +1,162 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mxfile host="app.diagrams.net" version="29.0.0" agent="TaskLoom native draw.io authoring">
+  <diagram id="10_project_mindmap" name="TaskLoom · 项目思维导图">
+    <mxGraphModel dx="1600" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="900" math="0" shadow="0" background="#FAFBFE">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="canvas" value="" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=#FAFBFE;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;locked=1;" vertex="1" parent="1" data-role="neutral" data-uml-kind="decoration">
+          <mxGeometry x="0" y="0" width="1600" height="900" as="geometry" />
+        </mxCell>
+        <mxCell id="title" value="TaskLoom · 项目思维导图" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=42;fontColor=#25364D;fontStyle=1;align=left;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="1" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="50" y="30" width="1500" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="root" value="" style="shape=rectangle;rounded=1;arcSize=14;whiteSpace=wrap;html=1;fillColor=#EDF1F6;strokeColor=#64748B;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="1" data-role="neutral" data-uml-kind="mindmap-root">
+          <mxGeometry x="620" y="391.0330578512397" width="360" height="167.76859504132233" as="geometry" />
+        </mxCell>
+        <mxCell id="root-title" value="TaskLoom「织序」" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=31;fontColor=#25364D;fontStyle=1;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="root" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="16" y="16.776859504132233" width="328" height="45.53719008264463" as="geometry" />
+        </mxCell>
+        <mxCell id="root-body" value="让有限资源支撑&#10;完整任务的交付。" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=26;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="root" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="16" y="71.90082644628099" width="328" height="83.88429752066116" as="geometry" />
+        </mxCell>
+        <mxCell id="pain" value="" style="shape=rectangle;rounded=1;arcSize=14;whiteSpace=wrap;html=1;fillColor=#EAF0FD;strokeColor=#416BB4;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="1" data-role="task" data-uml-kind="mindmap-branch">
+          <mxGeometry x="415" y="181.3223140495868" width="300" height="149.79338842975207" as="geometry" />
+        </mxCell>
+        <mxCell id="pain-title" value="为什么需要调度" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=1;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="pain" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="16" y="16.776859504132233" width="268" height="45.53719008264463" as="geometry" />
+        </mxCell>
+        <mxCell id="pain-body" value="并发任务需要竞争资源，&#10;独立重试也会争用额度。" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=22;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="pain" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="16" y="71.90082644628099" width="268" height="65.9090909090909" as="geometry" />
+        </mxCell>
+        <mxCell id="scope" value="" style="shape=rectangle;rounded=1;arcSize=14;whiteSpace=wrap;html=1;fillColor=#F1EBFB;strokeColor=#7957A7;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="1" data-role="platform" data-uml-kind="mindmap-branch">
+          <mxGeometry x="885" y="181.3223140495868" width="300" height="149.79338842975207" as="geometry" />
+        </mxCell>
+        <mxCell id="scope-title" value="系统在哪里介入" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=1;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="scope" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="16" y="16.776859504132233" width="268" height="45.53719008264463" as="geometry" />
+        </mxCell>
+        <mxCell id="scope-body" value="个人端安排自己的任务，&#10;平台端协调不同用户。" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=22;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="scope" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="16" y="71.90082644628099" width="268" height="65.9090909090909" as="geometry" />
+        </mxCell>
+        <mxCell id="methods" value="" style="shape=rectangle;rounded=1;arcSize=14;whiteSpace=wrap;html=1;fillColor=#E4F4F0;strokeColor=#167C77;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="1" data-role="local" data-uml-kind="mindmap-branch">
+          <mxGeometry x="415" y="607.9338842975206" width="300" height="149.79338842975207" as="geometry" />
+        </mxCell>
+        <mxCell id="methods-title" value="OS 方法怎样起作用" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=1;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="methods" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="16" y="16.776859504132233" width="268" height="45.53719008264463" as="geometry" />
+        </mxCell>
+        <mxCell id="methods-body" value="先判断工作是否就绪，&#10;再安全分配执行机会。" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=22;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="methods" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="16" y="71.90082644628099" width="268" height="65.9090909090909" as="geometry" />
+        </mxCell>
+        <mxCell id="value" value="" style="shape=rectangle;rounded=1;arcSize=14;whiteSpace=wrap;html=1;fillColor=#FFF2DD;strokeColor=#AD6C18;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="1" data-role="client" data-uml-kind="mindmap-branch">
+          <mxGeometry x="885" y="607.9338842975206" width="300" height="149.79338842975207" as="geometry" />
+        </mxCell>
+        <mxCell id="value-title" value="怎样证明项目有效" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=1;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="value" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="16" y="16.776859504132233" width="268" height="45.53719008264463" as="geometry" />
+        </mxCell>
+        <mxCell id="value-body" value="保持模型与资源不变，&#10;比较完整任务的交付。" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=22;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="value" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="16" y="71.90082644628099" width="268" height="65.9090909090909" as="geometry" />
+        </mxCell>
+        <mxCell id="pain-local" value="工具争用 CPU、内存与文件，&#10;可能变慢、失败或留下残留。" style="shape=rectangle;rounded=1;arcSize=14;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#416BB4;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="1" data-role="task" data-uml-kind="mindmap-leaf">
+          <mxGeometry x="60" y="125.0" width="320" height="105.45454545454545" as="geometry" />
+        </mxCell>
+        <mxCell id="branch-pain-local" value="" style="edgeStyle=none;rounded=0;html=1;strokeColor=#416BB4;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=none;endArrow=none;startFill=1;endFill=1;startSize=12;endSize=11;dashed=0;exitX=0;exitY=0.5;entryX=1;entryY=0.5;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;" edge="1" parent="1" source="pain" target="pain-local" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="398" y="256.2190082644628" />
+              <mxPoint x="398" y="177.72727272727272" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="pain-api" value="各任务争抢同一份模型额度，&#10;短任务与后台任务容易失衡。" style="shape=rectangle;rounded=1;arcSize=14;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#416BB4;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="1" data-role="task" data-uml-kind="mindmap-leaf">
+          <mxGeometry x="60" y="302.3553719008264" width="320" height="105.45454545454545" as="geometry" />
+        </mxCell>
+        <mxCell id="branch-pain-api" value="" style="edgeStyle=none;rounded=0;html=1;strokeColor=#416BB4;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=none;endArrow=none;startFill=1;endFill=1;startSize=12;endSize=11;dashed=0;exitX=0;exitY=0.5;entryX=1;entryY=0.5;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;" edge="1" parent="1" source="pain" target="pain-api" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="398" y="256.2190082644628" />
+              <mxPoint x="398" y="355.08264462809916" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="scope-local" value="个人端管理工具、任务依赖，&#10;以及模型请求的发送顺序。" style="shape=rectangle;rounded=1;arcSize=14;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#7957A7;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="1" data-role="platform" data-uml-kind="mindmap-leaf">
+          <mxGeometry x="1220" y="125.0" width="320" height="105.45454545454545" as="geometry" />
+        </mxCell>
+        <mxCell id="branch-scope-local" value="" style="edgeStyle=none;rounded=0;html=1;strokeColor=#7957A7;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=none;endArrow=none;startFill=1;endFill=1;startSize=12;endSize=11;dashed=0;exitX=1;exitY=0.5;entryX=0;entryY=0.5;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;" edge="1" parent="1" source="scope" target="scope-local" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1202" y="256.2190082644628" />
+              <mxPoint x="1202" y="177.72727272727272" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="scope-platform" value="平台管理多用户请求的派发，&#10;并向个人端反馈拥塞状态。" style="shape=rectangle;rounded=1;arcSize=14;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#7957A7;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="1" data-role="platform" data-uml-kind="mindmap-leaf">
+          <mxGeometry x="1220" y="302.3553719008264" width="320" height="105.45454545454545" as="geometry" />
+        </mxCell>
+        <mxCell id="branch-scope-platform" value="" style="edgeStyle=none;rounded=0;html=1;strokeColor=#7957A7;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=none;endArrow=none;startFill=1;endFill=1;startSize=12;endSize=11;dashed=0;exitX=1;exitY=0.5;entryX=0;entryY=0.5;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;" edge="1" parent="1" source="scope" target="scope-platform" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1202" y="256.2190082644628" />
+              <mxPoint x="1202" y="355.08264462809916" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="methods-fair" value="列表调度、成本 DRR 与老化&#10;兼顾响应速度和持续推进。" style="shape=rectangle;rounded=1;arcSize=14;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#167C77;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="1" data-role="local" data-uml-kind="mindmap-leaf">
+          <mxGeometry x="60" y="568.3884297520661" width="320" height="105.45454545454545" as="geometry" />
+        </mxCell>
+        <mxCell id="branch-methods-fair" value="" style="edgeStyle=none;rounded=0;html=1;strokeColor=#167C77;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=none;endArrow=none;startFill=1;endFill=1;startSize=12;endSize=11;dashed=0;exitX=0;exitY=0.5;entryX=1;entryY=0.5;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;" edge="1" parent="1" source="methods" target="methods-fair" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="398" y="682.8305785123966" />
+              <mxPoint x="398" y="621.1157024793388" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="methods-safe" value="原子准入、银行家检查与守护&#10;共同约束分配和异常清理。" style="shape=rectangle;rounded=1;arcSize=14;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#167C77;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="1" data-role="local" data-uml-kind="mindmap-leaf">
+          <mxGeometry x="60" y="744.5454545454545" width="320" height="105.45454545454545" as="geometry" />
+        </mxCell>
+        <mxCell id="branch-methods-safe" value="" style="edgeStyle=none;rounded=0;html=1;strokeColor=#167C77;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=none;endArrow=none;startFill=1;endFill=1;startSize=12;endSize=11;dashed=0;exitX=0;exitY=0.5;entryX=1;entryY=0.5;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;" edge="1" parent="1" source="methods" target="methods-safe" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="398" y="682.8305785123966" />
+              <mxPoint x="398" y="797.2727272727273" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="value-experiment" value="对比基础、单端与协同方案，&#10;检查按时合格完成率和等待。" style="shape=rectangle;rounded=1;arcSize=14;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#AD6C18;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="1" data-role="client" data-uml-kind="mindmap-leaf">
+          <mxGeometry x="1220" y="568.3884297520661" width="320" height="105.45454545454545" as="geometry" />
+        </mxCell>
+        <mxCell id="branch-value-experiment" value="" style="edgeStyle=none;rounded=0;html=1;strokeColor=#AD6C18;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=none;endArrow=none;startFill=1;endFill=1;startSize=12;endSize=11;dashed=0;exitX=1;exitY=0.5;entryX=0;entryY=0.5;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;" edge="1" parent="1" source="value" target="value-experiment" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1202" y="682.8305785123966" />
+              <mxPoint x="1202" y="621.1157024793388" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="value-month" value="使用实测结果校准月度仿真，&#10;核对费用、公平性与残留。" style="shape=rectangle;rounded=1;arcSize=14;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#AD6C18;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="1" data-role="client" data-uml-kind="mindmap-leaf">
+          <mxGeometry x="1220" y="744.5454545454545" width="320" height="105.45454545454545" as="geometry" />
+        </mxCell>
+        <mxCell id="branch-value-month" value="" style="edgeStyle=none;rounded=0;html=1;strokeColor=#AD6C18;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=none;endArrow=none;startFill=1;endFill=1;startSize=12;endSize=11;dashed=0;exitX=1;exitY=0.5;entryX=0;entryY=0.5;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;" edge="1" parent="1" source="value" target="value-month" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1202" y="682.8305785123966" />
+              <mxPoint x="1202" y="797.2727272727273" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="root-pain" value="" style="edgeStyle=none;rounded=0;html=1;strokeColor=#416BB4;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=none;endArrow=none;startFill=1;endFill=1;startSize=12;endSize=11;dashed=0;exitX=0.25;exitY=0;entryX=0.5;entryY=1;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;" edge="1" parent="1" source="root" target="pain" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="root-scope" value="" style="edgeStyle=none;rounded=0;html=1;strokeColor=#7957A7;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=none;endArrow=none;startFill=1;endFill=1;startSize=12;endSize=11;dashed=0;exitX=0.75;exitY=0;entryX=0.5;entryY=1;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;" edge="1" parent="1" source="root" target="scope" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="root-methods" value="" style="edgeStyle=none;rounded=0;html=1;strokeColor=#167C77;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=none;endArrow=none;startFill=1;endFill=1;startSize=12;endSize=11;dashed=0;exitX=0.25;exitY=1;entryX=0.5;entryY=0;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;" edge="1" parent="1" source="root" target="methods" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="root-value" value="" style="edgeStyle=none;rounded=0;html=1;strokeColor=#AD6C18;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=none;endArrow=none;startFill=1;endFill=1;startSize=12;endSize=11;dashed=0;exitX=0.75;exitY=1;entryX=0.5;entryY=0;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;" edge="1" parent="1" source="root" target="value" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

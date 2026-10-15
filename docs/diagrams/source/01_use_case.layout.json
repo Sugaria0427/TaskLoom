@@ -1,0 +1,349 @@
+{
+  "key": "01_use_case",
+  "width": 2000,
+  "height": 1110,
+  "shapes": [
+    {
+      "id": "System",
+      "x": 430,
+      "y": 35,
+      "w": 1110,
+      "h": 1020,
+      "kind": "frame",
+      "fill": "#FAFCFE",
+      "label": "TaskLoom 系统边界：个人端 ＋ 应用平台"
+    },
+    {
+      "id": "User",
+      "x": 135,
+      "y": 405,
+      "w": 70,
+      "h": 120,
+      "kind": "actor",
+      "fill": "#F5F7FA",
+      "label": "项目用户"
+    },
+    {
+      "id": "Admin",
+      "x": 1780,
+      "y": 765,
+      "w": 70,
+      "h": 120,
+      "kind": "actor",
+      "fill": "#F5F7FA",
+      "label": "平台管理员／实验人员"
+    },
+    {
+      "id": "Model",
+      "x": 1780,
+      "y": 90,
+      "w": 70,
+      "h": 120,
+      "kind": "actor",
+      "fill": "#F5F7FA",
+      "label": "固定模型 API 服务"
+    },
+    {
+      "id": "Tool",
+      "x": 1780,
+      "y": 350,
+      "w": 70,
+      "h": 120,
+      "kind": "actor",
+      "fill": "#F5F7FA",
+      "label": "受控工具程序"
+    },
+    {
+      "id": "Run",
+      "x": 500,
+      "y": 145,
+      "w": 435,
+      "h": 110,
+      "kind": "ellipse",
+      "fill": "#EAF3FC",
+      "label": "提交并运行\nAgent 任务"
+    },
+    {
+      "id": "Observe",
+      "x": 500,
+      "y": 330,
+      "w": 435,
+      "h": 110,
+      "kind": "ellipse",
+      "fill": "#EAF3FC",
+      "label": "查看任务进度\n与等待原因"
+    },
+    {
+      "id": "Cancel",
+      "x": 500,
+      "y": 515,
+      "w": 435,
+      "h": 110,
+      "kind": "ellipse",
+      "fill": "#EAF3FC",
+      "label": "取消任务"
+    },
+    {
+      "id": "Resume",
+      "x": 500,
+      "y": 700,
+      "w": 435,
+      "h": 110,
+      "kind": "ellipse",
+      "fill": "#EAF3FC",
+      "label": "恢复可继续的任务"
+    },
+    {
+      "id": "Result",
+      "x": 500,
+      "y": 885,
+      "w": 435,
+      "h": 110,
+      "kind": "ellipse",
+      "fill": "#EAF3FC",
+      "label": "查看与导出\n已确认的结果"
+    },
+    {
+      "id": "Config",
+      "x": 1040,
+      "y": 680,
+      "w": 440,
+      "h": 110,
+      "kind": "ellipse",
+      "fill": "#FBF2E1",
+      "label": "配置资源与额度策略"
+    },
+    {
+      "id": "Evaluate",
+      "x": 1040,
+      "y": 900,
+      "w": 440,
+      "h": 110,
+      "kind": "ellipse",
+      "fill": "#FBF2E1",
+      "label": "运行策略对照\n与故障实验"
+    }
+  ],
+  "edges": [
+    {
+      "source": "User",
+      "target": "Run",
+      "points": [
+        [
+          205,
+          455
+        ],
+        [
+          370,
+          200
+        ],
+        [
+          500,
+          200
+        ]
+      ],
+      "label": "",
+      "lx": null,
+      "ly": null,
+      "kind": "assoc",
+      "ms": "",
+      "mt": ""
+    },
+    {
+      "source": "User",
+      "target": "Observe",
+      "points": [
+        [
+          205,
+          455
+        ],
+        [
+          370,
+          385
+        ],
+        [
+          500,
+          385
+        ]
+      ],
+      "label": "",
+      "lx": null,
+      "ly": null,
+      "kind": "assoc",
+      "ms": "",
+      "mt": ""
+    },
+    {
+      "source": "User",
+      "target": "Cancel",
+      "points": [
+        [
+          205,
+          455
+        ],
+        [
+          370,
+          570
+        ],
+        [
+          500,
+          570
+        ]
+      ],
+      "label": "",
+      "lx": null,
+      "ly": null,
+      "kind": "assoc",
+      "ms": "",
+      "mt": ""
+    },
+    {
+      "source": "User",
+      "target": "Resume",
+      "points": [
+        [
+          205,
+          455
+        ],
+        [
+          370,
+          755
+        ],
+        [
+          500,
+          755
+        ]
+      ],
+      "label": "",
+      "lx": null,
+      "ly": null,
+      "kind": "assoc",
+      "ms": "",
+      "mt": ""
+    },
+    {
+      "source": "User",
+      "target": "Result",
+      "points": [
+        [
+          205,
+          455
+        ],
+        [
+          370,
+          940
+        ],
+        [
+          500,
+          940
+        ]
+      ],
+      "label": "",
+      "lx": null,
+      "ly": null,
+      "kind": "assoc",
+      "ms": "",
+      "mt": ""
+    },
+    {
+      "source": "Admin",
+      "target": "Config",
+      "points": [
+        [
+          1780,
+          815
+        ],
+        [
+          1630,
+          735
+        ],
+        [
+          1480,
+          735
+        ]
+      ],
+      "label": "",
+      "lx": null,
+      "ly": null,
+      "kind": "assoc",
+      "ms": "",
+      "mt": ""
+    },
+    {
+      "source": "Admin",
+      "target": "Evaluate",
+      "points": [
+        [
+          1780,
+          835
+        ],
+        [
+          1630,
+          955
+        ],
+        [
+          1480,
+          955
+        ]
+      ],
+      "label": "",
+      "lx": null,
+      "ly": null,
+      "kind": "assoc",
+      "ms": "",
+      "mt": ""
+    },
+    {
+      "source": "Run",
+      "target": "Model",
+      "points": [
+        [
+          935,
+          180
+        ],
+        [
+          1630,
+          180
+        ],
+        [
+          1780,
+          140
+        ]
+      ],
+      "label": "",
+      "lx": null,
+      "ly": null,
+      "kind": "assoc",
+      "ms": "",
+      "mt": ""
+    },
+    {
+      "source": "Run",
+      "target": "Tool",
+      "points": [
+        [
+          935,
+          218
+        ],
+        [
+          1650,
+          218
+        ],
+        [
+          1650,
+          400
+        ],
+        [
+          1780,
+          400
+        ]
+      ],
+      "label": "",
+      "lx": null,
+      "ly": null,
+      "kind": "assoc",
+      "ms": "",
+      "mt": ""
+    }
+  ]
+}

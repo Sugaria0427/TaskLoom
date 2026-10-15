@@ -1,0 +1,56 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mxfile host="app.diagrams.net" version="29.0.0" agent="TaskLoom native draw.io authoring">
+  <diagram id="06_tool_branch_sequence" name="TaskLoom · 工具与子 Agent 时序图">
+    <mxGraphModel dx="1600" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="900" math="0" shadow="0" background="#FAFBFE">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="canvas" value="" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=#FAFBFE;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;locked=1;" vertex="1" parent="1" data-role="neutral" data-uml-kind="decoration">
+          <mxGeometry x="0" y="0" width="1600" height="900" as="geometry" />
+        </mxCell>
+        <mxCell id="title" value="TaskLoom · 工具与子 Agent 时序图" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=42;fontColor=#25364D;fontStyle=1;align=left;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="1" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="50" y="30" width="1500" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="h" value="任务管理器&#10;L2 Harness" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;size=70;fontFamily=Microsoft YaHei;fontSize=24;fontColor=#25364D;strokeWidth=2;labelBackgroundColor=#FAFBFE;fillColor=#EAF0FD;strokeColor=#416BB4;fontStyle=1;fontSize=25;labelBackgroundColor=none;" vertex="1" parent="1" data-uml-kind="lifeline">
+          <mxGeometry x="105.0" y="125.0" width="265" height="725.0" as="geometry" />
+        </mxCell>
+        <mxCell id="a" value="子 Agent 执行分支&#10;AgentExecution" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;size=70;fontFamily=Microsoft YaHei;fontSize=24;fontColor=#25364D;strokeWidth=2;labelBackgroundColor=#FAFBFE;fillColor=#EAF0FD;strokeColor=#416BB4;fontStyle=1;fontSize=25;labelBackgroundColor=none;" vertex="1" parent="1" data-uml-kind="lifeline">
+          <mxGeometry x="485.0" y="125.0" width="265" height="725.0" as="geometry" />
+        </mxCell>
+        <mxCell id="r" value="本地资源管理器&#10;L1 · 资源准入" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;size=70;fontFamily=Microsoft YaHei;fontSize=24;fontColor=#25364D;strokeWidth=2;labelBackgroundColor=#FAFBFE;fillColor=#E4F4F0;strokeColor=#167C77;fontStyle=1;fontSize=25;labelBackgroundColor=none;" vertex="1" parent="1" data-uml-kind="lifeline">
+          <mxGeometry x="865.0" y="125.0" width="265" height="725.0" as="geometry" />
+        </mxCell>
+        <mxCell id="e" value="受管工具执行器&#10;L1 · 进程管理" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;size=70;fontFamily=Microsoft YaHei;fontSize=24;fontColor=#25364D;strokeWidth=2;labelBackgroundColor=#FAFBFE;fillColor=#E4F4F0;strokeColor=#167C77;fontStyle=1;fontSize=25;labelBackgroundColor=none;" vertex="1" parent="1" data-uml-kind="lifeline">
+          <mxGeometry x="1245.0" y="125.0" width="265" height="725.0" as="geometry" />
+        </mxCell>
+        <mxCell id="act0" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;outlineConnect=0;fillColor=#ffffff;fontFamily=Microsoft YaHei;fontSize=24;fontColor=#25364D;strokeWidth=2;labelBackgroundColor=#FAFBFE;fillColor=#FFFFFF;strokeColor=#167C77;" vertex="1" parent="e" data-uml-kind="activation">
+          <mxGeometry x="127" y="337.45454545454544" width="10" height="89.63636363636363" as="geometry" />
+        </mxCell>
+        <mxCell id="act1" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;outlineConnect=0;fillColor=#ffffff;fontFamily=Microsoft YaHei;fontSize=24;fontColor=#25364D;strokeWidth=2;labelBackgroundColor=#FAFBFE;fillColor=#FFFFFF;strokeColor=#167C77;" vertex="1" parent="r" data-uml-kind="activation">
+          <mxGeometry x="127" y="247.8181818181818" width="10" height="268.9090909090909" as="geometry" />
+        </mxCell>
+        <mxCell id="act2" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;outlineConnect=0;fillColor=#ffffff;fontFamily=Microsoft YaHei;fontSize=24;fontColor=#25364D;strokeWidth=2;labelBackgroundColor=#FAFBFE;fillColor=#FFFFFF;strokeColor=#416BB4;" vertex="1" parent="a" data-uml-kind="activation">
+          <mxGeometry x="127" y="158.1818181818182" width="10" height="448.1818181818182" as="geometry" />
+        </mxCell>
+        <mxCell id="m0" value="创建分支并继承根任务份额。" style="html=1;verticalAlign=bottom;endArrow=open;dashed=0;curved=0;rounded=0;exitX=0.5;exitY=0.2182;entryX=0;entryY=0.0;fontFamily=Microsoft YaHei;fontSize=24;fontColor=#25364D;strokeWidth=2;labelBackgroundColor=#FAFBFE;spacingBottom=7;" edge="1" parent="1" source="h" target="act2" data-uml-kind="message">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="m1" value="提交依赖已满足的步骤，&#10;声明当前工具资源需求。" style="html=1;verticalAlign=bottom;endArrow=open;dashed=0;curved=0;rounded=0;exitX=1;exitY=0.2;entryX=0;entryY=0.0;fontFamily=Microsoft YaHei;fontSize=24;fontColor=#25364D;strokeWidth=2;labelBackgroundColor=#FAFBFE;spacingBottom=7;" edge="1" parent="1" source="act2" target="act1" data-uml-kind="message">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="m2" value="通过准入与安全检查后，&#10;启动受管工具进程。" style="html=1;verticalAlign=bottom;endArrow=open;dashed=0;curved=0;rounded=0;exitX=1;exitY=0.3333;entryX=0;entryY=0.0;fontFamily=Microsoft YaHei;fontSize=24;fontColor=#25364D;strokeWidth=2;labelBackgroundColor=#FAFBFE;spacingBottom=7;" edge="1" parent="1" source="act1" target="act0" data-uml-kind="message">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="m3" value="报告工具结果，&#10;提供可核验的退出状态。" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;curved=0;rounded=0;strokeColor=#999999;fontColor=#999999;exitX=0;exitY=1.0;entryX=1;entryY=0.6667;fontFamily=Microsoft YaHei;fontSize=24;fontColor=#25364D;strokeWidth=2;labelBackgroundColor=#FAFBFE;spacingBottom=7;" edge="1" parent="1" source="act0" target="act1" data-uml-kind="message">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="m4" value="核对资源释放后，&#10;交付当前工具结果。" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;curved=0;rounded=0;strokeColor=#999999;fontColor=#999999;exitX=0;exitY=1.0;entryX=1;entryY=0.8;fontFamily=Microsoft YaHei;fontSize=24;fontColor=#25364D;strokeWidth=2;labelBackgroundColor=#FAFBFE;spacingBottom=7;" edge="1" parent="1" source="act1" target="act2" data-uml-kind="message">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="m5" value="保存必要结果后，&#10;报告当前分支已经完成。" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;curved=0;rounded=0;strokeColor=#999999;fontColor=#999999;exitX=0;exitY=1.0;entryX=0.5;entryY=0.8364;fontFamily=Microsoft YaHei;fontSize=24;fontColor=#25364D;strokeWidth=2;labelBackgroundColor=#FAFBFE;spacingBottom=7;" edge="1" parent="1" source="act2" target="h" data-uml-kind="message">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

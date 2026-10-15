@@ -1,0 +1,24 @@
+{
+  "date": "2026-10-14",
+  "evidence_as_of": "2026-10-14",
+  "baseline_evidence_as_of": "2026-09-29",
+  "performed": "Archive preservation, normalized coding, report structure and local-link checks; no product execution or performance reproduction.",
+  "source_records": 249,
+  "usable_records": 243,
+  "deduplicated_usable_source_keys": 234,
+  "theme_count": 16,
+  "case_assessment_count": 80,
+  "layer_source_counts": {
+    "L1": 58,
+    "L2": 108,
+    "L3": 38,
+    "archive": 30,
+    "L4": 15
+  },
+  "current_reports": 3,
+  "original_files_preserved": 607,
+  "authored_links_checked": 491,
+  "updated_external_links_checked": 135,
+  "errors": [],
+  "passed": true
+}

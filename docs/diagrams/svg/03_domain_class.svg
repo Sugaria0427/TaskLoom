@@ -1,0 +1,101 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2080" height="1730" viewBox="0 0 2080 1730"><title>TaskLoom 核心领域类图</title><desc>任务、执行者、步骤、尝试与产物的关系。实心菱形表示组合，空心三角表示继承；0..*表示零到多个。Agent不等于OS进程。</desc><rect width="2080" height="1730" fill="#FCFDFE"/><rect x="42" y="36" width="5" height="102" rx="2" fill="#416C82"/><text x="65" y="58" font-family="Microsoft YaHei, sans-serif" font-size="18" font-weight="650" fill="#607B8E">TASKLOOM  /  SYSTEM MODELING</text><text x="65" y="108" font-family="Microsoft YaHei, sans-serif" font-size="37" font-weight="650" fill="#203144">核心领域类图</text><text x="65" y="145" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#526C7D">任务、执行者、步骤、尝试与产物的关系</text><text x="2015" y="69" text-anchor="end" font-family="Arial,sans-serif" font-size="35" font-weight="700" fill="#ADBFCC">03</text><text x="2015" y="106" text-anchor="end" font-family="Arial,sans-serif" font-size="17" fill="#607B8E">DOMAIN CLASS</text><g transform="translate(65,180)">
+<defs><marker id="open" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M1,1 L10,6 L1,11" fill="none" stroke="#536779" stroke-width="1.5"/></marker><marker id="triangle" markerWidth="15" markerHeight="15" refX="13" refY="7.5" orient="auto"><path d="M1,1 L13,7.5 L1,14 Z" fill="white" stroke="#536779" stroke-width="1.4"/></marker><marker id="diamond" markerWidth="16" markerHeight="12" refX="1" refY="6" orient="auto"><path d="M1,6 L8,1 L15,6 L8,11 Z" fill="#536779"/></marker></defs>
+<rect x="70" y="60" width="380" height="245" rx="5" fill="#EEEDF9" stroke="#A6B8C8" stroke-width="1.5"/><line x1="70" y1="140" x2="450" y2="140" stroke="#BCC9D4"/>
+<text x="260.0" y="91.0" font-family="Microsoft YaHei, sans-serif" font-size="24" font-weight="600" fill="#203144" text-anchor="middle">用户任务</text>
+<text x="260.0" y="124.12" font-family="Microsoft YaHei, sans-serif" font-size="24" font-weight="600" fill="#203144" text-anchor="middle">Task</text>
+<text x="90" y="179.0" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#203144" text-anchor="start"> taskId: UUID</text>
+<text x="90" y="214.0" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#203144" text-anchor="start">ownerUserId: UserId</text>
+<text x="90" y="249.0" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#203144" text-anchor="start">goal: Text</text>
+<text x="90" y="284.0" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#203144" text-anchor="start">budgetLimit: Money</text>
+<rect x="70" y="450" width="430" height="225" rx="5" fill="#EEEDF9" stroke="#A6B8C8" stroke-width="1.5"/><line x1="70" y1="530" x2="500" y2="530" stroke="#BCC9D4"/>
+<text x="285.0" y="481.0" font-family="Microsoft YaHei, sans-serif" font-size="24" font-weight="600" fill="#203144" text-anchor="middle">逻辑执行者</text>
+<text x="285.0" y="514.12" font-family="Microsoft YaHei, sans-serif" font-size="24" font-weight="600" fill="#203144" text-anchor="middle">AgentExecution</text>
+<text x="90" y="569.0" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#203144" text-anchor="start"> agentId: UUID</text>
+<text x="90" y="604.0" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#203144" text-anchor="start">parentAgentId: Optional&lt;AgentId&gt;</text>
+<text x="90" y="639.0" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#203144" text-anchor="start">contextRef: ArtifactRef</text>
+<rect x="670" y="260" width="460" height="280" rx="5" fill="#EEEDF9" stroke="#A6B8C8" stroke-width="1.5"/><line x1="670" y1="340" x2="1130" y2="340" stroke="#BCC9D4"/>
+<text x="900.0" y="291.0" font-family="Microsoft YaHei, sans-serif" font-size="24" font-weight="600" fill="#203144" text-anchor="middle">执行步骤</text>
+<text x="900.0" y="324.12" font-family="Microsoft YaHei, sans-serif" font-size="24" font-weight="600" fill="#203144" text-anchor="middle">Step {abstract}</text>
+<text x="690" y="379.0" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#203144" text-anchor="start"> stepId: UUID</text>
+<text x="690" y="414.0" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#203144" text-anchor="start">status: StepStatus</text>
+<text x="690" y="449.0" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#203144" text-anchor="start">knownPredecessors: Set&lt;StepId&gt;</text>
+<text x="690" y="484.0" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#203144" text-anchor="start">deadline: Optional&lt;Time&gt;</text>
+<rect x="1380" y="240" width="450" height="315" rx="5" fill="#F5F7FA" stroke="#A6B8C8" stroke-width="1.5"/><line x1="1380" y1="320" x2="1830" y2="320" stroke="#BCC9D4"/>
+<text x="1605.0" y="271.0" font-family="Microsoft YaHei, sans-serif" font-size="24" font-weight="600" fill="#203144" text-anchor="middle">执行尝试</text>
+<text x="1605.0" y="304.12" font-family="Microsoft YaHei, sans-serif" font-size="24" font-weight="600" fill="#203144" text-anchor="middle">Attempt</text>
+<text x="1400" y="359.0" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#203144" text-anchor="start"> attemptId: UUID</text>
+<text x="1400" y="394.0" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#203144" text-anchor="start">generation: Integer</text>
+<text x="1400" y="429.0" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#203144" text-anchor="start">outcome: Outcome</text>
+<text x="1400" y="464.0" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#203144" text-anchor="start">executionState: ExecutionState</text>
+<text x="1400" y="499.0" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#203144" text-anchor="start">billingState: BillingState</text>
+<rect x="515" y="795" width="405" height="245" rx="5" fill="#EAF3FC" stroke="#A6B8C8" stroke-width="1.5"/><line x1="515" y1="875" x2="920" y2="875" stroke="#BCC9D4"/>
+<text x="717.5" y="826.0" font-family="Microsoft YaHei, sans-serif" font-size="24" font-weight="600" fill="#203144" text-anchor="middle">模型步骤</text>
+<text x="717.5" y="859.12" font-family="Microsoft YaHei, sans-serif" font-size="24" font-weight="600" fill="#203144" text-anchor="middle">ModelStep</text>
+<text x="535" y="914.0" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#203144" text-anchor="start"> inputRef: ArtifactRef</text>
+<text x="535" y="949.0" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#203144" text-anchor="start">outputLimit: TokenCount</text>
+<text x="535" y="984.0" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#203144" text-anchor="start">requestClass: ServiceClass</text>
+<rect x="1010" y="795" width="435" height="245" rx="5" fill="#EBF6F2" stroke="#A6B8C8" stroke-width="1.5"/><line x1="1010" y1="875" x2="1445" y2="875" stroke="#BCC9D4"/>
+<text x="1227.5" y="826.0" font-family="Microsoft YaHei, sans-serif" font-size="24" font-weight="600" fill="#203144" text-anchor="middle">工具步骤</text>
+<text x="1227.5" y="859.12" font-family="Microsoft YaHei, sans-serif" font-size="24" font-weight="600" fill="#203144" text-anchor="middle">ToolStep</text>
+<text x="1030" y="914.0" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#203144" text-anchor="start"> toolName: String</text>
+<text x="1030" y="949.0" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#203144" text-anchor="start">inputRef: ArtifactRef</text>
+<text x="1030" y="984.0" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#203144" text-anchor="start">accessScope: ResourceScope</text>
+<rect x="1520" y="870" width="385" height="270" rx="5" fill="#F5F7FA" stroke="#A6B8C8" stroke-width="1.5"/><line x1="1520" y1="950" x2="1905" y2="950" stroke="#BCC9D4"/>
+<text x="1712.5" y="901.0" font-family="Microsoft YaHei, sans-serif" font-size="24" font-weight="600" fill="#203144" text-anchor="middle">结果产物</text>
+<text x="1712.5" y="934.12" font-family="Microsoft YaHei, sans-serif" font-size="24" font-weight="600" fill="#203144" text-anchor="middle">Artifact</text>
+<text x="1540" y="989.0" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#203144" text-anchor="start"> artifactId: UUID</text>
+<text x="1540" y="1024.0" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#203144" text-anchor="start">location: URI</text>
+<text x="1540" y="1059.0" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#203144" text-anchor="start">inputVersion: String</text>
+<text x="1540" y="1094.0" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#203144" text-anchor="start">checksum: String</text>
+<rect x="1010" y="1170" width="435" height="245" rx="5" fill="#EBF6F2" stroke="#A6B8C8" stroke-width="1.5"/><line x1="1010" y1="1250" x2="1445" y2="1250" stroke="#BCC9D4"/>
+<text x="1227.5" y="1201.0" font-family="Microsoft YaHei, sans-serif" font-size="24" font-weight="600" fill="#203144" text-anchor="middle">阶段资源声明</text>
+<text x="1227.5" y="1234.12" font-family="Microsoft YaHei, sans-serif" font-size="24" font-weight="600" fill="#203144" text-anchor="middle">StageClaim</text>
+<text x="1030" y="1289.0" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#203144" text-anchor="start"> stageId: UUID</text>
+<text x="1030" y="1324.0" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#203144" text-anchor="start">poolId: ResourcePoolId</text>
+<text x="1030" y="1359.0" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#203144" text-anchor="start">maxDemand: ResourceVector</text>
+<text x="1030" y="1394.0" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#203144" text-anchor="start">allocation: ResourceVector</text>
+<polyline points="260,305 260,450" fill="none" stroke="#536779" stroke-width="1.7" marker-start="url(#diamond)"/>
+<rect x="280.0" y="369.0" width="60" height="29" rx="4" fill="white" fill-opacity=".96"/>
+<text x="310" y="390.0" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#203144" text-anchor="middle">包含</text>
+<rect x="262.3" y="311.0" width="29.4" height="28" rx="4" fill="white" fill-opacity=".96"/>
+<text x="277" y="331.0" font-family="Microsoft YaHei, sans-serif" font-size="20" font-weight="400" fill="#203144" text-anchor="middle">1</text>
+<rect x="203.2" y="416.0" width="63.599999999999994" height="28" rx="4" fill="white" fill-opacity=".96"/>
+<text x="235" y="436.0" font-family="Microsoft YaHei, sans-serif" font-size="20" font-weight="400" fill="#203144" text-anchor="middle">0..*</text>
+<polyline points="450,185 570,185 570,340 670,340" fill="none" stroke="#536779" stroke-width="1.7" marker-start="url(#diamond)"/>
+<rect x="555.0" y="203.0" width="60" height="29" rx="4" fill="white" fill-opacity=".96"/>
+<text x="585" y="224.0" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#203144" text-anchor="middle">包含</text>
+<rect x="452.3" y="191.0" width="29.4" height="28" rx="4" fill="white" fill-opacity=".96"/>
+<text x="467" y="211.0" font-family="Microsoft YaHei, sans-serif" font-size="20" font-weight="400" fill="#203144" text-anchor="middle">1</text>
+<rect x="613.2" y="306.0" width="63.599999999999994" height="28" rx="4" fill="white" fill-opacity=".96"/>
+<text x="645" y="326.0" font-family="Microsoft YaHei, sans-serif" font-size="20" font-weight="400" fill="#203144" text-anchor="middle">0..*</text>
+<polyline points="500,565 600,565 600,455 670,455" fill="none" stroke="#536779" stroke-width="1.7"/>
+<rect x="469.0" y="409.0" width="102" height="29" rx="4" fill="white" fill-opacity=".96"/>
+<text x="520" y="430.0" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#203144" text-anchor="middle">负责推进</text>
+<rect x="502.3" y="571.0" width="29.4" height="28" rx="4" fill="white" fill-opacity=".96"/>
+<text x="517" y="591.0" font-family="Microsoft YaHei, sans-serif" font-size="20" font-weight="400" fill="#203144" text-anchor="middle">1</text>
+<rect x="613.2" y="421.0" width="63.599999999999994" height="28" rx="4" fill="white" fill-opacity=".96"/>
+<text x="645" y="441.0" font-family="Microsoft YaHei, sans-serif" font-size="20" font-weight="400" fill="#203144" text-anchor="middle">0..*</text>
+<polyline points="1130,380 1380,380" fill="none" stroke="#536779" stroke-width="1.7" marker-start="url(#diamond)"/>
+<rect x="1209.0" y="326.0" width="102" height="29" rx="4" fill="white" fill-opacity=".96"/>
+<text x="1260" y="347.0" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#203144" text-anchor="middle">尝试历史</text>
+<rect x="1132.3" y="386.0" width="29.4" height="28" rx="4" fill="white" fill-opacity=".96"/>
+<text x="1147" y="406.0" font-family="Microsoft YaHei, sans-serif" font-size="20" font-weight="400" fill="#203144" text-anchor="middle">1</text>
+<rect x="1323.2" y="346.0" width="63.599999999999994" height="28" rx="4" fill="white" fill-opacity=".96"/>
+<text x="1355" y="366.0" font-family="Microsoft YaHei, sans-serif" font-size="20" font-weight="400" fill="#203144" text-anchor="middle">0..*</text>
+<polyline points="717,795 717,665 830,665 830,540" fill="none" stroke="#536779" stroke-width="1.7" marker-end="url(#triangle)"/>
+<polyline points="1227,795 1227,625 960,625 960,540" fill="none" stroke="#536779" stroke-width="1.7" marker-end="url(#triangle)"/>
+<polyline points="1605,555 1605,705 1712,705 1712,870" fill="none" stroke="#536779" stroke-width="1.7" marker-end="url(#open)"/>
+<rect x="1665.0" y="651.0" width="60" height="29" rx="4" fill="white" fill-opacity=".96"/>
+<text x="1695" y="672.0" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#203144" text-anchor="middle">产生</text>
+<rect x="1607.3" y="561.0" width="29.4" height="28" rx="4" fill="white" fill-opacity=".96"/>
+<text x="1622" y="581.0" font-family="Microsoft YaHei, sans-serif" font-size="20" font-weight="400" fill="#203144" text-anchor="middle">1</text>
+<rect x="1655.2" y="836.0" width="63.599999999999994" height="28" rx="4" fill="white" fill-opacity=".96"/>
+<text x="1687" y="856.0" font-family="Microsoft YaHei, sans-serif" font-size="20" font-weight="400" fill="#203144" text-anchor="middle">0..*</text>
+<polyline points="1440,555 1440,675 1470,675 1470,1120 1227,1120 1227,1170" fill="none" stroke="#536779" stroke-width="1.7" marker-start="url(#diamond)"/>
+<rect x="1235.5" y="1069.0" width="165" height="29" rx="4" fill="white" fill-opacity=".96"/>
+<text x="1318" y="1090.0" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#203144" text-anchor="middle">工具尝试的阶段</text>
+<rect x="1442.3" y="561.0" width="29.4" height="28" rx="4" fill="white" fill-opacity=".96"/>
+<text x="1457" y="581.0" font-family="Microsoft YaHei, sans-serif" font-size="20" font-weight="400" fill="#203144" text-anchor="middle">1</text>
+<rect x="1170.2" y="1136.0" width="63.599999999999994" height="28" rx="4" fill="white" fill-opacity=".96"/>
+<text x="1202" y="1156.0" font-family="Microsoft YaHei, sans-serif" font-size="20" font-weight="400" fill="#203144" text-anchor="middle">0..*</text>
+</g><line x1="65" y1="1639" x2="2015" y2="1639" stroke="#D4DEE6"/><text x="65" y="1675" font-family="Microsoft YaHei, sans-serif" font-size="20" font-weight="400" fill="#526C7D">实心菱形表示组合，空心三角表示继承；0..*表示零到多个。Agent不等于OS进程。</text><text x="2015" y="1706" text-anchor="end" font-family="Arial,sans-serif" font-size="15" fill="#899DAA">PROPOSED DESIGN  ·  v1.1  ·  2026-09-29</text></svg>

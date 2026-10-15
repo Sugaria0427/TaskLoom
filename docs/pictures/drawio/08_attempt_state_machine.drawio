@@ -1,0 +1,163 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mxfile host="app.diagrams.net" version="29.0.0" agent="TaskLoom native draw.io authoring">
+  <diagram id="08_attempt_state_machine" name="TaskLoom · 执行尝试状态图">
+    <mxGraphModel dx="1600" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="900" math="0" shadow="0" background="#FAFBFE">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="canvas" value="" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=#FAFBFE;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;locked=1;" vertex="1" parent="1" data-role="neutral" data-uml-kind="decoration">
+          <mxGeometry x="0" y="0" width="1600" height="900" as="geometry" />
+        </mxCell>
+        <mxCell id="title" value="TaskLoom · 执行尝试状态图" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=42;fontColor=#25364D;fontStyle=1;align=left;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="1" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="50" y="30" width="1500" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="initial" value="" style="shape=ellipse;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=#25364D;strokeColor=#25364D;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="1" data-role="neutral" data-uml-kind="initial-state">
+          <mxGeometry x="60" y="246.93749999999997" width="28" height="28.0" as="geometry" />
+        </mxCell>
+        <mxCell id="queued" value="" style="shape=rectangle;rounded=1;arcSize=14;whiteSpace=wrap;html=1;fillColor=#EAF0FD;strokeColor=#416BB4;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="1" data-role="task" data-uml-kind="state">
+          <mxGeometry x="155" y="183.42927631578948" width="300" height="155.01644736842104" as="geometry" />
+        </mxCell>
+        <mxCell id="queued-title" value="等待派发" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=1;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="queued" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="16" y="16.69407894736842" width="268" height="45.3125" as="geometry" />
+        </mxCell>
+        <mxCell id="queued-body" value="依赖与资源许可&#10;仍需逐项检查。" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=24;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="queued" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="16" y="71.54605263157895" width="268" height="71.54605263157895" as="geometry" />
+        </mxCell>
+        <mxCell id="running" value="" style="shape=rectangle;rounded=1;arcSize=14;whiteSpace=wrap;html=1;fillColor=#E4F4F0;strokeColor=#167C77;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="1" data-role="local" data-uml-kind="state">
+          <mxGeometry x="650" y="183.42927631578948" width="340" height="155.01644736842104" as="geometry" />
+        </mxCell>
+        <mxCell id="running-title" value="正在执行" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=1;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="running" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="16" y="16.69407894736842" width="308" height="45.3125" as="geometry" />
+        </mxCell>
+        <mxCell id="running-body" value="本次尝试已启动，&#10;实际占用持续记账。" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=24;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="running" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="16" y="71.54605263157895" width="308" height="71.54605263157895" as="geometry" />
+        </mxCell>
+        <mxCell id="unknown" value="" style="shape=rectangle;rounded=1;arcSize=14;whiteSpace=wrap;html=1;fillColor=#FCEDEB;strokeColor=#B85550;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="1" data-role="risk" data-uml-kind="state">
+          <mxGeometry x="1210" y="183.42927631578948" width="330" height="155.01644736842104" as="geometry" />
+        </mxCell>
+        <mxCell id="unknown-title" value="执行状态未知" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=1;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="unknown" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="16" y="16.69407894736842" width="298" height="45.3125" as="geometry" />
+        </mxCell>
+        <mxCell id="unknown-body" value="现有证据不足以判断&#10;远端或工具是否结束。" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=24;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="unknown" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="16" y="71.54605263157895" width="298" height="71.54605263157895" as="geometry" />
+        </mxCell>
+        <mxCell id="stopping" value="" style="shape=rectangle;rounded=1;arcSize=14;whiteSpace=wrap;html=1;fillColor=#FCEDEB;strokeColor=#B85550;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="1" data-role="risk" data-uml-kind="state">
+          <mxGeometry x="155" y="505.3865131578947" width="300" height="155.01644736842104" as="geometry" />
+        </mxCell>
+        <mxCell id="stopping-title" value="取消与清理中" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=1;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="stopping" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="16" y="16.69407894736842" width="268" height="45.3125" as="geometry" />
+        </mxCell>
+        <mxCell id="stopping-body" value="停止继续派生工作，&#10;并等待清理确认。" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=24;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="stopping" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="16" y="71.54605263157895" width="268" height="71.54605263157895" as="geometry" />
+        </mxCell>
+        <mxCell id="reconciling" value="" style="shape=rectangle;rounded=1;arcSize=14;whiteSpace=wrap;html=1;fillColor=#FCEDEB;strokeColor=#B85550;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="1" data-role="risk" data-uml-kind="state">
+          <mxGeometry x="1210" y="505.3865131578947" width="330" height="155.01644736842104" as="geometry" />
+        </mxCell>
+        <mxCell id="reconciling-title" value="正在核对状态" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=1;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="reconciling" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="16" y="16.69407894736842" width="298" height="45.3125" as="geometry" />
+        </mxCell>
+        <mxCell id="reconciling-body" value="查询可验证的状态，&#10;证据不足时继续等待。" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=24;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="reconciling" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="16" y="71.54605263157895" width="298" height="71.54605263157895" as="geometry" />
+        </mxCell>
+        <mxCell id="resolved" value="" style="shape=rectangle;rounded=1;arcSize=14;whiteSpace=wrap;html=1;fillColor=#EDF1F6;strokeColor=#64748B;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="1" data-role="neutral" data-uml-kind="state">
+          <mxGeometry x="620" y="684.2516447368421" width="420" height="143.0921052631579" as="geometry" />
+        </mxCell>
+        <mxCell id="resolved-title" value="执行已经收敛" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=1;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="resolved" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="16" y="16.69407894736842" width="388" height="45.3125" as="geometry" />
+        </mxCell>
+        <mxCell id="resolved-body" value="已记录成功、失败或取消结果。" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="resolved" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="16" y="71.54605263157895" width="388" height="59.62171052631579" as="geometry" />
+        </mxCell>
+        <mxCell id="final" value="" style="shape=ellipse;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#25364D;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="1" data-role="neutral" data-uml-kind="final-state">
+          <mxGeometry x="1110" y="812.7286184210526" width="34" height="34.0" as="geometry" />
+        </mxCell>
+        <mxCell id="final-dot" value="" style="shape=ellipse;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=#25364D;strokeColor=#25364D;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="1" data-role="neutral" data-uml-kind="decoration">
+          <mxGeometry x="1118" y="820.7286184210526" width="18" height="18.0" as="geometry" />
+        </mxCell>
+        <mxCell id="enter" value="" style="edgeStyle=none;rounded=0;html=1;strokeColor=#416BB4;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=none;endArrow=block;startFill=1;endFill=1;startSize=12;endSize=11;dashed=0;exitX=1;exitY=0.5;entryX=0;entryY=0.5;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;" edge="1" parent="1" source="initial" target="queued" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="dispatch" value="" style="edgeStyle=none;rounded=0;html=1;strokeColor=#167C77;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=none;endArrow=open;startFill=1;endFill=1;startSize=12;endSize=11;dashed=0;exitX=1;exitY=0.5;entryX=0;entryY=0.5;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;" edge="1" parent="1" source="queued" target="running" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="dispatch-label" value="满足准入条件后，启动当前尝试。" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="1" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="378" y="125.0" width="520" height="46.504934210526315" as="geometry" />
+        </mxCell>
+        <mxCell id="lost-status" value="" style="edgeStyle=none;rounded=0;html=1;strokeColor=#B85550;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=none;endArrow=open;startFill=1;endFill=1;startSize=12;endSize=11;dashed=0;exitX=1;exitY=0.5;entryX=0;entryY=0.5;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;" edge="1" parent="1" source="running" target="unknown" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="lost-label" value="无法确认实际执行结果。" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="1" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="941" y="125.0" width="480" height="46.504934210526315" as="geometry" />
+        </mxCell>
+        <mxCell id="cancel-queued" value="" style="edgeStyle=none;rounded=0;html=1;strokeColor=#B85550;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=none;endArrow=open;startFill=1;endFill=1;startSize=12;endSize=11;dashed=0;exitX=0.1;exitY=1;entryX=0.1;entryY=0;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;" edge="1" parent="1" source="queued" target="stopping" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="cancel-queued-label" value="收到取消后，&#10;清理已预留许可。" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="1" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="200" y="368.25657894736844" width="190" height="79.89309210526315" as="geometry" />
+        </mxCell>
+        <mxCell id="cancel-running" value="" style="edgeStyle=none;rounded=0;html=1;strokeColor=#B85550;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=none;endArrow=open;startFill=1;endFill=1;startSize=12;endSize=11;dashed=0;exitX=0.23;exitY=1;entryX=0.8;entryY=0;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;" edge="1" parent="1" source="running" target="stopping" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="728.2" y="392.10526315789474" />
+              <mxPoint x="395" y="392.10526315789474" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="cancel-running-label" value="收到取消后，发起停止。" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="1" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="390" y="404.02960526315786" width="435" height="42.92763157894736" as="geometry" />
+        </mxCell>
+        <mxCell id="begin-reconcile" value="" style="edgeStyle=none;rounded=0;html=1;strokeColor=#B85550;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=none;endArrow=open;startFill=1;endFill=1;startSize=12;endSize=11;dashed=0;exitX=0.5;exitY=1;entryX=0.5;entryY=0;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;" edge="1" parent="1" source="unknown" target="reconciling" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="reconcile-label" value="启动状态查询，&#10;核验实际占用。" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="1" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="1075" y="370.64144736842104" width="270" height="79.89309210526315" as="geometry" />
+        </mxCell>
+        <mxCell id="stop-unknown" value="" style="edgeStyle=none;rounded=0;html=1;strokeColor=#B85550;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=none;endArrow=open;startFill=1;endFill=1;startSize=12;endSize=11;dashed=0;exitX=1;exitY=0.3;entryX=0;entryY=0.3;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;" edge="1" parent="1" source="stopping" target="reconciling" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="stop-unknown-label" value="无法确认停止时，保留占用，&#10;并转入状态核对流程。" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="1" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="490" y="467.2286184210526" width="350" height="75.12335526315789" as="geometry" />
+        </mxCell>
+        <mxCell id="normal-complete" value="" style="edgeStyle=none;rounded=0;html=1;strokeColor=#64748B;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=none;endArrow=open;startFill=1;endFill=1;startSize=12;endSize=11;dashed=0;exitX=0.75;exitY=1;entryX=0.57;entryY=0;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;" edge="1" parent="1" source="running" target="resolved" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="905" y="606.7434210526316" />
+              <mxPoint x="859.4" y="606.7434210526316" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="normal-complete-label" value="收到确定结果后，&#10;记录执行结论。" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="1" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="945" y="580.5098684210526" width="245" height="83.4703947368421" as="geometry" />
+        </mxCell>
+        <mxCell id="stopped" value="" style="edgeStyle=none;rounded=0;html=1;strokeColor=#64748B;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=none;endArrow=open;startFill=1;endFill=1;startSize=12;endSize=11;dashed=0;exitX=0.5;exitY=1;entryX=0;entryY=0.5;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;" edge="1" parent="1" source="stopping" target="resolved" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="305" y="755.797697368421" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="stopped-label" value="确认已经停止，&#10;登记取消结果。" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="1" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="325" y="675.9046052631578" width="280" height="77.50822368421052" as="geometry" />
+        </mxCell>
+        <mxCell id="reconciled" value="" style="edgeStyle=none;rounded=0;html=1;strokeColor=#64748B;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=none;endArrow=open;startFill=1;endFill=1;startSize=12;endSize=11;dashed=0;exitX=0.5;exitY=1;entryX=1;entryY=0.5;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;" edge="1" parent="1" source="reconciling" target="resolved" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1375" y="755.797697368421" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="reconciled-label" value="核验得到确定结论后，&#10;登记对应执行结果。" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="1" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="1045" y="672.327302631579" width="285" height="77.50822368421052" as="geometry" />
+        </mxCell>
+        <mxCell id="finish" value="" style="edgeStyle=none;rounded=0;html=1;strokeColor=#64748B;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=none;endArrow=open;startFill=1;endFill=1;startSize=12;endSize=11;dashed=0;exitX=1;exitY=0.85;entryX=0;entryY=0.5;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;" edge="1" parent="1" source="resolved" target="final" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1080" y="805.8799342105262" />
+              <mxPoint x="1080" y="829.7286184210526" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

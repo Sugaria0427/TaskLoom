@@ -1,0 +1,219 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mxfile host="app.diagrams.net" version="29.0.0" agent="TaskLoom native draw.io authoring">
+  <diagram id="03_domain_classes" name="TaskLoom · 核心领域类图">
+    <mxGraphModel dx="1600" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="900" math="0" shadow="0" background="#FAFBFE">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="canvas" value="" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=#FAFBFE;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;locked=1;" vertex="1" parent="1" data-role="neutral" data-uml-kind="decoration">
+          <mxGeometry x="0" y="0" width="1600" height="900" as="geometry" />
+        </mxCell>
+        <mxCell id="title" value="TaskLoom · 核心领域类图" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=42;fontColor=#25364D;fontStyle=1;align=left;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="1" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="50" y="30" width="1500" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="task" value="" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=#EAF0FD;strokeColor=#416BB4;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="1" data-role="task" data-uml-kind="class">
+          <mxGeometry x="60" y="162.60129659643437" width="300" height="264.38411669367906" as="geometry" />
+        </mxCell>
+        <mxCell id="task-name" value="Task · 根任务" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=24;fontColor=#25364D;fontStyle=1;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="task" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="10" y="9.40032414910859" width="280" height="56.401944894651535" as="geometry" />
+        </mxCell>
+        <mxCell id="task-separator" value="" style="html=1;strokeColor=#416BB4;strokeWidth=2;startArrow=none;endArrow=none;dashed=0;" edge="1" parent="1" data-uml-kind="decoration">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="60" y="230.75364667747164" as="sourcePoint" />
+            <mxPoint x="360" y="230.75364667747164" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="task-fields" value="+ taskId : UUID&#10;+ ownerId : UUID&#10;+ deadline : Time?&#10;+ budget : Money" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;fontStyle=0;align=left;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="task" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="18" y="83.42787682333874" width="264" height="166.85575364667747" as="geometry" />
+        </mxCell>
+        <mxCell id="agent" value="" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=#EAF0FD;strokeColor=#416BB4;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="1" data-role="task" data-uml-kind="class">
+          <mxGeometry x="60" y="562.1150729335494" width="300" height="246.75850891410047" as="geometry" />
+        </mxCell>
+        <mxCell id="agent-name" value="AgentExecution&#10;Agent 执行分支" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=24;fontColor=#25364D;fontStyle=1;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="agent" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="10" y="9.40032414910859" width="280" height="88.12803889789303" as="geometry" />
+        </mxCell>
+        <mxCell id="agent-separator" value="" style="html=1;strokeColor=#416BB4;strokeWidth=2;startArrow=none;endArrow=none;dashed=0;" edge="1" parent="1" data-uml-kind="decoration">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="60" y="661.9935170178281" as="sourcePoint" />
+            <mxPoint x="360" y="661.9935170178281" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="agent-fields" value="+ agentId : UUID&#10;+ parentId : UUID?&#10;+ taskId : UUID" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;fontStyle=0;align=left;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="agent" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="18" y="115.15397082658022" width="264" height="117.50405186385737" as="geometry" />
+        </mxCell>
+        <mxCell id="step" value="" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=#EAF0FD;strokeColor=#416BB4;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="1" data-role="task" data-uml-kind="class">
+          <mxGeometry x="460" y="162.60129659643437" width="320" height="264.38411669367906" as="geometry" />
+        </mxCell>
+        <mxCell id="step-name" value="Step · 抽象步骤" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=24;fontColor=#25364D;fontStyle=1;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;fontStyle=3;" vertex="1" parent="step" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="10" y="9.40032414910859" width="300" height="56.401944894651535" as="geometry" />
+        </mxCell>
+        <mxCell id="step-separator" value="" style="html=1;strokeColor=#416BB4;strokeWidth=2;startArrow=none;endArrow=none;dashed=0;" edge="1" parent="1" data-uml-kind="decoration">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="460" y="230.75364667747164" as="sourcePoint" />
+            <mxPoint x="780" y="230.75364667747164" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="step-fields" value="+ stepId : UUID&#10;+ status : StepState&#10;+ dependsOn : StepId[]&#10;+ agentId : UUID" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;fontStyle=0;align=left;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="step" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="18" y="83.42787682333874" width="284" height="166.85575364667747" as="geometry" />
+        </mxCell>
+        <mxCell id="attempt" value="" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=#EDF1F6;strokeColor=#64748B;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="1" data-role="neutral" data-uml-kind="class">
+          <mxGeometry x="460" y="544.4894651539707" width="320" height="264.38411669367906" as="geometry" />
+        </mxCell>
+        <mxCell id="attempt-name" value="Attempt · 单次尝试" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=24;fontColor=#25364D;fontStyle=1;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="attempt" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="10" y="9.40032414910859" width="300" height="56.401944894651535" as="geometry" />
+        </mxCell>
+        <mxCell id="attempt-separator" value="" style="html=1;strokeColor=#64748B;strokeWidth=2;startArrow=none;endArrow=none;dashed=0;" edge="1" parent="1" data-uml-kind="decoration">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="460" y="612.6418152350082" as="sourcePoint" />
+            <mxPoint x="780" y="612.6418152350082" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="attempt-fields" value="+ attemptId : UUID&#10;+ executionState : State&#10;+ settlementState : State&#10;+ resultVersion : Int" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;fontStyle=0;align=left;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="attempt" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="18" y="83.42787682333874" width="284" height="166.85575364667747" as="geometry" />
+        </mxCell>
+        <mxCell id="model" value="" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=#FFF2DD;strokeColor=#AD6C18;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="1" data-role="client" data-uml-kind="class">
+          <mxGeometry x="885" y="162.60129659643437" width="285" height="211.50729335494327" as="geometry" />
+        </mxCell>
+        <mxCell id="model-name" value="ModelStep · 模型步骤" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=24;fontColor=#25364D;fontStyle=1;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="model" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="10" y="9.40032414910859" width="265" height="56.401944894651535" as="geometry" />
+        </mxCell>
+        <mxCell id="model-separator" value="" style="html=1;strokeColor=#AD6C18;strokeWidth=2;startArrow=none;endArrow=none;dashed=0;" edge="1" parent="1" data-uml-kind="decoration">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="885" y="230.75364667747164" as="sourcePoint" />
+            <mxPoint x="1170" y="230.75364667747164" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="model-fields" value="+ input : ModelInput&#10;+ costEstimate : Cost" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;fontStyle=0;align=left;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="model" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="18" y="83.42787682333874" width="249" height="113.97893030794165" as="geometry" />
+        </mxCell>
+        <mxCell id="tool" value="" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=#E4F4F0;strokeColor=#167C77;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="1" data-role="local" data-uml-kind="class">
+          <mxGeometry x="1260" y="162.60129659643437" width="280" height="211.50729335494327" as="geometry" />
+        </mxCell>
+        <mxCell id="tool-name" value="ToolStep · 工具步骤" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=24;fontColor=#25364D;fontStyle=1;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="tool" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="10" y="9.40032414910859" width="260" height="56.401944894651535" as="geometry" />
+        </mxCell>
+        <mxCell id="tool-separator" value="" style="html=1;strokeColor=#167C77;strokeWidth=2;startArrow=none;endArrow=none;dashed=0;" edge="1" parent="1" data-uml-kind="decoration">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1260" y="230.75364667747164" as="sourcePoint" />
+            <mxPoint x="1540" y="230.75364667747164" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="tool-fields" value="+ toolId : String&#10;+ input : ToolInput" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;fontStyle=0;align=left;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="tool" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="18" y="83.42787682333874" width="244" height="113.97893030794165" as="geometry" />
+        </mxCell>
+        <mxCell id="artifact" value="" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=#EDF1F6;strokeColor=#64748B;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="1" data-role="neutral" data-uml-kind="class">
+          <mxGeometry x="885" y="562.1150729335494" width="285" height="235.00810372771474" as="geometry" />
+        </mxCell>
+        <mxCell id="artifact-name" value="Artifact · 结果产物" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=24;fontColor=#25364D;fontStyle=1;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="artifact" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="10" y="9.40032414910859" width="265" height="56.401944894651535" as="geometry" />
+        </mxCell>
+        <mxCell id="artifact-separator" value="" style="html=1;strokeColor=#64748B;strokeWidth=2;startArrow=none;endArrow=none;dashed=0;" edge="1" parent="1" data-uml-kind="decoration">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="885" y="630.2674230145867" as="sourcePoint" />
+            <mxPoint x="1170" y="630.2674230145867" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="artifact-fields" value="+ uri : String&#10;+ contentHash : String&#10;+ referenceCount : Int" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;fontStyle=0;align=left;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="artifact" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="18" y="83.42787682333874" width="249" height="137.47974068071312" as="geometry" />
+        </mxCell>
+        <mxCell id="claim" value="" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=#E4F4F0;strokeColor=#167C77;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=25;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;" vertex="1" parent="1" data-role="local" data-uml-kind="class">
+          <mxGeometry x="1260" y="562.1150729335494" width="280" height="235.00810372771474" as="geometry" />
+        </mxCell>
+        <mxCell id="claim-name" value="StageClaim · 阶段声明" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=24;fontColor=#25364D;fontStyle=1;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="claim" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="10" y="9.40032414910859" width="260" height="56.401944894651535" as="geometry" />
+        </mxCell>
+        <mxCell id="claim-separator" value="" style="html=1;strokeColor=#167C77;strokeWidth=2;startArrow=none;endArrow=none;dashed=0;" edge="1" parent="1" data-uml-kind="decoration">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1260" y="630.2674230145867" as="sourcePoint" />
+            <mxPoint x="1540" y="630.2674230145867" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="claim-fields" value="+ maximum : Vector&#10;+ allocation : Vector&#10;+ version : Int" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;fontStyle=0;align=left;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="claim" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="18" y="83.42787682333874" width="244" height="137.47974068071312" as="geometry" />
+        </mxCell>
+        <mxCell id="owns-steps" value="" style="edgeStyle=none;rounded=0;html=1;strokeColor=#416BB4;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=diamondThin;endArrow=none;startFill=1;endFill=1;startSize=12;endSize=11;dashed=0;exitX=1;exitY=0.5;entryX=0;entryY=0.5;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;" edge="1" parent="1" source="task" target="step" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="owns-agents" value="" style="edgeStyle=none;rounded=0;html=1;strokeColor=#416BB4;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=diamondThin;endArrow=none;startFill=1;endFill=1;startSize=12;endSize=11;dashed=0;exitX=0.5;exitY=1;entryX=0.5;entryY=0;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;" edge="1" parent="1" source="task" target="agent" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="responsible" value="" style="edgeStyle=none;rounded=0;html=1;strokeColor=#416BB4;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=none;endArrow=none;startFill=1;endFill=1;startSize=12;endSize=11;dashed=0;exitX=1;exitY=0.5;entryX=0.16;entryY=1;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;" edge="1" parent="1" source="agent" target="step" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="415" y="685.4943273905997" />
+              <mxPoint x="415" y="479.86223662884925" />
+              <mxPoint x="511.2" y="479.86223662884925" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="owns-attempts" value="" style="edgeStyle=none;rounded=0;html=1;strokeColor=#64748B;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=diamondThin;endArrow=none;startFill=1;endFill=1;startSize=12;endSize=11;dashed=0;exitX=0.5;exitY=1;entryX=0.5;entryY=0;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;" edge="1" parent="1" source="step" target="attempt" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="model-inherits" value="" style="edgeStyle=none;rounded=0;html=1;strokeColor=#AD6C18;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=none;endArrow=block;startFill=0;endFill=0;startSize=12;endSize=11;dashed=0;exitX=0;exitY=0.5;entryX=1;entryY=0.4;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;" edge="1" parent="1" source="model" target="step" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="tool-inherits" value="" style="edgeStyle=none;rounded=0;html=1;strokeColor=#167C77;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=none;endArrow=block;startFill=0;endFill=0;startSize=12;endSize=11;dashed=0;exitX=0.5;exitY=0;entryX=0.5;entryY=0;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;" edge="1" parent="1" source="tool" target="step" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1400" y="125.0" />
+              <mxPoint x="620" y="125.0" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="produces" value="" style="edgeStyle=none;rounded=0;html=1;strokeColor=#64748B;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=none;endArrow=none;startFill=1;endFill=1;startSize=12;endSize=11;dashed=0;exitX=1;exitY=0.5;entryX=0;entryY=0.4875;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;" edge="1" parent="1" source="attempt" target="artifact" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="owns-claim" value="" style="edgeStyle=none;rounded=0;html=1;strokeColor=#167C77;strokeWidth=2.2;fontFamily=Microsoft YaHei;fontSize=23;fontColor=#25364D;labelBackgroundColor=#FAFBFE;startArrow=diamondThin;endArrow=none;startFill=1;endFill=1;startSize=12;endSize=11;dashed=0;exitX=0.7;exitY=1;entryX=0.5;entryY=1;exitPerimeter=1;entryPerimeter=1;jumpStyle=arc;jumpSize=7;" edge="1" parent="1" source="attempt" target="claim" data-uml-kind="relationship">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="684" y="837.0745542949757" />
+              <mxPoint x="1400" y="837.0745542949757" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="m-task1" value="1" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=22;fontColor=#25364D;fontStyle=0;align=left;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="1" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="365" y="250.7293354943274" width="30" height="35.25121555915721" as="geometry" />
+        </mxCell>
+        <mxCell id="m-step-many" value="0..*" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=22;fontColor=#25364D;fontStyle=0;align=left;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="1" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="409" y="250.7293354943274" width="50" height="35.25121555915721" as="geometry" />
+        </mxCell>
+        <mxCell id="m-task2" value="1" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=22;fontColor=#25364D;fontStyle=0;align=left;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="1" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="217" y="434.0356564019449" width="30" height="35.25121555915721" as="geometry" />
+        </mxCell>
+        <mxCell id="m-agent-many" value="1..*" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=22;fontColor=#25364D;fontStyle=0;align=left;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="1" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="217" y="510.4132901134522" width="60" height="35.25121555915721" as="geometry" />
+        </mxCell>
+        <mxCell id="m-agent1" value="1" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=22;fontColor=#25364D;fontStyle=0;align=left;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="1" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="367" y="638.4927066450567" width="30" height="35.25121555915721" as="geometry" />
+        </mxCell>
+        <mxCell id="m-agent-steps" value="0..*" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=22;fontColor=#25364D;fontStyle=0;align=left;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="1" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="465" y="432.8606158833063" width="50" height="35.25121555915721" as="geometry" />
+        </mxCell>
+        <mxCell id="m-step1" value="1" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=22;fontColor=#25364D;fontStyle=0;align=left;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="1" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="630" y="431.6855753646677" width="30" height="35.25121555915721" as="geometry" />
+        </mxCell>
+        <mxCell id="m-attempts" value="0..*" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=22;fontColor=#25364D;fontStyle=0;align=left;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="1" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="630" y="504.5380875202593" width="60" height="35.25121555915721" as="geometry" />
+        </mxCell>
+        <mxCell id="m-producer" value="1" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=22;fontColor=#25364D;fontStyle=0;align=left;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="1" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="786" y="634.967585089141" width="30" height="35.25121555915721" as="geometry" />
+        </mxCell>
+        <mxCell id="m-artifacts" value="0..*" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=22;fontColor=#25364D;fontStyle=0;align=left;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="1" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="828" y="634.967585089141" width="55" height="35.25121555915721" as="geometry" />
+        </mxCell>
+        <mxCell id="m-attempt1" value="1" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=22;fontColor=#25364D;fontStyle=0;align=left;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="1" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="650" y="814.7487844408428" width="25" height="35.25121555915721" as="geometry" />
+        </mxCell>
+        <mxCell id="m-claim" value="0..*" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=22;fontColor=#25364D;fontStyle=0;align=left;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#25364D;" vertex="1" parent="1" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="1410" y="802.9983792544571" width="65" height="35.25121555915721" as="geometry" />
+        </mxCell>
+        <mxCell id="constraint1" value="子 Agent 的父子关系必须无环。&#10;步骤与执行分支同属一个根任务。" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=22;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#62718A;" vertex="1" parent="1" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="820" y="422.28525121555913" width="355" height="79.90275526742302" as="geometry" />
+        </mxCell>
+        <mxCell id="constraint2" value="阶段声明归属一次工具尝试。&#10;API 额度不参与银行家检查。" style="shape=rectangle;rounded=0;arcSize=14;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;strokeWidth=2;fontFamily=Microsoft YaHei;fontSize=22;fontColor=#25364D;fontStyle=0;align=center;verticalAlign=middle;spacing=8;shadow=0;spacing=0;overflow=visible;fontColor=#167C77;" vertex="1" parent="1" data-role="neutral" data-uml-kind="label">
+          <mxGeometry x="1188" y="422.28525121555913" width="355" height="79.90275526742302" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

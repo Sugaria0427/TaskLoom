@@ -1,0 +1,35 @@
+@startuml
+!include _theme.iuml
+left to right direction
+skinparam linetype polyline
+node "个人电脑 [1..N]\n各用户独立部署" as PC {
+  node "Linux／WSL2 执行环境" as OS {
+    node "个人端应用进程\nL2 任务协调 ＋ L3 请求调度" as App <<executionEnvironment>> #EEEDF9
+    node "L1 资源管理进程" as RM <<executionEnvironment>> #EBF6F2
+    node "受管工具资源组\ncgroup v2／进程组" as Group {
+      node "工具 worker [0..N]\n及其自有后代" as W <<executionEnvironment>> #EBF6F2
+    }
+    node "独立监督守护进程" as D <<executionEnvironment>> #F5F7FA
+    artifact "本地磁盘\nSQLite WAL／任务产物" as Disk <<persistent files>>
+    App -- RM : 本地 IPC
+    RM -- W : 执行许可／状态事件
+    App ..> Disk : 状态与索引
+    D -- RM : 监督／对账
+    D -- Group : 核对与清理
+  }
+  node "本地浏览器\nWeb 界面" as UI <<executionEnvironment>>
+  UI -- App : 本机 HTTP／事件
+}
+node "应用平台服务器\n首版单实例" as Platform {
+  node "L4 接入与派发进程" as Gateway <<executionEnvironment>> #FBF2E1
+  artifact "平台持久账本\n共享额度与请求状态" as Q <<persistent files>>
+  node "平台监督服务进程" as PD <<executionEnvironment>>
+  Gateway ..> Q : 单一权威写入
+  PD -- Gateway : 健康与重启
+}
+node "外部固定模型服务\n执行条件固定" as External <<external>> {
+  node "既有模型 API 运行环境" as API <<executionEnvironment>> #F2F3F5
+}
+App -- Gateway : HTTPS／流式响应
+Gateway -- API : HTTPS／流式响应
+@enduml

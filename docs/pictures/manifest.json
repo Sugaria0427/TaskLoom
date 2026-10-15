@@ -1,0 +1,92 @@
+[
+  {
+    "stem": "01_use_case",
+    "title": "TaskLoom · 系统用例图",
+    "category": "需求视图",
+    "canvas": [
+      1600,
+      1000
+    ]
+  },
+  {
+    "stem": "02_components",
+    "title": "TaskLoom · 两端四层组件图",
+    "category": "结构视图",
+    "canvas": [
+      1600,
+      1000
+    ]
+  },
+  {
+    "stem": "03_domain_classes",
+    "title": "TaskLoom · 核心领域类图",
+    "category": "结构视图",
+    "canvas": [
+      1600,
+      900
+    ]
+  },
+  {
+    "stem": "04_deployment",
+    "title": "TaskLoom · 部署与运行层次图",
+    "category": "结构视图",
+    "canvas": [
+      1600,
+      1200
+    ]
+  },
+  {
+    "stem": "05_model_request_sequence",
+    "title": "TaskLoom · 模型请求时序图",
+    "category": "行为视图",
+    "canvas": [
+      1600,
+      900
+    ]
+  },
+  {
+    "stem": "06_tool_branch_sequence",
+    "title": "TaskLoom · 工具与子 Agent 时序图",
+    "category": "行为视图",
+    "canvas": [
+      1600,
+      900
+    ]
+  },
+  {
+    "stem": "07_cancel_recovery_sequence",
+    "title": "TaskLoom · 本地取消与核对时序图",
+    "category": "行为视图",
+    "canvas": [
+      1600,
+      1100
+    ]
+  },
+  {
+    "stem": "08_attempt_state_machine",
+    "title": "TaskLoom · 执行尝试状态图",
+    "category": "行为视图",
+    "canvas": [
+      1600,
+      900
+    ]
+  },
+  {
+    "stem": "09_bankers_activity",
+    "title": "TaskLoom · 银行家安全检查活动图",
+    "category": "行为视图",
+    "canvas": [
+      1600,
+      900
+    ]
+  },
+  {
+    "stem": "10_project_mindmap",
+    "title": "TaskLoom · 项目思维导图",
+    "category": "项目总览",
+    "canvas": [
+      1600,
+      900
+    ]
+  }
+]

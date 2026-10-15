@@ -1,0 +1,157 @@
+{
+  "retrieved_date": "2026-09-27",
+  "scope": "Targeted follow-up literature review, not exhaustive; no experiments or implementation performed",
+  "sources": [
+    {
+      "id": "S1",
+      "title": "Agentix: An Efficient Serving Engine for LLM Agents as General Programs",
+      "publication_status": "NSDI 2026",
+      "url": "https://www.usenix.org/conference/nsdi26/presentation/luo",
+      "inspection_status": "Official abstract re-fetched; existing full-text method/evaluation passages reviewed",
+      "material_path_relative_to_materials": "web/2026-09-27/agentix_official.txt",
+      "sha256": "77e2886a1213f701acf34c7f6380a1b222e429587fd55c79a499b96d3f820014"
+    },
+    {
+      "id": "S2",
+      "title": "JITServe: SLO-aware LLM Serving with Imprecise Request Information",
+      "publication_status": "NSDI 2026",
+      "url": "https://www.usenix.org/conference/nsdi26/presentation/zhang-wei",
+      "inspection_status": "Official abstract re-fetched; existing research context reused",
+      "material_path_relative_to_materials": "web/2026-09-27/jitserve_official.txt",
+      "sha256": "0ded81d271b01a69da1c5456c104e9bd9f72f1071456e264ea64e436644fd886"
+    },
+    {
+      "id": "S3",
+      "title": "Architectural Implications of Agentic AI Workflows",
+      "publication_status": "arXiv preprint",
+      "url": "https://arxiv.org/abs/2608.04458",
+      "inspection_status": "Existing full-text hardware and method passages reviewed",
+      "material_path_relative_to_materials": "extracted/arch.txt",
+      "sha256": "64096340ae13771775eb3af7be4631aa8f3c087d0d56d0675ff0a22e699a25db"
+    },
+    {
+      "id": "S4",
+      "title": "Agentic Coding in the Wild: Characterizing GitHub Copilot at Production Scale",
+      "publication_status": "arXiv preprint",
+      "url": "https://arxiv.org/abs/2608.00101",
+      "inspection_status": "Existing full-text workload, timing, parallelism, failure and limitations passages reviewed",
+      "material_path_relative_to_materials": "extracted/coding.txt",
+      "sha256": "112bde450a793029c0372d0820f13acc1520d018e873878e7d21ba29ab0ee3f3"
+    },
+    {
+      "id": "S5",
+      "title": "AIOS: LLM Agent Operating System",
+      "publication_status": "arXiv record labels COLM 2025; independent OpenReview attempt rate-limited",
+      "url": "https://arxiv.org/abs/2403.16971v5",
+      "inspection_status": "Abstract verified; full HTML saved; scheduler/tool manager/evaluation passages reviewed",
+      "material_path_relative_to_materials": "extracted/2026-09-27/aios.txt",
+      "sha256": "51bc87c6c43a337bd307d35057e4fa46ea54a547e8331a3ad2b9c0078d8c63f9"
+    },
+    {
+      "id": "S6",
+      "title": "An LLM Compiler for Parallel Function Calling",
+      "publication_status": "ICML 2024, PMLR 235:24370-24391",
+      "url": "https://proceedings.mlr.press/v235/kim24y.html",
+      "inspection_status": "Publisher metadata verified; HTML saved; abstract/method overview read",
+      "material_path_relative_to_materials": "extracted/2026-09-27/llmcompiler.txt",
+      "sha256": "0c63f066101daf2cb2a4d0c30f1d261c1d80e39b3cc3d428f1d2e806e4f67578"
+    },
+    {
+      "id": "S7",
+      "title": "LangGraph Checkpointers",
+      "publication_status": "Official software documentation",
+      "url": "https://docs.langchain.com/oss/python/langgraph/checkpointers",
+      "inspection_status": "Pending writes, fault tolerance and durability modes inspected; capability evidence only",
+      "material_path_relative_to_materials": "web/2026-09-27/langgraph_checkpointers.txt",
+      "sha256": "7bd2a1b5f35330c26c1d37a82f4ff6f11cb45d02d04957a2d406e5ec29c634f3"
+    },
+    {
+      "id": "S8",
+      "title": "PeakBench: Benchmarking Resource-Aware Tool Invocation in LLM Agents",
+      "publication_status": "arXiv preprint, 2026-08-25",
+      "url": "https://arxiv.org/abs/2608.24509",
+      "inspection_status": "Full HTML saved; methods/evaluation/Table3/Table9/capacity/profiling/noise sections inspected; linked code repository returned 404",
+      "material_path_relative_to_materials": "extracted/2026-09-27/peakbench.txt",
+      "sha256": "2751c724e0b99789a7cad45d6594f5b3cc5ea32659e90c444c3a8902c83d23da"
+    },
+    {
+      "id": "S9",
+      "title": "HiveMind: OS-Inspired Scheduling for Concurrent LLM Agent Workloads",
+      "publication_status": "arXiv preprint, 2026-04-18",
+      "url": "https://arxiv.org/abs/2604.17111",
+      "inspection_status": "Full HTML saved; method/evaluation/ablation/limitations inspected; repository API available; code not executed",
+      "material_path_relative_to_materials": "extracted/2026-09-27/hivemind.txt",
+      "sha256": "06a34a7631aa8565577ad711a744d85597a0e03c899e284dabf69275429ab6f4"
+    },
+    {
+      "id": "S10",
+      "title": "Decoupling Readiness from Release for Tail-Aware Scheduling of Agentic LLM Workflows",
+      "publication_status": "arXiv preprint, 2026-09-10",
+      "url": "https://arxiv.org/abs/2609.10964",
+      "inspection_status": "Full HTML saved; method and evaluation inspected; self-hosted vLLM and engine telemetry required by evaluated setup",
+      "material_path_relative_to_materials": "extracted/2026-09-27/readiness_release.txt",
+      "sha256": "409b3eac4f6c0345401014f2ce0e32c2ad73cb2e89ba9e2ba3bd08674a692b20"
+    }
+  ],
+  "search_log": [
+    {
+      "source": "AMiner",
+      "query": "agent tool scheduling",
+      "result": "40308 Invalid Token"
+    },
+    {
+      "source": "arXiv",
+      "query": "agent tool scheduling",
+      "result_file": "search_tools_2026-09-27.json",
+      "screened_first_page": 50
+    },
+    {
+      "source": "arXiv",
+      "query": "agent local resource contention",
+      "result_file": "search_local_2026-09-27.json",
+      "screened_first_page": 25
+    },
+    {
+      "source": "Crossref",
+      "queries": [
+        "PeakBench Benchmarking Resource-Aware Tool Invocation",
+        "AIOS LLM Agent Operating System",
+        "An LLM Compiler for Parallel Function Calling"
+      ],
+      "rows_each": 3,
+      "result": "No exact matches returned; unrelated records excluded"
+    },
+    {
+      "source": "OpenReview API",
+      "query": "AIOS: LLM Agent Operating System",
+      "result": "429 Too Many Requests"
+    },
+    {
+      "source": "GitHub",
+      "url": "https://github.com/Czzzk/Staggering-the-Peaks",
+      "result": "404 on web and repository API"
+    },
+    {
+      "source": "GitHub",
+      "url": "https://github.com/jayluxferro/hivemind",
+      "result": "Repository API 200; not cloned or run"
+    }
+  ],
+  "additional_abstract_only": [
+    {
+      "title": "SpecBox: Speculative Sandbox Scheduling for Efficient LLM Agent Serving",
+      "url": "https://arxiv.org/abs/2607.23933",
+      "snapshot": "web/2026-09-27/specbox.txt"
+    },
+    {
+      "title": "Memory Compression for High-Fanout Agent Sandboxes",
+      "url": "https://arxiv.org/abs/2609.11294",
+      "snapshot": "web/2026-09-27/memory_sandboxes.txt"
+    },
+    {
+      "title": "AgentServe: Algorithm-System Co-Design for Efficient Agentic AI Serving on a Consumer-Grade GPU",
+      "url": "https://arxiv.org/abs/2603.10342",
+      "snapshot": "web/2026-09-27/agentserve.txt"
+    }
+  ]
+}

@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#f7f8fa">
+  <title>TaskLoom · 织序</title>
+  <link rel="icon" href="/static/mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/style.css?v=workbench-1">
+  <script src="/static/api.js?v=workbench-1" defer></script>
+</head>
+<body>
+  <svg class="svg-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <defs>
+      <symbol id="i-loom" viewBox="0 0 24 24"><path d="M5 3v18M12 3v18M19 3v18M3 7h18M3 17h18m-16-10 14 10M5 17 19 7"/></symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+      <symbol id="i-chat" viewBox="0 0 24 24"><path d="M20 11.5a8 8 0 0 1-8 8H5l-3 2v-10a9 9 0 0 1 18 0ZM7 10h8m-8 4h5"/></symbol>
+      <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><path d="M14 20v-3m3 3v-6m3 6v-9"/></symbol>
+      <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4.5 4.5"/></symbol>
+      <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M12 19V5m-6 6 6-6 6 6"/></symbol>
+      <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6"/></symbol>
+      <symbol id="i-panel" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M15 4v16m3-10v4"/></symbol>
+      <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+      <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6"/></symbol>
+      <symbol id="i-settings" viewBox="0 0 24 24"><path d="m9 3-.5 2-2 .9-1.8-.6-2 3.4 1.4 1.5v2.3l-1.4 1.4 2 3.5 1.8-.6 2 .9L9 21h4l.5-2.3 2-.9 1.8.6 2-3.5-1.4-1.4v-2.3l1.4-1.5-2-3.4-1.8.6-2-.9L13 3Z"/><circle cx="11" cy="12" r="3"/></symbol>
+      <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Zm0 0v6h6M8 13h8M8 17h5"/></symbol>
+      <symbol id="i-chip" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 1v5m6-5v5M9 18v5m6-5v5M1 9h5m-5 6h5m12-6h5m-5 6h5"/><rect x="9" y="9" width="6" height="6" rx="1"/></symbol>
+      <symbol id="i-bolt" viewBox="0 0 24 24"><path d="m13 2-9 12h7l-1 8 10-13h-7Z"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+      <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+      <symbol id="i-edit" viewBox="0 0 24 24"><path d="m16 3 5 5-12 12-6 1 1-6ZM13 6l5 5"/></symbol>
+      <symbol id="i-archive" viewBox="0 0 24 24"><path d="M4 8v12h16V8M3 3h18v5H3ZM9 12h6"/></symbol>
+      <symbol id="i-link" viewBox="0 0 24 24"><path d="m10 13 4-4m-7 2L5 13a4 4 0 0 0 6 6l2-2m-2-10 2-2a4 4 0 0 1 6 6l-2 2"/></symbol>
+      <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></symbol>
+      <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 8a8 8 0 1 0 .3 7M20 3v5h-5"/></symbol>
+      <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m-4-4 4 4 4-4M4 17v4h16v-4"/></symbol>
+      <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v.01"/></symbol>
+      <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
+    </defs>
+  </svg>
+  <a class="skip-link" href="#main">跳到主内容</a>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar" aria-label="工作台导航">
+      <a href="#chat" class="brand" aria-label="TaskLoom 织序首页"><span class="brand-mark"><svg class="icon"><use href="#i-loom"/></svg></span><span>TaskLoom <small>织序</small></span></a>
+      <button class="new-chat" id="new-chat"><svg class="icon"><use href="#i-plus"/></svg><span>新建会话</span><kbd>Ctrl K</kbd></button>
+      <nav class="primary-nav" aria-label="主导航">
+        <button id="nav-chat" class="nav-item active" aria-current="page"><svg class="icon"><use href="#i-chat"/></svg>Agent 工作台<span class="nav-count" id="active-count">0</span></button>
+        <button id="nav-monitor" class="nav-item"><svg class="icon"><use href="#i-grid"/></svg>调度监控<span class="live-dot"></span></button>
+      </nav>
+      <div class="session-heading"><span>会话记录</span><button class="icon-button" id="show-archived" aria-label="查看已归档会话" title="查看已归档会话" aria-pressed="false"><svg class="icon"><use href="#i-archive"/></svg></button></div>
+      <label class="session-search"><svg class="icon"><use href="#i-search"/></svg><input id="session-search" type="search" placeholder="搜索会话" aria-label="搜索会话"></label>
+      <div class="session-list" id="session-list" role="navigation" aria-label="会话列表"><p class="sidebar-empty">正在读取会话…</p></div>
+      <div class="sidebar-bottom"><div class="sidebar-system"><span class="live-dot" id="connection-dot"></span><span id="health">正在连接本地服务</span><span class="local-pill">LOCAL</span></div><button class="account-button" id="open-settings"><span class="avatar" id="avatar">T</span><span class="account-label"><strong id="account">平台账号</strong><small id="account-status">正在连接</small></span><svg class="icon"><use href="#i-settings"/></svg></button></div>
+    </aside>
+
+    <main id="main" class="main-column" tabindex="-1">
+      <header class="topbar">
+        <button class="icon-button mobile-menu" id="toggle-sidebar" aria-label="打开导航"><svg class="icon"><use href="#i-menu"/></svg></button>
+        <div class="page-heading"><span class="breadcrumb" id="breadcrumb">个人工作台</span><h1 id="page-title">新会话</h1></div>
+        <div class="header-actions"><span class="model-badge"><span class="live-dot"></span><span id="model-name">平台模型</span><span id="model-mode" class="mode-pill">连接中</span></span><button class="icon-button conversation-action" id="rename-chat" aria-label="重命名会话" title="重命名会话" hidden><svg class="icon"><use href="#i-edit"/></svg></button><button class="icon-button conversation-action" id="archive-chat" aria-label="归档会话" title="归档会话" hidden><svg class="icon"><use href="#i-archive"/></svg></button><span class="header-divider"></span><button class="icon-button" id="toggle-inspector" aria-label="显示执行面板" title="执行面板" aria-expanded="true"><svg class="icon"><use href="#i-panel"/></svg></button></div>
+      </header>
+      <section class="chat-view" id="chat-view" aria-label="Agent 会话">
+        <div class="chat-scroll" id="chat-scroll">
+          <div class="welcome" id="welcome"><div class="welcome-kicker"><span class="tiny-line"></span> TASKLOOM WORKSPACE</div><div class="welcome-mark"><svg class="icon"><use href="#i-loom"/></svg></div><h2>交给 Agent，<br><span>也看清每一步。</span></h2><p>整理资料、执行工具、获得结果。<br>任务如何排队、资源如何分配，始终清晰可见。</p><div class="suggestions" role="group" aria-label="示例任务"><button data-example="notes"><svg class="icon"><use href="#i-file"/></svg><span>统计一份学习笔记<small>从一次完整的工具调用开始</small></span><svg class="icon"><use href="#i-arrow-right"/></svg></button><button data-example="files"><svg class="icon"><use href="#i-link"/></svg><span>统计多份文本资料<small>添加本地文本文件后统一统计</small></span><svg class="icon"><use href="#i-arrow-right"/></svg></button><button data-example="load"><svg class="icon"><use href="#i-chip"/></svg><span>观察任务资源竞争<small>提高计算量，查看并发与取消</small></span><svg class="icon"><use href="#i-arrow-right"/></svg></button></div></div>
+          <div class="messages" id="messages" role="log" aria-label="会话消息" aria-live="polite" aria-relevant="additions"></div>
+        </div>
+        <div class="composer-region">
+          <div class="conversation-summary" id="conversation-summary" hidden></div>
+          <div class="archive-notice" id="archive-notice" hidden><span>此会话已归档，执行记录与成果已保留。</span><button id="restore-chat" class="text-button">恢复会话</button></div>
+          <form id="form" class="composer"><div id="attachments" class="attachments" role="group" aria-label="已添加文件"></div><label class="sr-only" for="message">发送消息或输入待统计的资料</label><textarea id="message" rows="3" maxlength="16000" placeholder="输入资料，或添加文本文件，让 Agent 开始工作…" required></textarea><div class="composer-toolbar"><div class="composer-tools"><button type="button" id="attach-file" class="icon-button" aria-label="添加文本文件" title="添加文本文件"><svg class="icon"><use href="#i-plus"/></svg></button><input type="file" id="file-input" accept=".txt,.md,.csv,.json,.log,.py,.js,.ts,.html,.css,.yaml,.yml,.toml" multiple hidden><span class="composer-divider"></span><span class="tool-label"><svg class="icon"><use href="#i-file"/></svg>文档统计 Agent</span><button type="button" id="task-options" class="options-button" aria-expanded="false" aria-controls="options-panel">执行设置<svg class="icon"><use href="#i-chevron"/></svg></button></div><button type="submit" id="submit" class="send-button" aria-label="发送消息" title="发送消息 · Enter" disabled><svg class="icon"><use href="#i-arrow"/></svg></button></div><div id="options-panel" class="options-panel" hidden><label>计算工作量<select id="iterations"><option value="1">标准文件统计</option><option value="5000000">增加哈希计算 · 观察资源竞争</option></select></label><label>本次任务额度上限<input id="task-budget" type="number" value="100000" min="100" max="10000000" step="100"></label></div></form>
+          <p class="composer-footnote"><span id="workflow-note">当前工作流：文档统计与结果校验</span><span>Enter 发送 · Shift Enter 换行</span></p><p class="form-error" id="error" role="alert"></p>
+        </div>
+      </section>
+      <section class="monitor-view" id="monitor-view" aria-label="调度监控" hidden>
+        <div class="monitor-intro"><div><p class="eyebrow">SCHEDULING OBSERVATORY</p><h2>任务在推进，资源有去向。</h2><p>从本地工具到平台请求，查看真实执行状态与分配结果。</p></div><span class="sampling-badge"><span class="live-dot"></span>每秒更新</span></div>
+        <div class="monitor-kpis" id="monitor-kpis"></div>
+        <div class="monitor-platform" id="monitor-platform" role="region" aria-label="共享平台状态"></div>
+        <div class="monitor-middle"><section class="surface resource-surface"><div class="section-heading"><h3>资源分配</h3><span>预算与预留</span></div><div id="monitor-resources"></div><p class="surface-note">内存展示调度器预留量；CPU 与实际 RSS 的采集将在后续接入。</p></section><section class="surface trend-surface"><div class="section-heading"><h3>本地排队趋势</h3><span id="trend-range">当前页面采样</span></div><div class="trend-legend"><span><i class="legend-dot green"></i>工具队列</span><span><i class="legend-dot blue"></i>模型队列</span></div><div id="queue-chart" class="queue-chart"></div></section></div>
+        <section class="surface task-surface"><div class="section-heading"><h3>任务运行表</h3><div class="filter-buttons" id="task-filters"><button class="active" data-filter="all">全部</button><button data-filter="active">进行中</button><button data-filter="finished">已结束</button></div></div><div class="table-scroll"><table class="task-table"><thead><tr><th>任务 / 会话</th><th>执行状态</th><th>当前步骤</th><th>分配资源</th><th>累计耗时</th><th>消耗 / 预留</th><th>操作</th></tr></thead><tbody id="task-table"></tbody></table></div><div id="task-table-empty" class="table-empty" hidden>暂无符合条件的任务。</div></section>
+        <section class="surface event-surface"><div class="section-heading"><h3>执行事件</h3><span>最近 80 条 · 当前 profile</span></div><div id="monitor-events" class="monitor-events" tabindex="0" aria-label="执行事件列表" role="region"></div></section>
+      </section>
+      <footer class="statusbar"><span><span class="live-dot"></span><span id="runtime-status">本地执行环境正在连接</span></span><span id="statusbar-queue">工具与模型队列 —</span><span id="statusbar-feedback">平台反馈 —</span></footer>
+    </main>
+    <aside class="inspector" id="inspector" aria-label="执行与资源面板"><div class="inspector-heading"><div><span class="live-dot"></span><h2>执行与资源</h2></div><button id="close-inspector" class="icon-button" aria-label="收起执行面板"><svg class="icon"><use href="#i-close"/></svg></button></div><div class="inspector-scroll"><section class="inspector-section"><div class="section-heading"><h3>当前会话</h3><span id="session-task-count">0 项任务</span></div><div class="session-stats" id="session-stats"></div><div id="current-execution"></div></section><section class="inspector-section"><div class="section-heading"><h3>本地资源</h3><span class="layer-label">L1 — L3</span></div><div id="local-resources"></div></section><section class="inspector-section"><div class="section-heading"><h3>平台模型服务</h3><span class="layer-label">L4</span></div><div id="platform-resources"></div><button class="inline-link" id="inspect-monitor">查看完整调度监控<svg class="icon"><use href="#i-arrow-right"/></svg></button></section><section class="inspector-section"><div class="section-heading"><h3>最近动态</h3><span>会话范围</span></div><div id="recent-events"></div></section><div class="data-provenance"><svg class="icon"><use href="#i-info"/></svg><p id="data-provenance">指标来自本地调度器与平台账本。</p></div></div></aside>
+  </div>
+  <div class="mobile-backdrop" id="mobile-backdrop" hidden></div>
+  <dialog id="settings-dialog" class="settings-dialog" aria-label="平台账号与连接"><div class="dialog-heading"><div><p class="eyebrow">PLATFORM CONNECTION</p><h2>平台账号与连接</h2></div><button class="icon-button" data-close-dialog="settings-dialog" aria-label="关闭设置"><svg class="icon"><use href="#i-close"/></svg></button></div><p class="dialog-description">个人端使用 TaskLoom 平台账号调用共享模型服务。</p><div class="settings-account" id="settings-account"></div><form id="platform-form"><label for="platform-url">TaskLoom 平台 API 地址</label><input id="platform-url" type="url" value="http://127.0.0.1:8796" required><div class="connection-grid"><div><label for="username">平台用户名</label><input id="username" autocomplete="username" pattern="[a-z][a-z0-9_-]{2,31}" placeholder="例如 charlie"></div><div><label for="password">账号密码</label><input id="password" type="password" autocomplete="current-password" minlength="10" maxlength="128" placeholder="至少 10 个字符"></div></div><div class="dialog-actions"><button type="button" id="login" class="primary-button">登录并连接</button><button type="button" id="register" class="secondary-button">注册并连接</button></div><div class="form-separator"><span>或使用已有凭证</span></div><label for="api-key">平台账号 API Key</label><input id="api-key" type="password" autocomplete="off" placeholder="粘贴平台注册账号下的 API Key"><button type="submit" id="connect" class="secondary-button full-width">使用 API Key 连接</button><p class="input-hint">凭证保存在本机当前 profile。更换平台或账号时，使用独立 profile 保存任务与账本。</p><p id="connection-error" class="form-error" role="alert"></p></form></dialog>
+  <dialog id="rename-dialog" class="rename-dialog" aria-label="重命名会话"><form id="rename-form"><div class="dialog-heading"><h2>重命名会话</h2><button type="button" class="icon-button" data-close-dialog="rename-dialog" aria-label="关闭重命名"><svg class="icon"><use href="#i-close"/></svg></button></div><label for="conversation-title">会话名称</label><input id="conversation-title" maxlength="120" required><p id="rename-error" class="form-error" role="alert"></p><div class="dialog-actions"><button type="button" class="secondary-button" data-close-dialog="rename-dialog">取消</button><button type="submit" class="primary-button" id="save-title">保存名称</button></div></form></dialog>
+  <div id="toast" class="toast" role="status" hidden></div>
+</body>
+</html>

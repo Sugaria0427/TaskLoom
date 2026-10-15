@@ -1,0 +1,639 @@
+{
+  "schema_version": "2.1",
+  "organized_at": "2026-10-14",
+  "evidence_as_of": "2026-10-14",
+  "themes": [
+    {
+      "theme_id": "T-L1-01",
+      "primary_layer": "L1",
+      "related_layers": [
+        "L2"
+      ],
+      "name": "工具需求异质与容量准入",
+      "problem": "工具能够独立并行，并不代表其同时启动适合设备容量；统一并发数难以表达内存需求和内部线程差异。",
+      "root_cause": "依赖就绪、并发数量和物理容量是不同约束；子进程、重工具和服务实例的需求不同。",
+      "cause_status": "method_supported",
+      "resolution": "T",
+      "evidence_grade": "E2",
+      "remaining_severity": "H",
+      "severity_condition": "条件性H依据OpenClaw #161050报告的10GB VM、claude-cli和重工具并行；具体OOM数字为E3现场记录。首版内置runtime和普通PC收益需实测。",
+      "support_sources": [
+        "P17",
+        "L07",
+        "C01",
+        "C09",
+        "C03",
+        "OC-I161050",
+        "OC-I95506"
+      ],
+      "counter_sources": [
+        "P16",
+        "P18"
+      ],
+      "existing_controls": "资源声明、并发上限、资源画像与cgroup保护已经存在。",
+      "residual": "对数量限制合规但资源成本不均的真实工作使用统一资源向量准入，核验同等资源和质量下的改善。",
+      "os_methods": [
+        "资源约束列表调度",
+        "计数信号量",
+        "原子多资源准入",
+        "Aging与大工具等待保护"
+      ],
+      "validation": "测量工具实际画像与并发干扰；比较调参后的并发控制、可行性先行及等待保护。",
+      "assessed_at": "2026-10-14",
+      "evidence_as_of": "2026-10-14"
+    },
+    {
+      "theme_id": "T-L1-02",
+      "primary_layer": "L1",
+      "related_layers": [
+        "L2"
+      ],
+      "name": "工具进程树与退出回收",
+      "problem": "特定退出路径可能在清理完成前终止工具管理者，使后代进程或连接继续存在。",
+      "root_cause": "取消通知、管理进程退出与后代真实停止缺少完整交接，或清理时限与进程组策略不匹配。",
+      "cause_status": "conditional_report",
+      "resolution": "P",
+      "evidence_grade": "E3",
+      "remaining_severity": "H",
+      "severity_condition": "仅针对已报告的退出入口和版本；正常exec清理成功以及现有进程组机制作为对照。",
+      "support_sources": [
+        "CX48524",
+        "P06",
+        "CX26984"
+      ],
+      "counter_sources": [
+        "CX-SOURCE",
+        "CX12647",
+        "CCD06",
+        "OC-I97616",
+        "OC-S09",
+        "OC-S20",
+        "OC-S21"
+      ],
+      "existing_controls": "原生进程组终止、驻留淘汰和多种进程树修复已经存在。",
+      "residual": "确认每一种受控结束路径都完成实际清理，并让账本只在确认释放后归还容量。",
+      "os_methods": [
+        "进程组与cgroup v2",
+        "资源所有权",
+        "有期限的清理协议",
+        "独立守护进程"
+      ],
+      "validation": "使用受控后代进程，注入EOF、超时、取消及执行器崩溃，测残留和回收时间。",
+      "assessed_at": "2026-10-14",
+      "evidence_as_of": "2026-10-14"
+    },
+    {
+      "theme_id": "T-L1-03",
+      "primary_layer": "L1",
+      "related_layers": [
+        "L2"
+      ],
+      "name": "临时产物与输出存量",
+      "problem": "特定Git LFS操作的临时副本，或结束后未回收的工作区，会在并发下降后继续占用磁盘与驻留资源。",
+      "root_cause": "产物生命周期没有随任务或实际使用者结束收敛，重复操作还可能放大存量。",
+      "cause_status": "conditional_report",
+      "resolution": "P",
+      "evidence_grade": "E3",
+      "remaining_severity": "H",
+      "severity_condition": "高等级针对Codex特定LFS耗盘案例；只读worktree未清理归为较轻子项，不合并为同等损害。",
+      "support_sources": [
+        "CX34953",
+        "CC14",
+        "C12"
+      ],
+      "counter_sources": [
+        "CCD06",
+        "CX48543"
+      ],
+      "existing_controls": "排除文件、调整暂存位置、已有worktree清理和输出消费方式可以缓解部分情形。",
+      "residual": "统一记录产物拥有者、空间预算和仍在使用的结果，避免重复生成与错误回收。",
+      "os_methods": [
+        "空间配额",
+        "引用计数",
+        "single-flight",
+        "有界输出与到期回收"
+      ],
+      "validation": "区分已使用与可回收产物，测真实峰值、重复副本与任务结束后的残留空间。",
+      "assessed_at": "2026-10-14",
+      "evidence_as_of": "2026-09-29"
+    },
+    {
+      "theme_id": "T-L1-04",
+      "primary_layer": "L1",
+      "related_layers": [
+        "L2"
+      ],
+      "name": "共享访问与分批资源申请",
+      "problem": "重复初始化、共享profile或文件访问可能发生竞态；父子阶段分批取得有限资源时还可能形成循环等待。",
+      "root_cause": "检查和创建不在同一临界区，或资源取得顺序及阶段最大需求没有明确协议。",
+      "cause_status": "static_and_model",
+      "resolution": "P",
+      "evidence_grade": "E2",
+      "remaining_severity": "M",
+      "severity_condition": "初始化竞态由D3590与选读源码支持；银行家案例是拟验证模型，不计为已发生事故。",
+      "support_sources": [
+        "D3590",
+        "DS_python_client",
+        "DS_python_api",
+        "P04",
+        "P07",
+        "OS21",
+        "OS22",
+        "OS23",
+        "OC-I95506",
+        "OC-S12"
+      ],
+      "counter_sources": [
+        "P10",
+        "CCD02",
+        "C14"
+      ],
+      "existing_controls": "独立profile、worktree、文件锁、资源顺序与原子准入已有成熟方法。",
+      "residual": "统一初始化、冲突访问及受控阶段申请，保证资源账本与真实持有者一致。",
+      "os_methods": [
+        "互斥与读写锁",
+        "固定锁顺序",
+        "阶段化银行家安全检查",
+        "条件性优先级继承"
+      ],
+      "validation": "分别验证重复初始化、同文件冲突和受控阶段安全分配，记录安全拒绝与实际完成。",
+      "assessed_at": "2026-10-14",
+      "evidence_as_of": "2026-10-14"
+    },
+    {
+      "theme_id": "T-L2-01",
+      "primary_layer": "L2",
+      "related_layers": [
+        "L1"
+      ],
+      "name": "所有权交接与失败回滚",
+      "problem": "工作已结束却因失败消息留下的所有权依赖而无法结算，结果交付停滞。",
+      "root_cause": "先改变持有关系再验证消息，拒绝路径回滚不完整，可能留下循环依赖。",
+      "cause_status": "static_correlated",
+      "resolution": "P",
+      "evidence_grade": "E2",
+      "remaining_severity": "H",
+      "severity_condition": "D7936与已查源码支持该链，尚无本项目独立复现；历史session写锁缺失另列已覆盖反例。",
+      "support_sources": [
+        "D7936",
+        "DS_continuation",
+        "DS_activation"
+      ],
+      "counter_sources": [
+        "D4178",
+        "D5460",
+        "DS_lease"
+      ],
+      "existing_controls": "权限检查、会话写租约和父子管理已经存在。",
+      "residual": "失败回滚与结算条件必须和所有权改变保持一致。",
+      "os_methods": [
+        "先验证后占有",
+        "短事务与回滚",
+        "无环等待关系",
+        "幂等结算"
+      ],
+      "validation": "注入消息拒绝和提交失败，检查等待关系、结果可交付性与一次性释放。",
+      "assessed_at": "2026-10-14",
+      "evidence_as_of": "2026-09-29"
+    },
+    {
+      "theme_id": "T-L2-02",
+      "primary_layer": "L2",
+      "related_layers": [
+        "L1",
+        "L3"
+      ],
+      "name": "等待唤醒与控制通道",
+      "problem": "就绪输入未被唤醒、挂起run长期占槽，或者后台事件输出使控制请求明显迟延。",
+      "root_cause": "等待状态、唤醒代际、槽位所有者与控制消息优先级没有形成可靠交接；部分挂起根因仍未确认。",
+      "cause_status": "mixed_confirmed_and_unknown",
+      "resolution": "P",
+      "evidence_grade": "E3",
+      "remaining_severity": "M",
+      "severity_condition": "lost-wake和后台事件案例分开测试；权限等待或沉默日志不直接认定为死锁。",
+      "support_sources": [
+        "D274",
+        "D4952",
+        "D1316",
+        "CX38385",
+        "CX49027",
+        "CC06",
+        "CC08",
+        "OC-I165950",
+        "OC-S17"
+      ],
+      "counter_sources": [
+        "CX-DOC",
+        "CCD01",
+        "CCD06",
+        "OC-I79589",
+        "OC-P167683",
+        "OC-I116227",
+        "OC-P116286"
+      ],
+      "existing_controls": "并发上限、队列、取消和部分状态恢复已有覆盖。",
+      "residual": "区分运行、等审批、等额度与等工具，保持停止和完成消息可达。",
+      "os_methods": [
+        "生产者—消费者",
+        "有界事件队列",
+        "独立控制通道",
+        "代际唤醒与监督"
+      ],
+      "validation": "注入乱序事件与丢失唤醒，测控制延迟、槽位占用和恢复后的前进性。",
+      "assessed_at": "2026-10-14",
+      "evidence_as_of": "2026-10-14"
+    },
+    {
+      "theme_id": "T-L2-03",
+      "primary_layer": "L2",
+      "related_layers": [
+        "L1",
+        "L3"
+      ],
+      "name": "父子取消与终态一致性",
+      "problem": "界面结束、父任务取消、子任务停止、结果发布和资源结算可能不同步。",
+      "root_cause": "不同事件各自使用完成标记，缺少统一的父子关系、Attempt代际与终态核对。",
+      "cause_status": "contract_and_report",
+      "resolution": "P",
+      "evidence_grade": "E3",
+      "remaining_severity": "M",
+      "severity_condition": "CC09为一次观测且复现尝试未触发；CX49131只有UI残留，不用作实际资源泄漏证据。",
+      "support_sources": [
+        "CC09",
+        "CC11",
+        "CC12",
+        "CX49131",
+        "D4109"
+      ],
+      "counter_sources": [
+        "CCD05",
+        "CCD06",
+        "DS_subagent_docs",
+        "OC-I171366",
+        "OC-P171570",
+        "OC-I169777",
+        "OC-P170493"
+      ],
+      "existing_controls": "停止接口、父子状态、完成hook及部分取消修复已经存在。",
+      "residual": "按实际停止与真实用量推进终态，明确结果未知和迟到结果的处理。",
+      "os_methods": [
+        "结构化并发",
+        "IPC控制消息",
+        "Attempt代际",
+        "幂等提交与状态对账"
+      ],
+      "validation": "测试父取消、子运行、旧结果迟到和取消完成竞态，检查发布、释放与计费分别收敛。",
+      "assessed_at": "2026-10-14",
+      "evidence_as_of": "2026-10-14"
+    },
+    {
+      "theme_id": "T-L2-04",
+      "primary_layer": "L2",
+      "related_layers": [
+        "L3"
+      ],
+      "name": "检查点与完整任务续作",
+      "problem": "已有成果存在，却因状态发现或父子续接不完整而难以交付和继续。",
+      "root_cause": "聊天历史或单会话恢复没有自动提供跨分支的成果索引、依赖有效性和根任务验收。",
+      "cause_status": "contract_and_report",
+      "resolution": "P",
+      "evidence_grade": "E3",
+      "remaining_severity": "M",
+      "severity_condition": "订阅额度中断案例用于续作需求，不将其当作API RPM/TPM竞争实证。",
+      "support_sources": [
+        "CC02",
+        "CC03",
+        "CC04",
+        "C07"
+      ],
+      "counter_sources": [
+        "P11",
+        "P24",
+        "A10",
+        "CCD01",
+        "CCD08"
+      ],
+      "existing_controls": "检查点、pending writes、partial output与resume已存在。",
+      "residual": "将已确认成果、父子任务和恢复入口组织到统一任务记录中。",
+      "os_methods": [
+        "日志与检查点",
+        "持久任务树",
+        "依赖有效性核验",
+        "外部副作用对账"
+      ],
+      "validation": "中断后恢复相同任务，核验成果保留、必要重做、质量及最终交付。",
+      "assessed_at": "2026-10-14",
+      "evidence_as_of": "2026-09-29"
+    },
+    {
+      "theme_id": "T-L3-01",
+      "primary_layer": "L3",
+      "related_layers": [
+        "L2",
+        "L4"
+      ],
+      "name": "重试提示与等待预算",
+      "problem": "服务端要求等待的时间、适配器保留的错误信息、内部退避上限和任务总等待期限可能不一致。",
+      "root_cause": "错误头在适配链中丢失，或者不同层独立重试而没有统一总时限与在途状态。",
+      "cause_status": "static_correlated",
+      "resolution": "P",
+      "evidence_grade": "E2",
+      "remaining_severity": "M",
+      "severity_condition": "D892/D3128/D3852/D7926属于同一重试机制家族；配置可缓解的部分标为C，不按四次独立事故统计。",
+      "support_sources": [
+        "D892",
+        "D3128",
+        "D3852",
+        "D7926",
+        "DS_retry",
+        "DS_pi_stream",
+        "C04",
+        "OC-I152360",
+        "OC-S13",
+        "OC-S14"
+      ],
+      "counter_sources": [
+        "A17",
+        "CCD07"
+      ],
+      "existing_controls": "重试、抖动、Retry-After及取消已有成熟实现。",
+      "residual": "让等待提示、任务期限和尝试身份贯通，减少不合时机的重复发送。",
+      "os_methods": [
+        "延迟队列",
+        "指数退避与抖动",
+        "统一总时限",
+        "Attempt账本"
+      ],
+      "validation": "构造不同Retry-After和网络未知结果，测无效尝试、完成率及预算结算。",
+      "assessed_at": "2026-10-14",
+      "evidence_as_of": "2026-10-14"
+    },
+    {
+      "theme_id": "T-L3-02",
+      "primary_layer": "L3",
+      "related_layers": [
+        "L4"
+      ],
+      "name": "费用预留与实际结算",
+      "problem": "最坏费用预留可能让实际预算尚够的请求被拒，估计过低又可能越过硬预算。",
+      "root_cause": "输出成本未知与并发在途占用共同形成安全预算和可用性的取舍。",
+      "cause_status": "contract_tradeoff",
+      "resolution": "T",
+      "evidence_grade": "E3",
+      "remaining_severity": "M",
+      "severity_condition": "A21为预留提案与讨论，证明设计取舍而非行业发生率；硬预算依据可强制上界。",
+      "support_sources": [
+        "A21",
+        "A29",
+        "A05"
+      ],
+      "counter_sources": [
+        "A14",
+        "CCD03"
+      ],
+      "existing_controls": "预算、费用预留、用量计量与结算已有覆盖。",
+      "residual": "在明确风险与真实API计价规则下比较保守预留和估计预留，保留未知在途费用。",
+      "os_methods": [
+        "原子预算账本",
+        "层级预留",
+        "幂等结算",
+        "风险有界的估计策略"
+      ],
+      "validation": "同时报告实际费用、未结算费用、拒绝量和合格完成量。",
+      "assessed_at": "2026-10-14",
+      "evidence_as_of": "2026-09-29"
+    },
+    {
+      "theme_id": "T-L3-03",
+      "primary_layer": "L3",
+      "related_layers": [
+        "L4"
+      ],
+      "name": "速率窗口与在途数量",
+      "problem": "请求次数、输入输出token速率、同时在途数量及总费用若混用，会产生错误放行或过度等待。",
+      "root_cause": "不同约束的作用域、预扣时机和归还规则不同，部分路径采用事后计数。",
+      "cause_status": "documented_contract",
+      "resolution": "C",
+      "evidence_grade": "E1",
+      "remaining_severity": "NA",
+      "severity_condition": "先固定提供商与网关功能路径；成熟限流正确配置作为共同底座，额外损失再测。",
+      "support_sources": [
+        "A01",
+        "A02",
+        "A13",
+        "A14",
+        "A19",
+        "A27"
+      ],
+      "counter_sources": [
+        "A04",
+        "A25"
+      ],
+      "existing_controls": "RPM/TPM、输入输出分开限流、在途上限与工作队列限速已经存在。",
+      "residual": "将特定服务契约映射为同一任务账本，并处理系统外客户端共用额度时的观测不完整。",
+      "os_methods": [
+        "令牌桶或窗口计数",
+        "计数信号量",
+        "原子准入",
+        "作用域映射"
+      ],
+      "validation": "按合同测放行、窗口恢复、真实在途与预算，单列已发未确认请求。",
+      "assessed_at": "2026-10-14",
+      "evidence_as_of": "2026-09-29"
+    },
+    {
+      "theme_id": "T-L3-04",
+      "primary_layer": "L3",
+      "related_layers": [
+        "L2",
+        "L4"
+      ],
+      "name": "根任务公平与子Agent扇出",
+      "problem": "一个任务产生很多子Agent请求后，按请求轮转是否会使其获得过多机会，仍需在成熟策略之后测量。",
+      "root_cause": "公平单位若是请求或子Agent，而用户关心的是完整根任务，份额归属可能不一致。",
+      "cause_status": "research_hypothesis",
+      "resolution": "U",
+      "evidence_grade": "E0",
+      "remaining_severity": "NA",
+      "severity_condition": "现有材料支持机制可能性；未取得个人账户强基线下的长短任务失衡实测。",
+      "support_sources": [
+        "A06",
+        "A20",
+        "D7098",
+        "C05"
+      ],
+      "counter_sources": [
+        "A24",
+        "A26",
+        "CX-DOC",
+        "CCD01",
+        "OC-D06",
+        "OC-D12",
+        "OC-S02",
+        "OC-S04"
+      ],
+      "existing_controls": "优先级、公平、DAG、并发上限及预算归属已有先例。",
+      "residual": "在同质量、同模型与同预算下验证根任务成本公平能否减少交互等待并保护后台推进。",
+      "os_methods": [
+        "成本DRR",
+        "根任务份额继承",
+        "Aging",
+        "有期限任务的EDF次级排序"
+      ],
+      "validation": "使用不同扇出规模的相同根任务，测获得服务量、交互P95和后台最长等待。",
+      "assessed_at": "2026-10-14",
+      "evidence_as_of": "2026-10-14"
+    },
+    {
+      "theme_id": "T-L4-01",
+      "primary_layer": "L4",
+      "related_layers": [
+        "L3"
+      ],
+      "name": "多用户与任务服务份额",
+      "problem": "按请求数公平与按成本、按用户目标公平不同；成熟控制后仍有多少可避免失衡需要测量。",
+      "root_cause": "用户、根任务与单次请求是不同公平粒度，服务成本也不完全相同。",
+      "cause_status": "research_hypothesis",
+      "resolution": "U",
+      "evidence_grade": "E0",
+      "remaining_severity": "NA",
+      "severity_condition": "应用网关已有公平和优先能力；不以推理论文或客户端投诉认定平台普遍调度失衡。",
+      "support_sources": [
+        "A24",
+        "A26",
+        "C10"
+      ],
+      "counter_sources": [
+        "A13",
+        "A04",
+        "A06"
+      ],
+      "existing_controls": "优先级、用户额度、加权公平、借用和有界队列已有成熟实现。",
+      "residual": "在受控网关中比较用户级及用户内根任务级成本公平。",
+      "os_methods": [
+        "分层加权公平",
+        "成本DRR",
+        "空闲份额借用",
+        "紧急份额约束"
+      ],
+      "validation": "多个隔离客户端共享相同上游条件，测成本份额和按时合格任务完成率。",
+      "assessed_at": "2026-10-14",
+      "evidence_as_of": "2026-09-29"
+    },
+    {
+      "theme_id": "T-L4-02",
+      "primary_layer": "L4",
+      "related_layers": [
+        "L2",
+        "L3"
+      ],
+      "name": "平台可见信息与任务元数据",
+      "problem": "普通模型请求的会话关系并不自动表达根任务、当前步骤、期限和本地工具压力。",
+      "root_cause": "对话API的状态关联服务于会话延续，完整任务调度需要另外提供身份、目标和就绪信息。",
+      "cause_status": "documented_contract",
+      "resolution": "T",
+      "evidence_grade": "E1",
+      "remaining_severity": "NA",
+      "severity_condition": "接口可见性差异有依据；元数据缺失导致的实际性能损失为待验证假设。",
+      "support_sources": [
+        "R01",
+        "R02",
+        "R04",
+        "R06",
+        "R07"
+      ],
+      "counter_sources": [
+        "A10",
+        "A24"
+      ],
+      "existing_controls": "会话关联、metadata和运行时状态接口可提供部分信息。",
+      "residual": "为受控网关定义最小调度元数据，并验证其信息价值及维护成本。",
+      "os_methods": [
+        "任务身份映射",
+        "最小元数据协议",
+        "版本与有效期",
+        "认证身份与权限校验"
+      ],
+      "validation": "分别关闭任务关系、目标和状态字段，保持其余策略相同进行信息消融。",
+      "assessed_at": "2026-10-14",
+      "evidence_as_of": "2026-09-29"
+    },
+    {
+      "theme_id": "T-L4-03",
+      "primary_layer": "L4",
+      "related_layers": [
+        "L3"
+      ],
+      "name": "准入、过载与明确背压",
+      "problem": "请求持续进入有限派发能力时，等待队列和错误重试可能放大压力。",
+      "root_cause": "等待容量、服务容量和发送节奏若缺少边界，负载会在队列与重试之间积累。",
+      "cause_status": "established_control",
+      "resolution": "C",
+      "evidence_grade": "E1",
+      "remaining_severity": "NA",
+      "severity_condition": "成熟限流与过载保护作为基线；更复杂的协同收益另归T-L4-04。",
+      "support_sources": [
+        "C08",
+        "C10",
+        "A25",
+        "A17"
+      ],
+      "counter_sources": [
+        "A04",
+        "A13",
+        "A26"
+      ],
+      "existing_controls": "有界pending、在途上限、Retry-After和公平准入已经存在。",
+      "residual": "将接纳、排队和实际派发区分记录，向客户端提供明确且有时效的压力信息。",
+      "os_methods": [
+        "有界队列",
+        "准入控制",
+        "背压",
+        "在途信号量"
+      ],
+      "validation": "测各阶段等待、拒绝后恢复和重试放大，所有提交任务保留在评价分母。",
+      "assessed_at": "2026-10-14",
+      "evidence_as_of": "2026-09-29"
+    },
+    {
+      "theme_id": "T-L4-04",
+      "primary_layer": "L4",
+      "related_layers": [
+        "L1",
+        "L2",
+        "L3"
+      ],
+      "name": "两端动态反馈与阶段协调",
+      "problem": "个人端和平台分别优化后，是否仍存在重复排队、下游积压与过度保守，需要直接实验回答。",
+      "root_cause": "个人端掌握本地就绪与资源，平台掌握全体用户和拥塞；各自信息不完整可能导致阶段决策失配。",
+      "cause_status": "research_hypothesis",
+      "resolution": "U",
+      "evidence_grade": "E0",
+      "remaining_severity": "NA",
+      "severity_condition": "尚无本项目同条件的双端独立优化与动态协同比较。",
+      "support_sources": [
+        "A06",
+        "R04",
+        "R06",
+        "R07",
+        "P14"
+      ],
+      "counter_sources": [
+        "P16",
+        "A24",
+        "A13"
+      ],
+      "existing_controls": "工作流、网关与资源管理各自已经具有调度能力。",
+      "residual": "证明有限状态摘要是否带来额外任务收益，并识别反馈震荡和重复约束的代价。",
+      "os_methods": [
+        "阶段感知背压",
+        "低频有时效反馈",
+        "动态发送窗口",
+        "跨层任务身份"
+      ],
+      "validation": "直接比较B11与B11+FB，并分别关闭本地压力摘要和平台反馈。",
+      "assessed_at": "2026-10-14",
+      "evidence_as_of": "2026-09-29"
+    }
+  ]
+}

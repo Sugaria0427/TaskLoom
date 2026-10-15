@@ -1,0 +1,60 @@
+@startuml
+!include _theme.iuml
+top to bottom direction
+hide circle
+abstract class "执行步骤\nStep" as Step #EEEDF9 {
+  stepId: UUID
+  status: StepStatus
+  knownPredecessors: Set<StepId>
+  deadline: Optional<Time>
+}
+class "用户任务\nTask" as Task #EEEDF9 {
+  taskId: UUID
+  ownerUserId: UserId
+  goal: Text
+  budgetLimit: Money
+}
+class "逻辑执行者\nAgentExecution" as Agent #EEEDF9 {
+  agentId: UUID
+  parentAgentId: Optional<AgentId>
+  contextRef: ArtifactRef
+}
+class "模型步骤\nModelStep" as Model #EAF3FC {
+  inputRef: ArtifactRef
+  outputLimit: TokenCount
+  requestClass: ServiceClass
+}
+class "工具步骤\nToolStep" as Tool #EBF6F2 {
+  toolName: String
+  inputRef: ArtifactRef
+  accessScope: ResourceScope
+}
+class "执行尝试\nAttempt" as Attempt #F7F9FB {
+  attemptId: UUID
+  generation: Integer
+  outcome: Outcome
+  executionState: ExecutionState
+  billingState: BillingState
+}
+class "结果产物\nArtifact" as Artifact #F7F9FB {
+  artifactId: UUID
+  location: URI
+  inputVersion: String
+  checksum: String
+}
+class "阶段资源声明\nStageClaim" as Claim #EBF6F2 {
+  stageId: UUID
+  poolId: ResourcePoolId
+  maxDemand: ResourceVector
+  allocation: ResourceVector
+}
+Task "1" *-- "0..*" Agent : 包含
+Task "1" *-- "0..*" Step : 包含
+Agent "1" -- "0..*" Step : 负责推进
+Step <|-- Model
+Step <|-- Tool
+Step "1" *-- "0..*" Attempt : 尝试历史
+Attempt "1" --> "0..*" Artifact : 产生
+Attempt "1" *-- "0..*" Claim : 工具尝试的阶段
+Model -[hidden]right-> Tool
+@enduml
