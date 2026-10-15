@@ -7,6 +7,7 @@
 | 阅读目的 | 文件 |
 |---|---|
 | 了解当前完整项目、两端设计、OS 技术和验收。 | [项目说明书：当前完整方案](TaskLoom_项目说明书_当前完整方案.md) |
+| 从 Gitee 加入团队、生成成员邀请链接、认领工作包和提交 PR。 | [Gitee 协作说明](engineering/TaskLoom_Gitee协作说明.md) |
 | 从零建立本机代码骨架，明确模块、接口、工程约束和验收。 | [工程骨架搭建计划](engineering/TaskLoom_工程骨架搭建计划.md) |
 | 了解当前代码结构、运行进程、状态所有权及扩展接口。 | [基础工程架构](engineering/TaskLoom_基础工程架构.md) |
 | 复现启动、测试、Linux 保护与独立安装结果。 | [基础工程验收记录](engineering/TaskLoom_基础工程验收记录.md) |

@@ -2,6 +2,8 @@
 
 由个人 Agent 客户端和统一模型服务平台组成的协同调度系统。
 
+主仓库：[Gitee / Sugaria / TaskLoom](https://gitee.com/Sugaria/TaskLoom)。团队在 [Gitee Issues](https://gitee.com/Sugaria/TaskLoom/issues) 认领工作包、记录进展并提交 Pull Request；成员邀请和协作流程见 [Gitee 协作说明](docs/engineering/TaskLoom_Gitee协作说明.md)。[GitHub 仓库](https://github.com/Sugaria0427/TaskLoom)保留迁移前的历史副本。
+
 用户在 TaskLoom 平台注册账号，个人端配置平台 API 地址及账号 API Key。本机执行 Agent 与工具，平台管理账户额度，并向所有用户提供同一个固定模型服务池。
 
 ## 1. 当前实现
@@ -26,6 +28,8 @@ python tools/project.py doctor
 python tools/project.py bootstrap
 python tools/project.py dev
 ```
+
+新成员可以先执行 `git clone https://gitee.com/Sugaria/TaskLoom.git`，进入克隆后的 TaskLoom 目录，再执行上述命令。
 
 运行环境为 x86_64 Linux、Python 3.12；Windows 入口自动转交 Ubuntu WSL2。安装使用经 SHA-256 校验的项目内 uv 和 uv.lock。
 

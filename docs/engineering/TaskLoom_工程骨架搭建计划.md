@@ -144,12 +144,9 @@ python tools/project.py stop-client --profile charlie
 
 ### 4.3 团队工作包
 
-| 工作包 | 拟定负责人 | 主要边界 |
-|---|---|---|
-| 总体与集成。 | 龚旭。 | 契约、装配、里程碑及交付。 |
-| Agent 与本机执行。 | 杜金泽、许世浩、冀托。 | runtime、client、execution、executor、资源与恢复。 |
-| 平台与请求。 | 方震。 | 账号、L3/L4、额度、模型池连接与反馈。 |
-| 展示与验证。 | 戴淋。 | 页面、工作负载、自动化验证和实验结果。 |
+团队拆成总体集成、个人端 Harness、个人端请求调度、本地资源、平台调度和实验可视化六个工作包。建议人选及职责维护在[当前完整说明书](../TaskLoom_项目说明书_当前完整方案.md)第 4.4.1 节，实际负责人以 [Gitee 工作包 issue](https://gitee.com/Sugaria/TaskLoom/issues) 的认领结果为准。
+
+各工作包 issue 已给出当前基础、首批交付、代码入口、协作接口和验收标准。成员加入、链接邀请、分支与 Pull Request 流程见 [Gitee 协作说明](TaskLoom_Gitee协作说明.md)。
 
 ### 4.4 日常维护
 

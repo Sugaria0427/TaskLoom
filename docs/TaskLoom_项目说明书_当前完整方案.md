@@ -531,14 +531,16 @@ L3 管理根任务私有预算和本人的发送顺序，L4 权威管理平台�
 | 平台与协同。 | L4 公平、共享额度、有界接纳和控制通道。 | 多个隔离客户端真实连接，份额可核对。 |
 | 验收展示。 | 界面、消融、故障实验与校准仿真。 | 结果可复查，OS 机制有实际证据。 |
 
-团队沿用既有拟定分工：指导教师邵文华，组长龚旭。
+团队按六个工作包协作，指导教师邵文华，组长龚旭。下表为建议人选，实际负责人以 Gitee issue 的认领结果为准；成员邀请与提交约定见 [Gitee 协作说明](engineering/TaskLoom_Gitee协作说明.md)。
 
-| 工作包 | 成员 | 责任 |
+| 工作包 | 建议成员 | 责任与认领入口 |
 |---|---|---|
-| 总体与任务框架。 | 龚旭、杜金泽。 | 集成、任务模型、Agent 循环和状态。 |
-| 本地资源与恢复。 | 许世浩、冀托。 | 资源、共享互斥、进程线程、IPC 和守护。 |
-| 请求与平台。 | 方震。 | L3 公平、L4 派发、共享额度与协议。 |
-| 界面与实验。 | 戴淋。 | 真实展示、测量工具、数据与结果分析。 |
+| WP1：总体集成。 | 龚旭。 | 公共契约、真实模型后端、装配与集成交付；[工作包 issue](https://gitee.com/Sugaria/TaskLoom/issues/IKM3JP)。 |
+| WP2：个人端 Harness。 | 许世浩。 | Agent 循环、多步骤、多工具、子 Agent 与 OpenClaw 接入；[工作包 issue](https://gitee.com/Sugaria/TaskLoom/issues/IKM3JQ)。 |
+| WP3：个人端请求调度。 | 杜金泽。 | L3 成本公平、任务优先级、老化与反馈协调；[工作包 issue](https://gitee.com/Sugaria/TaskLoom/issues/IKM3JR)。 |
+| WP4：本地资源与恢复。 | 冀托。 | 工具画像、多资源准入、共享互斥、阶段安全检查与进程回收；[工作包 issue](https://gitee.com/Sugaria/TaskLoom/issues/IKM3JS)。 |
+| WP5：平台端调度。 | 方震。 | L4 分层公平、共享额度、有界接纳与平台反馈；[工作包 issue](https://gitee.com/Sugaria/TaskLoom/issues/IKM3JT)。 |
+| WP6：实验与可视化。 | 戴淋。 | 真实指标、混合负载、对照实验与校准仿真；[工作包 issue](https://gitee.com/Sugaria/TaskLoom/issues/IKM3JU)。 |
 
 #### 4.4.2 三类对照与贡献消融
 
