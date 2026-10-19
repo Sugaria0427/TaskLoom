@@ -586,6 +586,18 @@ def pool_app(base: Path, config: PoolConfig) -> FastAPI:
                         }
                     ],
                 }
+            elif not tool_messages:
+                message = {
+                    "role": "assistant",
+                    "content": json.dumps(
+                        {
+                            "files": 0,
+                            "words": 0,
+                            "summary": "没有可用的工具调用，已直接回复。",
+                        },
+                        ensure_ascii=False,
+                    ),
+                }
             else:
                 by_id = {
                     item["tool_call_id"]: json.loads(item["content"]) for item in tool_messages
