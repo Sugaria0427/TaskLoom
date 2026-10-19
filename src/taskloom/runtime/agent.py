@@ -3,20 +3,18 @@ import json
 from taskloom.contracts.models import Checkpoint, JsonObject, TaskCreate
 from taskloom.domain.model import DomainError
 from taskloom.runtime.ports import AgentHost
-
-FILE_STATS_TOOL: JsonObject = {
-    "type": "function",
-    "function": {
-        "name": "file_stats",
-        "description": "Read the task's staged files and return verified file/word statistics.",
-        "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
-    },
-}
+from taskloom.runtime.registry import ToolRegistry, default_registry
 
 
 async def run_agent(
-    host: AgentHost, specification: TaskCreate, checkpoint: Checkpoint, max_steps: int
+    host: AgentHost,
+    specification: TaskCreate,
+    checkpoint: Checkpoint,
+    max_steps: int,
+    registry: ToolRegistry | None = None,
 ) -> JsonObject:
+    if registry is None:
+        registry = default_registry()
     state = checkpoint.model_copy(deep=True)
     if not state.messages:
         state.messages = [
@@ -43,8 +41,8 @@ async def run_agent(
     while state.model_round + len(state.completed_tools) < max_steps:
         if state.pending_tools:
             call = state.pending_tools[0]
-            if call.name != "file_stats" or call.arguments:
-                raise DomainError("INVALID_TOOL", "The model requested an unsupported tool")
+            spec = registry.require(call.name)
+            spec.check(call)
             result = await host.tool(call)
             state.completed_tools[call.call_id] = result
             state.messages.append(
