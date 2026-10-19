@@ -50,7 +50,7 @@ def main() -> None:
             created.raise_for_status()
             task_id = created.json()["task_id"]
             print("=== WP2 STEP 1 · 多工具工作流功能演示 ===\n")
-            print("提交文档: notes.txt(4词) + data.txt(6词)")
+            print("提交文档: notes.txt(4词) + data.txt(5词)")
             print('fixture 模型将依次调用: file_stats → grep("the") → 汇总\n')
             print(f"任务已提交: {task_id}")
             task = wait_task(http, task_id)
