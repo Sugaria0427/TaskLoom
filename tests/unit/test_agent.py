@@ -150,3 +150,32 @@ async def test_step_limit_still_applies() -> None:
         await run_agent(
             host, specification(), Checkpoint(), max_steps=3, registry=default_registry()
         )
+
+
+async def test_multi_tool_chain_executes_two_tools_in_order() -> None:
+    files = {"a.txt": 2}
+    host = FakeHost(
+        [
+            ModelReply(
+                tool_calls=[ToolCall(call_id="c1", name="grep", arguments={"pattern": "hello"})],
+                usage=usage(),
+            ),
+            ModelReply(
+                tool_calls=[ToolCall(call_id="c2", name="file_stats", arguments={})],
+                usage=usage(),
+            ),
+            final_reply(files, 5, "grep first, stats second"),
+        ]
+    )
+    host.tool_results["c1"] = {"files": files, "words": 2, "matches": 1}
+    host.tool_results["c2"] = {"files": files, "words": 5}
+
+    result = await run_agent(
+        host, specification(), Checkpoint(), max_steps=12, registry=default_registry()
+    )
+
+    assert result["files"] == files
+    assert result["words"] == 5
+    assert [call.name for call in host.tool_calls] == ["grep", "file_stats"]
+    assert host.tool_calls[0].arguments == {"pattern": "hello"}
+    assert len(host.checkpoints) >= 3

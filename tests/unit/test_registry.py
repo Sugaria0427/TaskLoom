@@ -16,8 +16,13 @@ EXPECTED_FILE_STATS_SCHEMA = {
 
 def test_default_registry_keeps_baseline_schema() -> None:
     registry = default_registry()
-    assert registry.names() == ("file_stats",)
-    assert registry.schemas() == [EXPECTED_FILE_STATS_SCHEMA]
+    assert registry.names() == ("file_stats", "grep")
+    assert registry.schemas()[0] == EXPECTED_FILE_STATS_SCHEMA
+    assert registry.schemas()[1]["function"]["name"] == "grep"
+    assert registry.schemas()[1]["function"]["parameters"]["properties"]["pattern"] == {
+        "type": "string",
+        "description": "Substring to search for",
+    }
 
 
 def test_default_file_stats_rejects_arguments() -> None:
@@ -37,7 +42,7 @@ def test_duplicate_registration_is_rejected() -> None:
     )
     with pytest.raises(DomainError, match="already registered"):
         registry.register(duplicate)
-    assert len(registry) == 1
+    assert len(registry) == 2
 
 
 def test_registry_capacity_is_bounded() -> None:
