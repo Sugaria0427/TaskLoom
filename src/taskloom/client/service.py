@@ -601,6 +601,8 @@ class ClientService:
                 root_task_id=task_id,
                 tenant_id=task.tenant_id,
                 generation=attempt.generation,
+                tool_name=call.name,
+                arguments=call.arguments,
                 input_version=task.input_version,
                 work_iterations=task.specification.work_iterations,
                 emit_bytes=task.specification.emit_bytes,

@@ -167,14 +167,14 @@ function phase(task) {
   const pending = attempts(task).findLast((item) => item.outcome === "PENDING" || !item.quiescent);
   if (!pending) return "准备工作流";
   if (pending.state === "RECONCILING") return "核对执行结果";
-  if (pending.kind === "tool") return pending.state === "RUNNING" ? "执行 file_stats 工具" : "等待工具资源";
+  if (pending.kind === "tool") return pending.state === "RUNNING" ? "执行工具" : "等待工具资源";
   if (pending.state === "RUNNING") return "等待平台模型响应";
   const allocated = state.resources?.allocations?.some((item) => item.attempt_id === pending.attempt_id);
   return allocated ? "等待平台额度与窗口" : "本地模型请求排队";
 }
 
 function stepLabel(attempt, index) {
-  if (attempt.kind === "tool") return "执行 file_stats";
+  if (attempt.kind === "tool") return "执行工具";
   return index === 0 ? "模型规划工具调用" : "模型生成统计结果";
 }
 

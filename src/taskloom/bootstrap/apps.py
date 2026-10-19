@@ -562,9 +562,42 @@ def pool_app(base: Path, config: PoolConfig) -> FastAPI:
             )
             await asyncio.sleep(config.latency_seconds)
             tool_messages = [message for message in body.messages if message.get("role") == "tool"]
-            if tool_messages:
-                result = json.loads(tool_messages[-1]["content"])
-                message: JsonObject = {
+            available = [tool["function"]["name"] for tool in body.tools]
+            called: list[str] = []
+            for call_message in body.messages:
+                if call_message.get("role") == "assistant" and call_message.get("tool_calls"):
+                    called.extend(call["function"]["name"] for call in call_message["tool_calls"])
+            remaining = [name for name in available if name not in called]
+            message: JsonObject
+            if remaining:
+                name = remaining[0]
+                arguments: JsonObject = {"pattern": "the"} if name == "grep" else {}
+                message = {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": "call_" + request_id[:16],
+                            "type": "function",
+                            "function": {
+                                "name": name,
+                                "arguments": json.dumps(arguments),
+                            },
+                        }
+                    ],
+                }
+            else:
+                by_id = {
+                    item["tool_call_id"]: json.loads(item["content"]) for item in tool_messages
+                }
+                stats_result: JsonObject | None = None
+                for call_message in body.messages:
+                    if call_message.get("role") == "assistant" and call_message.get("tool_calls"):
+                        for call in call_message["tool_calls"]:
+                            if call["function"]["name"] == "file_stats":
+                                stats_result = by_id[call["id"]]
+                result = stats_result or json.loads(tool_messages[-1]["content"])
+                message = {
                     "role": "assistant",
                     "content": json.dumps(
                         {
@@ -574,18 +607,6 @@ def pool_app(base: Path, config: PoolConfig) -> FastAPI:
                         },
                         ensure_ascii=False,
                     ),
-                }
-            else:
-                message = {
-                    "role": "assistant",
-                    "content": None,
-                    "tool_calls": [
-                        {
-                            "id": "call_" + request_id[:16],
-                            "type": "function",
-                            "function": {"name": "file_stats", "arguments": "{}"},
-                        }
-                    ],
                 }
             output_tokens = mock_tokens(message)
             if output_tokens > body.max_tokens:
