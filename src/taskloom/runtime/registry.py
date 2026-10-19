@@ -105,11 +105,12 @@ class ToolRegistry:
 
 
 def default_registry() -> ToolRegistry:
-    """The 0.2 baseline tool set: verified staged-file statistics.
+    """The STEP 1 tool set: verified staged-file statistics plus content search.
 
-    The schema is byte-for-byte compatible with the previous
+    ``file_stats`` is byte-for-byte compatible with the previous
     ``FILE_STATS_TOOL`` constant so existing requests and acceptance remain
-    unchanged.
+    unchanged.  ``grep`` adds a second real tool so the runtime can run
+    multi-step chains that exercise two distinct tool operations.
     """
     registry = ToolRegistry()
     registry.register(
@@ -117,6 +118,16 @@ def default_registry() -> ToolRegistry:
             name="file_stats",
             description=("Read the task's staged files and return verified file/word statistics."),
             parameters={},
+        )
+    )
+    registry.register(
+        ToolSpec(
+            name="grep",
+            description=(
+                "Search the task's staged files for a literal substring and return "
+                "verified per-line matches with match counts."
+            ),
+            parameters={"pattern": {"type": "string", "description": "Substring to search for"}},
         )
     )
     return registry
