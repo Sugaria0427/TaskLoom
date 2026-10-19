@@ -30,7 +30,8 @@ from taskloom.contracts.models import (
 )
 from taskloom.domain.model import Agent, DomainError, Outcome, Resources, Step, WorkState
 from taskloom.domain.ports import Repository, StoredRecord
-from taskloom.runtime.agent import FILE_STATS_TOOL, run_agent
+from taskloom.runtime.agent import run_agent
+from taskloom.runtime.registry import ToolRegistry, default_registry
 
 
 class ClientService:
@@ -52,6 +53,7 @@ class ClientService:
         self.attempts: dict[str, AttemptState] = {}
         self.runners: dict[str, asyncio.Task[None]] = {}
         self.lock = asyncio.Lock()
+        self.registry: ToolRegistry = default_registry()
         self.models = Dispatcher(Resources(slots=config.max_inflight))
         self.tools = Dispatcher(
             Resources(
@@ -402,6 +404,7 @@ class ClientService:
                 task.specification,
                 task.checkpoint,
                 self.config.max_steps,
+                self.registry,
             )
             async with self.lock:
                 current = self.get(task_id)
@@ -513,7 +516,7 @@ class ClientService:
                 attempt_id=attempt.attempt_id,
                 cancel_generation=attempt.generation,
                 messages=messages,
-                tools=[FILE_STATS_TOOL],
+                tools=self.registry.schemas(),
                 deadline_at=task.deadline_at,
             )
             attempt.request_payload = request.model_dump(mode="json")
