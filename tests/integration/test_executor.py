@@ -76,7 +76,7 @@ async def test_real_grep_tool_searches_staged_files(tmp_path) -> None:
         assert result.outcome == Outcome.SUCCEEDED
         assert result.result["files"] == 1
         assert result.result["matches"] == 1
-        assert result.result["words"] == 2
+        assert result.result["words"] == 3
         assert result.result["lines"] == [{"file": "notes.txt", "line": 1, "text": "one two three"}]
     finally:
         await executor.close()
