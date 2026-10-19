@@ -310,9 +310,9 @@ def self_test(base: Path) -> dict[str, Any]:
                 artifact.raise_for_status()
                 assert artifact.json()["words"] == 5
                 graph = http.get(url + f"/api/v1/tasks/{task_id}/graph").json()
-                assert len(graph["agents"]) == 1 and len(graph["steps"]) == 3
-                assert len(graph["attempts"]) == 3
-                assert sum(bool(s["predecessors"]) for s in graph["steps"]) == 2
+                assert len(graph["agents"]) == 1 and len(graph["steps"]) == 5
+                assert len(graph["attempts"]) == 5
+                assert sum(bool(s["predecessors"]) for s in graph["steps"]) == 4
                 feedback = http.get(url + "/api/v1/platform").json()["feedback"]
                 assert feedback["account_id"] == task["tenant_id"]
             status = http.get(

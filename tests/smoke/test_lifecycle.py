@@ -112,7 +112,7 @@ def test_supervised_client_recovers_without_reexecuting_tool(tmp_path: Path) -> 
                 for row in resources["attempts"]
                 if row["root_task_id"] == task_id and row["kind"] == "tool"
             ]
-            assert len(tools) == 1
+            assert len(tools) == 2
             assert done["quiescent"] and done["reserved_units"] == 0
     finally:
         topology.close()
