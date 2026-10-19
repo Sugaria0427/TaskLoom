@@ -1,0 +1,468 @@
+{
+  "archived_at": "2026-10-20",
+  "source_commit": "efb6d12e2894d3eab710afab324421c1784785aa",
+  "policy": "Move tracked historical documents byte-for-byte; keep ignored local evidence in place.",
+  "files": [
+    {
+      "original": "docs/TaskLoom_开题项目计划书.md",
+      "archived": "backup/2026-10-20/docs/TaskLoom_开题项目计划书.md",
+      "sha256": "cbc37c29ac93cb4e2e01f0503808b5d190db6734d4399ed04912fd860b9ec3c6"
+    },
+    {
+      "original": "docs/TaskLoom_答辩Q&A.md",
+      "archived": "backup/2026-10-20/docs/TaskLoom_答辩Q&A.md",
+      "sha256": "538ebe0fb73400e77da2067241597bcc162a0ad9e937b3862895be8d6a9a2423"
+    },
+    {
+      "original": "docs/TaskLoom_项目说明书_分层清晰版.md",
+      "archived": "backup/2026-10-20/docs/TaskLoom_项目说明书_分层清晰版.md",
+      "sha256": "ac222d63d3235f4738a3fa00160858b117d3407d6ef097e804d4fa3cc48746ac"
+    },
+    {
+      "original": "docs/diagrams/README.md",
+      "archived": "backup/2026-10-20/docs/diagrams/README.md",
+      "sha256": "1988e078988b578ed13d76ec93c71846f39b596de0a9a564f3a0c1dd297af300"
+    },
+    {
+      "original": "docs/diagrams/index.html",
+      "archived": "backup/2026-10-20/docs/diagrams/index.html",
+      "sha256": "6b5514dcc1e5a674eb2bb1b16ed66af762cb793d431b1ae0347302cca0ae9559"
+    },
+    {
+      "original": "docs/diagrams/manifest.json",
+      "archived": "backup/2026-10-20/docs/diagrams/manifest.json",
+      "sha256": "b4b15b59af89c4f65feb664a3663868fac7031c546825a276c389591ffdc60db"
+    },
+    {
+      "original": "docs/diagrams/source/01_use_case.drawio",
+      "archived": "backup/2026-10-20/docs/diagrams/source/01_use_case.drawio",
+      "sha256": "a015cf991f90a53b78bd15d9928990025c4da58694bb37da54ba8de20c282617"
+    },
+    {
+      "original": "docs/diagrams/source/01_use_case.layout.json",
+      "archived": "backup/2026-10-20/docs/diagrams/source/01_use_case.layout.json",
+      "sha256": "e71f1042b2e99fab07688cc02794549305753b91af63c84c85192acb8a197cb3"
+    },
+    {
+      "original": "docs/diagrams/source/01_use_case.puml",
+      "archived": "backup/2026-10-20/docs/diagrams/source/01_use_case.puml",
+      "sha256": "f868b86bab02783c02ea248ab4e0c78f5b74fcbcc47b6b46d8a0f86e29a0a553"
+    },
+    {
+      "original": "docs/diagrams/source/02_component.drawio",
+      "archived": "backup/2026-10-20/docs/diagrams/source/02_component.drawio",
+      "sha256": "64c1e4656751382e08579cf96122d7bec6ff94a4f8e3bf7dec69aa915ea1d627"
+    },
+    {
+      "original": "docs/diagrams/source/02_component.layout.json",
+      "archived": "backup/2026-10-20/docs/diagrams/source/02_component.layout.json",
+      "sha256": "9b603d7e20ae51ca21f436a44e0e1548c18c2b67eaf416a038e68048ee756dc6"
+    },
+    {
+      "original": "docs/diagrams/source/02_component.puml",
+      "archived": "backup/2026-10-20/docs/diagrams/source/02_component.puml",
+      "sha256": "90e9536b16f741a503e5bddcd527952875d3a09d55ae9f64a31ffd077401f001"
+    },
+    {
+      "original": "docs/diagrams/source/03_domain_class.drawio",
+      "archived": "backup/2026-10-20/docs/diagrams/source/03_domain_class.drawio",
+      "sha256": "b40292277f3590663a80f14f82c4f80675cfa33dbdb57d3d42265ba8cbbd3f5a"
+    },
+    {
+      "original": "docs/diagrams/source/03_domain_class.layout.json",
+      "archived": "backup/2026-10-20/docs/diagrams/source/03_domain_class.layout.json",
+      "sha256": "5963d96e8d345d22fd8f2a577e45d01e037740b6819d5f7433b5f6bc5809616b"
+    },
+    {
+      "original": "docs/diagrams/source/03_domain_class.puml",
+      "archived": "backup/2026-10-20/docs/diagrams/source/03_domain_class.puml",
+      "sha256": "d5b275d53b53053bad5ca006c5180882b92807b60c099b945f4929ed601c0b85"
+    },
+    {
+      "original": "docs/diagrams/source/04_deployment.drawio",
+      "archived": "backup/2026-10-20/docs/diagrams/source/04_deployment.drawio",
+      "sha256": "c01632d27964df242f3674dfc2926cffcb50c0a3131644b228b43fb434bd5fff"
+    },
+    {
+      "original": "docs/diagrams/source/04_deployment.layout.json",
+      "archived": "backup/2026-10-20/docs/diagrams/source/04_deployment.layout.json",
+      "sha256": "e99cb3e4bc782728fdb8b77043c047d158049c153265cbdeb3daec19b90ce12a"
+    },
+    {
+      "original": "docs/diagrams/source/04_deployment.puml",
+      "archived": "backup/2026-10-20/docs/diagrams/source/04_deployment.puml",
+      "sha256": "b2bd733caa9820207c1125810bd9feb059e937b1e435ef8447c1a143763ca37b"
+    },
+    {
+      "original": "docs/diagrams/source/05_task_sequence.puml",
+      "archived": "backup/2026-10-20/docs/diagrams/source/05_task_sequence.puml",
+      "sha256": "56f913bf7dad06c702236b0e622a4740c883b07979498fb4574313ec7fd97096"
+    },
+    {
+      "original": "docs/diagrams/source/06_cancel_recovery_sequence.puml",
+      "archived": "backup/2026-10-20/docs/diagrams/source/06_cancel_recovery_sequence.puml",
+      "sha256": "cf2a68af36efb0985cc9da19c297a00bc0c87488a63df8c06e12363426a47873"
+    },
+    {
+      "original": "docs/diagrams/source/07_attempt_state.puml",
+      "archived": "backup/2026-10-20/docs/diagrams/source/07_attempt_state.puml",
+      "sha256": "f39fc8a9b33ca20ba5b949ca2ab3ad12a3b712c54d167232958f1914a1de4f54"
+    },
+    {
+      "original": "docs/diagrams/source/08_bankers_activity.puml",
+      "archived": "backup/2026-10-20/docs/diagrams/source/08_bankers_activity.puml",
+      "sha256": "81df84f4cb326cbb90cde6318e180316e0db322b5678bd656e4aff23ac59f56c"
+    },
+    {
+      "original": "docs/diagrams/source/09_project_mindmap.puml",
+      "archived": "backup/2026-10-20/docs/diagrams/source/09_project_mindmap.puml",
+      "sha256": "6833e9592d19d955e4b1967f78c4e07f3b74912c93a48826e71b07ac26e14c7a"
+    },
+    {
+      "original": "docs/diagrams/source/_theme.iuml",
+      "archived": "backup/2026-10-20/docs/diagrams/source/_theme.iuml",
+      "sha256": "78d74c9c13799255a7c26248fb71833efc9e29447237158bf6a482fe9fef035e"
+    },
+    {
+      "original": "docs/diagrams/svg/01_use_case.svg",
+      "archived": "backup/2026-10-20/docs/diagrams/svg/01_use_case.svg",
+      "sha256": "0e1da88b3890034707dc8c3ac010168d22899869db75c232758e0c677cd1435c"
+    },
+    {
+      "original": "docs/diagrams/svg/02_component.svg",
+      "archived": "backup/2026-10-20/docs/diagrams/svg/02_component.svg",
+      "sha256": "b8ada20234a374769cf4fa5e6df1495d2ec41ecd55c712fc8c3b6dc37dd02d5b"
+    },
+    {
+      "original": "docs/diagrams/svg/03_domain_class.svg",
+      "archived": "backup/2026-10-20/docs/diagrams/svg/03_domain_class.svg",
+      "sha256": "64cb1c956c7ae80e366b9b797b7554ce27fbb8c9f6d4aeedcbc7dab252138c6e"
+    },
+    {
+      "original": "docs/diagrams/svg/04_deployment.svg",
+      "archived": "backup/2026-10-20/docs/diagrams/svg/04_deployment.svg",
+      "sha256": "9ab23c6619f5bd464fdff2870f055eeaf78b6fb9f45f42001ba69c53a4c261cd"
+    },
+    {
+      "original": "docs/diagrams/svg/05_task_sequence.svg",
+      "archived": "backup/2026-10-20/docs/diagrams/svg/05_task_sequence.svg",
+      "sha256": "ea2b623dc1b787b284a63a6b47b6799fd2e80ebbd1ebdd1005ad3aa3686b7d11"
+    },
+    {
+      "original": "docs/diagrams/svg/06_cancel_recovery_sequence.svg",
+      "archived": "backup/2026-10-20/docs/diagrams/svg/06_cancel_recovery_sequence.svg",
+      "sha256": "db8f7c02c4ca705f7fd90d4dd82ff611feb6f77b091fbb2adac753e6367e1337"
+    },
+    {
+      "original": "docs/diagrams/svg/07_attempt_state.svg",
+      "archived": "backup/2026-10-20/docs/diagrams/svg/07_attempt_state.svg",
+      "sha256": "a22b1273b2907348c022df98ec79de30c182c13847d6b22dacc922942da81b6c"
+    },
+    {
+      "original": "docs/diagrams/svg/08_bankers_activity.svg",
+      "archived": "backup/2026-10-20/docs/diagrams/svg/08_bankers_activity.svg",
+      "sha256": "f7d08d4159341b06e6997b4fc153f5fe94168c542e472abdad6b9b56218dc8e8"
+    },
+    {
+      "original": "docs/diagrams/svg/09_project_mindmap.svg",
+      "archived": "backup/2026-10-20/docs/diagrams/svg/09_project_mindmap.svg",
+      "sha256": "f697f8b5179346451fa30ef22104b68e933e6818df655559dbe4e1ba27c73434"
+    },
+    {
+      "original": "docs/engineering/TaskLoom_基础工程验收记录.md",
+      "archived": "backup/2026-10-20/docs/engineering/TaskLoom_基础工程验收记录.md",
+      "sha256": "be0a78f8a324c893776fc30b6ec5cefddc01f529411d58bb6ef8f89b2449d85f"
+    },
+    {
+      "original": "docs/engineering/TaskLoom_统一系统改造与验收.md",
+      "archived": "backup/2026-10-20/docs/engineering/TaskLoom_统一系统改造与验收.md",
+      "sha256": "97747b103c67cff72aaca91e60026bb17b00052b5da8eb7d7f38533f63c62b9a"
+    },
+    {
+      "original": "docs/pictures/README.md",
+      "archived": "backup/2026-10-20/docs/pictures/README.md",
+      "sha256": "0176c583b6fd202272288f9a8eb498829f5e94929edad79dd92df7796381288b"
+    },
+    {
+      "original": "docs/pictures/TaskLoom_横版建模图集.drawio",
+      "archived": "backup/2026-10-20/docs/pictures/TaskLoom_横版建模图集.drawio",
+      "sha256": "2b5a373686985bfe61f133294ba4c7f11cc22bd0bae0db13a34acbca10ce7246"
+    },
+    {
+      "original": "docs/pictures/drawio/01_use_case.drawio",
+      "archived": "backup/2026-10-20/docs/pictures/drawio/01_use_case.drawio",
+      "sha256": "627afce746ef04ac9d5be4837501971e8a4adca9ceef4986c42bd8e0765feacb"
+    },
+    {
+      "original": "docs/pictures/drawio/02_components.drawio",
+      "archived": "backup/2026-10-20/docs/pictures/drawio/02_components.drawio",
+      "sha256": "c87f1be6e561f187f515fe8d32a7fde9b58e7eae464c4e779c0e3a1e31003cf7"
+    },
+    {
+      "original": "docs/pictures/drawio/03_domain_classes.drawio",
+      "archived": "backup/2026-10-20/docs/pictures/drawio/03_domain_classes.drawio",
+      "sha256": "23cca220c57bbee860acfccd5b1ff03ac13276cef9027caec7c25c94c93d8dd0"
+    },
+    {
+      "original": "docs/pictures/drawio/04_deployment.drawio",
+      "archived": "backup/2026-10-20/docs/pictures/drawio/04_deployment.drawio",
+      "sha256": "4739869719784617bef7c869797e76cde7107e7f24d23ba7d67b7db2968f52bb"
+    },
+    {
+      "original": "docs/pictures/drawio/05_model_request_sequence.drawio",
+      "archived": "backup/2026-10-20/docs/pictures/drawio/05_model_request_sequence.drawio",
+      "sha256": "7dc8113d688913bc0346c054cda67bf2ca4799af0d36e4febe68531c6ba16348"
+    },
+    {
+      "original": "docs/pictures/drawio/06_tool_branch_sequence.drawio",
+      "archived": "backup/2026-10-20/docs/pictures/drawio/06_tool_branch_sequence.drawio",
+      "sha256": "7124a768265079c4537abb986212186743f9dd17fa1610ad8508c8627f1da79a"
+    },
+    {
+      "original": "docs/pictures/drawio/07_cancel_recovery_sequence.drawio",
+      "archived": "backup/2026-10-20/docs/pictures/drawio/07_cancel_recovery_sequence.drawio",
+      "sha256": "7ff175c479aea0f75285c3b150260917351285438f9e1ca3dad0ac1632f21000"
+    },
+    {
+      "original": "docs/pictures/drawio/08_attempt_state_machine.drawio",
+      "archived": "backup/2026-10-20/docs/pictures/drawio/08_attempt_state_machine.drawio",
+      "sha256": "8aa3a9b7154bec38469499f6caf0d95cee1181bd1f25a15d903dceee33b0a36c"
+    },
+    {
+      "original": "docs/pictures/drawio/09_bankers_activity.drawio",
+      "archived": "backup/2026-10-20/docs/pictures/drawio/09_bankers_activity.drawio",
+      "sha256": "22d39b4afaba9fdcee63aab141a3c385e3ed531e2e01770f8e432bdd57750d9b"
+    },
+    {
+      "original": "docs/pictures/drawio/10_project_mindmap.drawio",
+      "archived": "backup/2026-10-20/docs/pictures/drawio/10_project_mindmap.drawio",
+      "sha256": "c14ed712a9b5f8860decefb542154a268a42172ac547b0ea33186dcf7a34c5af"
+    },
+    {
+      "original": "docs/pictures/index.html",
+      "archived": "backup/2026-10-20/docs/pictures/index.html",
+      "sha256": "59e39e8cddeb710800712af8a38b9440f6c60c8186500937da8be2ff975ba85e"
+    },
+    {
+      "original": "docs/pictures/manifest.json",
+      "archived": "backup/2026-10-20/docs/pictures/manifest.json",
+      "sha256": "183e725b7203be5cd3f5bea689a16c2ce030df5d7130f7fd005293bee43e3275"
+    },
+    {
+      "original": "docs/pictures/svg/01_use_case.svg",
+      "archived": "backup/2026-10-20/docs/pictures/svg/01_use_case.svg",
+      "sha256": "b4ca0d2b7af8b20f4d62b9fcab268edb4f56ad18320a8e3762db3f7280e029dc"
+    },
+    {
+      "original": "docs/pictures/svg/02_components.svg",
+      "archived": "backup/2026-10-20/docs/pictures/svg/02_components.svg",
+      "sha256": "1a98d9779588b5dc8db4d1d93c5b40ff40fa19d64da0ad61774d25e85fb8546f"
+    },
+    {
+      "original": "docs/pictures/svg/03_domain_classes.svg",
+      "archived": "backup/2026-10-20/docs/pictures/svg/03_domain_classes.svg",
+      "sha256": "99e498353b2b8b9cd86a9ab7f3f7286d456cdfa0d5e8b91a0c2ef4c69bd21e7d"
+    },
+    {
+      "original": "docs/pictures/svg/04_deployment.svg",
+      "archived": "backup/2026-10-20/docs/pictures/svg/04_deployment.svg",
+      "sha256": "885dfbfab13f6d30e610f6a594475b4bb5709459a024d9081c404d0a91bf7480"
+    },
+    {
+      "original": "docs/pictures/svg/05_model_request_sequence.svg",
+      "archived": "backup/2026-10-20/docs/pictures/svg/05_model_request_sequence.svg",
+      "sha256": "508fb1b6e9793f3d60395a835b2dc8bc0ca970f6f1d33b2ef7b957d2b0fc9d96"
+    },
+    {
+      "original": "docs/pictures/svg/06_tool_branch_sequence.svg",
+      "archived": "backup/2026-10-20/docs/pictures/svg/06_tool_branch_sequence.svg",
+      "sha256": "6edb3fcfaa60391c6131347ef64c01e36884930bfb9a224bb54872d1f83e993f"
+    },
+    {
+      "original": "docs/pictures/svg/07_cancel_recovery_sequence.svg",
+      "archived": "backup/2026-10-20/docs/pictures/svg/07_cancel_recovery_sequence.svg",
+      "sha256": "a98d9f1452ccb9037f04a39abd4f8480db56f50fcf21f85c62b3ad12d7c581b1"
+    },
+    {
+      "original": "docs/pictures/svg/08_attempt_state_machine.svg",
+      "archived": "backup/2026-10-20/docs/pictures/svg/08_attempt_state_machine.svg",
+      "sha256": "82e123d438429481f633cfc7275f34ff1a24896ce3c61025b0284bb4993785b8"
+    },
+    {
+      "original": "docs/pictures/svg/09_bankers_activity.svg",
+      "archived": "backup/2026-10-20/docs/pictures/svg/09_bankers_activity.svg",
+      "sha256": "d342f26c307ca2776fc4477370ea07abca385abb3b78b4317540ae7571f2029d"
+    },
+    {
+      "original": "docs/pictures/svg/10_project_mindmap.svg",
+      "archived": "backup/2026-10-20/docs/pictures/svg/10_project_mindmap.svg",
+      "sha256": "75058f53071ad06163da98c772ad47897bcfa6a16e54af18fa2097e684be863d"
+    },
+    {
+      "original": "docs/presentations/TaskLoom_答辩修订版/修改方案.md",
+      "archived": "backup/2026-10-20/docs/presentations/TaskLoom_答辩修订版/修改方案.md",
+      "sha256": "fce8482136f75aded42f1273fb3f76d1e69de26eb1055d5613ec9c2feb88bd76"
+    },
+    {
+      "original": "docs/presentations/TaskLoom_答辩修订版/修改说明.md",
+      "archived": "backup/2026-10-20/docs/presentations/TaskLoom_答辩修订版/修改说明.md",
+      "sha256": "79ecab7c8f096040c3e93b25597ad484a5bb4f1ee26cc87e126aba3790a7090c"
+    },
+    {
+      "original": "docs/presentations/TaskLoom_逻辑重构版/修改说明.md",
+      "archived": "backup/2026-10-20/docs/presentations/TaskLoom_逻辑重构版/修改说明.md",
+      "sha256": "2528e0da5ed93c3e49bf42e13b61403c041110870c208137d5503c958492bd01"
+    },
+    {
+      "original": "docs/references/final_citation_audit.md",
+      "archived": "backup/2026-10-20/docs/references/final_citation_audit.md",
+      "sha256": "17e7e26854de906f3b128fda4a951ebc2db97c40458a590d7534bcc81ac2c097"
+    },
+    {
+      "original": "docs/references/references_verified.json",
+      "archived": "backup/2026-10-20/docs/references/references_verified.json",
+      "sha256": "dac4513de936f4d44744a7a759f683acc3607c8f127670bf387ea49f028050c8"
+    },
+    {
+      "original": "docs/references/source_selection.md",
+      "archived": "backup/2026-10-20/docs/references/source_selection.md",
+      "sha256": "3c051d03cd07ae67527d431cb4ef64d09f4b6ab50d09c5a1413e2b11dedf745f"
+    },
+    {
+      "original": "docs/reviews/TaskLoom_PPT_20260930/审查意见.md",
+      "archived": "backup/2026-10-20/docs/reviews/TaskLoom_PPT_20260930/审查意见.md",
+      "sha256": "07aba540ba0b77329918ab1c4b4fa42b3b29b3e33bea1ff05c353d2cbb5fe4fa"
+    },
+    {
+      "original": "docs/reviews/proposal/final_technical_review.md",
+      "archived": "backup/2026-10-20/docs/reviews/proposal/final_technical_review.md",
+      "sha256": "29ac3e3fe7624c86f19354a7352b2775adb72af96e370eae21a9776aff9bf609"
+    },
+    {
+      "original": "docs/reviews/proposal/technical_review_prewrite.md",
+      "archived": "backup/2026-10-20/docs/reviews/proposal/technical_review_prewrite.md",
+      "sha256": "21b9edceecdcb44e522f98b1fbaedc1ccbb539c16c33e101724e422a5e0a312a"
+    },
+    {
+      "original": "research/ai_training_crawlers_2026-09-28/README.md",
+      "archived": "backup/2026-10-20/research/ai_training_crawlers_2026-09-28/README.md",
+      "sha256": "0280c9ca616caa498ccb9c3debac7af365ff54dc31159fbca1ba00869cf09efe"
+    },
+    {
+      "original": "research/ai_training_crawlers_2026-09-28/materials/metadata/artifact_inventory.json",
+      "archived": "backup/2026-10-20/research/ai_training_crawlers_2026-09-28/materials/metadata/artifact_inventory.json",
+      "sha256": "e4a29821cc3433a7dbc6899210948d8279734e87132234ac8f88f8603915c3a9"
+    },
+    {
+      "original": "research/ai_training_crawlers_2026-09-28/materials/metadata/discovery_hn.json",
+      "archived": "backup/2026-10-20/research/ai_training_crawlers_2026-09-28/materials/metadata/discovery_hn.json",
+      "sha256": "df66e6f63fc0dff05595e990db0bd263058ba08b04b9230cab587e63c9688b87"
+    },
+    {
+      "original": "research/ai_training_crawlers_2026-09-28/materials/metadata/research_protocol.md",
+      "archived": "backup/2026-10-20/research/ai_training_crawlers_2026-09-28/materials/metadata/research_protocol.md",
+      "sha256": "197fe1152a98877ec2018da1ab18a1b259cbc79e41bc6b05c5f88deb6ca4206f"
+    },
+    {
+      "original": "research/ai_training_crawlers_2026-09-28/materials/metadata/review_resolution.md",
+      "archived": "backup/2026-10-20/research/ai_training_crawlers_2026-09-28/materials/metadata/review_resolution.md",
+      "sha256": "d96b615b77f604dfc855470847d90a04f456e40020884edee8a8a438c5db03b9"
+    },
+    {
+      "original": "research/ai_training_crawlers_2026-09-28/materials/metadata/root_sources_batch1.json",
+      "archived": "backup/2026-10-20/research/ai_training_crawlers_2026-09-28/materials/metadata/root_sources_batch1.json",
+      "sha256": "2d2677f528ecc77ea3240dde3852c9bed5974485e035e48a0399e493951ecc95"
+    },
+    {
+      "original": "research/ai_training_crawlers_2026-09-28/materials/metadata/root_sources_batch2.json",
+      "archived": "backup/2026-10-20/research/ai_training_crawlers_2026-09-28/materials/metadata/root_sources_batch2.json",
+      "sha256": "3e3775c3e5321fa29333da3f3a9ffce9b70733ab482a2bd0536ef5902286da24"
+    },
+    {
+      "original": "research/ai_training_crawlers_2026-09-28/reports/01_findings_and_severity.md",
+      "archived": "backup/2026-10-20/research/ai_training_crawlers_2026-09-28/reports/01_findings_and_severity.md",
+      "sha256": "02bc38cd93ce1c064d9e0d92a73e7dc2272b5ec3a86f3d263a0600967d34379b"
+    },
+    {
+      "original": "research/ai_training_crawlers_2026-09-28/reports/02_existing_defenses.md",
+      "archived": "backup/2026-10-20/research/ai_training_crawlers_2026-09-28/reports/02_existing_defenses.md",
+      "sha256": "53354501c7ea83d450946ae7597201e8b592acc3a650c0a6239279923d7f40c5"
+    },
+    {
+      "original": "research/ai_training_crawlers_2026-09-28/reports/03_os_research_opportunities.md",
+      "archived": "backup/2026-10-20/research/ai_training_crawlers_2026-09-28/reports/03_os_research_opportunities.md",
+      "sha256": "76515384ff1363838e1804ef3c3f0eef483ad403ec068ac6ed66ffd0187206fd"
+    },
+    {
+      "original": "research/ai_training_crawlers_2026-09-28/reports/04_sources_and_audit.md",
+      "archived": "backup/2026-10-20/research/ai_training_crawlers_2026-09-28/reports/04_sources_and_audit.md",
+      "sha256": "fb80b4aedbd48d1fd44b71e76e569fd7db54eac370be680d6d8606bdf93d43c7"
+    },
+    {
+      "original": "research/ai_training_crawlers_2026-09-28/reports/05_socc2025_fulltext_reading.md",
+      "archived": "backup/2026-10-20/research/ai_training_crawlers_2026-09-28/reports/05_socc2025_fulltext_reading.md",
+      "sha256": "e2b71dee91ae629b82c4b209d441663ec3700690f22eaa7e905ccea1de9e1bce"
+    },
+    {
+      "original": "research/materials/metadata/agent_resource_reassessment_2026-09-27.json",
+      "archived": "backup/2026-10-20/research/materials/metadata/agent_resource_reassessment_2026-09-27.json",
+      "sha256": "99b817496ec48193630a80e4c2b3bf8e710bbc21a2c85ad53c0d3b2c14b07383"
+    },
+    {
+      "original": "research/materials/metadata/agent_scheduling_sources.json",
+      "archived": "backup/2026-10-20/research/materials/metadata/agent_scheduling_sources.json",
+      "sha256": "365739ea1ea9d4fbeb1cf1fbc3c403016f856076d1c414f5a7515da2518a34e5"
+    },
+    {
+      "original": "research/materials/metadata/classification_sources.json",
+      "archived": "backup/2026-10-20/research/materials/metadata/classification_sources.json",
+      "sha256": "5fcfab378bc27e33483d29d0aec5e8872a9d3282b5e542b2432238b9548a9274"
+    },
+    {
+      "original": "research/materials/metadata/search_local_2026-09-27.json",
+      "archived": "backup/2026-10-20/research/materials/metadata/search_local_2026-09-27.json",
+      "sha256": "db66cb981e142c9720ad3a26261d4db9b368f655b67523682d3842e6a2ef0bca"
+    },
+    {
+      "original": "research/materials/metadata/search_tools_2026-09-27.json",
+      "archived": "backup/2026-10-20/research/materials/metadata/search_tools_2026-09-27.json",
+      "sha256": "e1f67bca35dd02a6442ed16676bbfb7859e5057e2a0f65282f1fb72776114267"
+    },
+    {
+      "original": "research/materials/metadata/usenix_sources.json",
+      "archived": "backup/2026-10-20/research/materials/metadata/usenix_sources.json",
+      "sha256": "e3a19ee6f4b09f354f6b11beabddce0bcb99097220f53eec3b2eb70fc878538a"
+    },
+    {
+      "original": "research/reports/agent_resource_competition_reassessment.md",
+      "archived": "backup/2026-10-20/research/reports/agent_resource_competition_reassessment.md",
+      "sha256": "981ec34c0290e529e62999ce544c3c51ac2eeea996849fdca9d092f306199260"
+    },
+    {
+      "original": "research/reports/agent_scheduling_research.md",
+      "archived": "backup/2026-10-20/research/reports/agent_scheduling_research.md",
+      "sha256": "a2df8bcc0770fdf5c44f4db9dc5e369779e4d2867eb42019f53c82584db43892"
+    },
+    {
+      "original": "research/reports/agent_topic_maturity_audit_2026-09-29.md",
+      "archived": "backup/2026-10-20/research/reports/agent_topic_maturity_audit_2026-09-29.md",
+      "sha256": "f78263a505ea921001da3a49b5e88b243d111fa238db10f26b5827a342e88daa"
+    },
+    {
+      "original": "research/reports/web_bot_control_os_research.md",
+      "archived": "backup/2026-10-20/research/reports/web_bot_control_os_research.md",
+      "sha256": "9be48028a996c552f4477c9e6263e3071459d4ca32550f3cf1de096a859b4ccf"
+    },
+    {
+      "original": "research/reports/web_scheduling_proposal_review.md",
+      "archived": "backup/2026-10-20/research/reports/web_scheduling_proposal_review.md",
+      "sha256": "560df23611fa385b3d5f775901f2b4d0f84a7702910c649449cae73fc1636369"
+    },
+    {
+      "original": "research/reports/web_service_guard_project_proposal.md",
+      "archived": "backup/2026-10-20/research/reports/web_service_guard_project_proposal.md",
+      "sha256": "f35aff0cdf22e4b091486d0f4dc9ebe8d78f06fef8f4c6ff60c108ea32e2c60c"
+    }
+  ],
+  "hash_basis": "SHA-256 of Git blob bytes at source_commit; working tree line endings follow .gitattributes."
+}

@@ -132,7 +132,7 @@ P、A、L、CX、CC、D等既有来源编号全部保留。OpenClaw使用OC-D（
 
 主题判断的结构化入口是[analysis_catalog.json](analysis_catalog.json)，原文入口是[source_catalog.json](source_catalog.json)；报告对二者做面向读者的归纳。[theme_matrix.csv](theme_matrix.csv)提供可筛选表，[source_index.md](source_index.md)提供阅读导航。
 
-旧source registers、分析笔记、检索日志和脚本保存在[历史快照](../_archive/before_reorganization_20261014.zip)，迁移关系见[migration_manifest.json](migration_manifest.json)。[validation.json](validation.json)记录文件保留、来源ID、主题引用和当前链接检查结果。
+旧source registers、分析笔记、检索日志和脚本保存在历史快照（本地留存：`research/agent-orchestrate/materials/_archive/before_reorganization_20261014.zip`），迁移关系见[migration_manifest.json](migration_manifest.json)。[validation.json](validation.json)记录文件保留、来源ID、主题引用和当前链接检查结果。
 
 ### 4.3 检查范围
 

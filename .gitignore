@@ -19,7 +19,10 @@ htmlcov/
 *.db
 *.db-shm
 *.db-wal
-backup/
+# Publish only the documented archive; other local backups stay private.
+backup/*
+!backup/README.md
+!backup/2026-10-20/
 agent-workspace/outputs/
 agent-workspace/assets/
 **/*.zip
