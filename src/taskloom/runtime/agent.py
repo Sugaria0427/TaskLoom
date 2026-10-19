@@ -83,8 +83,10 @@ async def run_agent(
             raise DomainError("INVALID_RESULT", "Expected a structured JSON result") from None
         if not state.completed_tools:
             raise DomainError("UNVERIFIED_RESULT", "No verified tool result is available")
-        last = next(reversed(state.completed_tools.values()))
-        if final.get("files") != last["files"] or final.get("words") != last["words"]:
+        if not any(
+            final.get("files") == result["files"] and final.get("words") == result["words"]
+            for result in state.completed_tools.values()
+        ):
             raise DomainError(
                 "RESULT_MISMATCH", "Model summary disagrees with verified tool output"
             )
