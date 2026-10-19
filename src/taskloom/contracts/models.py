@@ -200,7 +200,8 @@ class ToolRun(Contract):
     root_task_id: str = Field(pattern=r"^[a-zA-Z0-9_-]{1,96}$")
     tenant_id: str
     generation: int = Field(ge=0)
-    tool_name: Literal["file_stats"] = "file_stats"
+    tool_name: str = "file_stats"
+    arguments: JsonObject = Field(default_factory=dict)
     input_version: str
     work_iterations: int = Field(default=1, ge=1, le=5000000)
     emit_bytes: int = Field(default=0, ge=0, le=8388608)
