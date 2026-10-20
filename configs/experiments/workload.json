@@ -1,0 +1,14 @@
+{
+  "workload": [
+    {"class": "short_light", "deadline_seconds": 30, "work_iterations": 1},
+    {"class": "short_heavy", "deadline_seconds": 30, "work_iterations": 100000},
+    {"class": "long_light", "deadline_seconds": 120, "work_iterations": 1},
+    {"class": "long_heavy", "deadline_seconds": 120, "work_iterations": 100000}
+  ],
+  "scenarios": {
+    "unconstrained": {"tool_slots": 2, "pool_capacity": 2},
+    "tool_constrained": {"tool_slots": 1, "pool_capacity": 2},
+    "api_constrained": {"tool_slots": 2, "pool_capacity": 1},
+    "both_constrained": {"tool_slots": 1, "pool_capacity": 1}
+  }
+}
