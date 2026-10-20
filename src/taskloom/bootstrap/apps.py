@@ -134,7 +134,19 @@ def platform_app(base: Path, config: PlatformConfig) -> FastAPI:
         finally:
             legacy_owner.close()
     store = SQLiteRepository(base / "platform/state.db")
-    provider = HTTPProvider(config.pool_url, config.model, config.pool_key, config.pool_kind)
+    provider = HTTPProvider(
+        config.pool_url,
+        config.model,
+        config.pool_key,
+        config.pool_kind,
+        {
+            account.account_id: (
+                account.url or config.pool_url,
+                config.pool_key if account.key is None else account.key,
+            )
+            for account in config.pool_accounts
+        },
+    )
     service = GatewayService(store, provider, config)
 
     @asynccontextmanager
@@ -195,7 +207,7 @@ def platform_app(base: Path, config: PlatformConfig) -> FastAPI:
 
     @app.get("/v1/requests/{request_id}")
     async def query(request_id: str, user: Annotated[str, Depends(tenant)]) -> GatewayRecord:
-        return service.get(user, request_id)
+        return await service.query(user, request_id)
 
     @app.post("/v1/requests/{request_id}/cancel")
     async def cancel(request_id: str, user: Annotated[str, Depends(tenant)]) -> GatewayRecord:

@@ -1,6 +1,10 @@
 import asyncio
+import math
 import time
-from datetime import datetime
+from collections import Counter
+from collections.abc import Callable, Sequence
+from datetime import UTC, datetime, timedelta
+from typing import Literal
 
 from taskloom.contracts.models import (
     GatewayRecord,
@@ -13,31 +17,72 @@ from taskloom.contracts.models import (
     RootRegistration,
     digest,
     identity,
-    utc_now,
 )
 from taskloom.domain.model import DomainError, Outcome
 from taskloom.domain.ports import Repository, StoredRecord
 from taskloom.gateway.accounts import AccountService
-from taskloom.gateway.ports import ModelProvider
-from taskloom.policies.fair import FairQueue
+from taskloom.gateway.ports import ModelProvider, ProviderRejected
+from taskloom.policies.placement import AffinityPlacement, HoldEstimator
+from taskloom.policies.reservation import Estimate, Prices, ReservationEstimator, worst_units
+from taskloom.policies.scheduling import scheduling_policy
+
+LIVE_STATES = ("QUEUED", "DISPATCH_INTENT", "UNKNOWN")
 
 
 class GatewayService:
-    def __init__(self, store: Repository, provider: ModelProvider, config: PlatformConfig) -> None:
+    # Admission bounds live work only; finished records leave memory after a retention and
+    # are then served from the store, which keeps every row.
+    max_live_requests = 1024
+    finished_retention_seconds = 300.0
+    max_finished_records = 1024
+    # Root registrations per window: a rate guard on registry growth, not a lifetime cap.
+    max_recent_roots = 1024
+    root_window_seconds = 600.0
+    # Pre-execution pool refusals back off exponentially and fail after a bounded count.
+    reject_backoff_seconds = 1.0
+    reject_backoff_cap_seconds = 30.0
+    max_pool_rejections = 6
+
+    def __init__(
+        self,
+        store: Repository,
+        provider: ModelProvider,
+        config: PlatformConfig,
+        clock: Callable[[], float] = time.time,
+    ) -> None:
         self.store = store
+        # Deadlines, windows and record timestamps share one clock so simulations stay consistent.
+        self.clock = clock
         self.provider = provider
         self.config = config
         self.requests: dict[str, GatewayRecord] = {}
         self.quota = QuotaState()
         self.accounts = AccountService(store, config)
         self.account_quotas: dict[str, QuotaState] = {}
-        self.queue: FairQueue[str] = FairQueue()
-        self._roots: dict[str, FairQueue[str]] = {}
+        self.policy = scheduling_policy(config.scheduling_policy)
+        # Without configured pool accounts the pool is one account and nothing is placed.
+        self.placement = (
+            AffinityPlacement(
+                {a.account_id: a.capacity for a in config.pool_accounts},
+                config.cache_wait_seconds,
+                config.anticipate_seconds,
+            )
+            if config.pool_accounts
+            else None
+        )
+        self.holds = HoldEstimator()
         self.lock = asyncio.Lock()
         self.wake = asyncio.Event()
         self._loop: asyncio.Task[None] | None = None
         self._active: dict[str, asyncio.Task[None]] = {}
+        self._recent_roots: dict[str, float] = {}
+        self._next_prune = 0.0
         self.ready = False
+        self.prices = Prices(config.output_price, config.cache_read_price, config.cache_write_price)
+        self.estimator = ReservationEstimator(self.prices)
+
+    def now(self) -> str:
+        return datetime.fromtimestamp(self.clock(), UTC).isoformat()
 
     @staticmethod
     def key(tenant: str, request_id: str) -> str:
@@ -49,43 +94,110 @@ class GatewayService:
         self.quota = QuotaState.model_validate(quota) if quota else QuotaState()
         for item in await self.store.records("account_quota"):
             self.account_quotas[item["account_id"]] = QuotaState.model_validate(item["quota"])
+        usage = {row["root_key"] for row in await self.store.records("root_usage")}
+        legacy: dict[str, tuple[str, int]] = {}
         for row in await self.store.records("request"):
             record = GatewayRecord.model_validate(row)
             key = self.key(record.tenant_id, record.request.request_id)
             self.requests[key] = record
+            root_key = self.key(record.tenant_id, record.request.root_task_id)
+            if record.consumed_units and root_key not in usage:
+                _, units = legacy.get(root_key, (record.tenant_id, 0))
+                legacy[root_key] = (record.tenant_id, units + record.consumed_units)
             if record.state == "QUEUED":
                 self._enqueue(record.tenant_id, record.request.root_task_id, key)
-            elif record.outcome == Outcome.PENDING:
+                continue
+            if record.outcome == Outcome.PENDING:
                 record.state = "UNKNOWN"
                 record.outcome = Outcome.UNKNOWN
                 record.error = "Dispatch interrupted; reconciliation required"
                 await self._save(record)
+            if record.state == "UNKNOWN":
+                # Unresolved work still holds its slot; the policy counts it until settled.
+                self.policy.on_dispatch(
+                    key, record.tenant_id, record.request.root_task_id, self.clock(),
+                    record.reserved_units,
+                )  # fmt: skip
+        # State written before per-root usage was persisted derives it once from full history.
+        for root_key, (tenant, units) in legacy.items():
+            await self.store.apply([self._root_usage(root_key, tenant, units)])
+        for tenant in {r.tenant_id for r in self.requests.values()}:
+            self._account_quota(tenant)
+        self._prune()
         await self.reconcile()
         self.ready = True
         self._loop = asyncio.create_task(self._schedule(), name="gateway-dispatch")
 
     def _enqueue(self, tenant: str, root: str, key: str) -> None:
-        if tenant not in self._roots:
-            self._roots[tenant] = FairQueue()
-            self.queue.push(tenant, tenant)
-        self._roots[tenant].push(root, key)
+        self.policy.push(tenant, root, key, self.clock())
         self.wake.set()
 
     def _candidate(self) -> str | None:
-        # Outer round-robin is per tenant; inner is per registered root task.
-        for _ in range(len(self._roots)):
-            tenant = self.queue.pop()
-            if tenant is None:
-                return None
-            inner = self._roots[tenant]
-            key = inner.pop(lambda item: self._feasible(self.requests[item]))
-            if len(inner):
-                self.queue.push(tenant, tenant)
-            else:
-                del self._roots[tenant]
-            if key is not None:
-                return key
-        return None
+        # The policy orders tenants, then registered root tasks; the gateway judges feasibility.
+        busy = self._upstream_busy()
+        if self.placement is not None and not self.placement.has_free(busy):
+            return None
+        now = self.clock()
+        # A request waiting for its cache's account steps aside only for tenants holding no
+        # more slots than its own; otherwise a heavier tenant would take the free slot, often
+        # for minutes, and caching would undo max-min fairness.
+        ceiling: int | None = None
+        free_in = self._free_in(busy, now)
+
+        def feasible(item: str) -> bool:
+            nonlocal ceiling
+            # Keys of finished records may outlive their pruned record in the queue.
+            if item not in self.requests:
+                return True
+            record = self.requests[item]
+            held = self._account_quota(record.tenant_id).inflight
+            if ceiling is not None and held > ceiling:
+                return False
+            if not self._feasible(record):
+                return False
+            if self.placement is None or self.placement.ready(
+                self._chain(record), busy, now, free_in
+            ):
+                return True
+            ceiling = held if ceiling is None else min(ceiling, held)
+            return False
+
+        return self.policy.pick(feasible, now)
+
+    def _free_in(self, busy: Counter[str], now: float) -> dict[str, float]:
+        """Expected seconds until each full upstream account frees a slot."""
+        if self.placement is None or self.placement.wait_seconds <= 0:
+            return {}
+        left: dict[str, float] = {}
+        for record in self.requests.values():
+            account = record.upstream_account
+            if account is None or record.state not in ("DISPATCH_INTENT", "UNKNOWN"):
+                continue
+            if busy[account] < self.placement.capacities.get(account, 0):
+                continue
+            expected = self.holds.expect(record.tenant_id, self._chain(record)) or 0.0
+            started = datetime.fromisoformat(record.dispatched_at or self.now()).timestamp()
+            remaining = max(0.0, expected - (now - started))
+            left[account] = min(left.get(account, remaining), remaining)
+        return left
+
+    def _chain(self, record: GatewayRecord) -> str:
+        # A chain is one agent of one user: the unit that carries a prompt cache.
+        return self.key(record.tenant_id, record.request.agent_id)
+
+    def _upstream_busy(self) -> Counter[str]:
+        # Unknown outcomes keep their upstream slot, like their reservation, until reconciled.
+        return Counter(
+            r.upstream_account
+            for r in self.requests.values()
+            if r.upstream_account is not None and r.state in ("DISPATCH_INTENT", "UNKNOWN")
+        )
+
+    def _place(self, record: GatewayRecord) -> str | None:
+        if self.placement is None:
+            return None
+        # _candidate guaranteed a free account.
+        return self.placement.choose(self._chain(record), self._upstream_busy(), self.clock())
 
     async def register_root(self, tenant: str, root: RootRegistration) -> None:
         self.accounts.get(tenant)
@@ -96,9 +208,14 @@ class GatewayService:
             data["tenant_id"] = tenant
             if previous is not None and previous != data:
                 raise DomainError("ROOT_CONFLICT", "Root task metadata changed")
-            if previous is None and len(await self.store.records("root")) >= 1024:
-                raise DomainError("QUEUE_FULL", "Root registry capacity exhausted", True)
+            if previous is None:
+                horizon = self.clock() - self.root_window_seconds
+                self._recent_roots = {k: at for k, at in self._recent_roots.items() if at > horizon}
+                if len(self._recent_roots) >= self.max_recent_roots:
+                    raise DomainError("QUEUE_FULL", "Root registry capacity exhausted", True)
             await self.store.apply([StoredRecord("root", key, tenant, data)])
+            if previous is None:
+                self._recent_roots[key] = self.clock()
 
     async def submit(self, tenant: str, request: ModelRequest) -> GatewayRecord:
         async with self.lock:
@@ -106,6 +223,10 @@ class GatewayService:
             key = self.key(tenant, request.request_id)
             payload_hash = digest(request.model_dump(mode="json"))
             previous = self.requests.get(key)
+            if previous is None:
+                # Duplicates of pruned (finished) records are answered from the store.
+                stored = await self.store.get("request", key)
+                previous = GatewayRecord.model_validate(stored) if stored else None
             if previous is not None:
                 if previous.payload_hash != payload_hash:
                     raise DomainError(
@@ -115,49 +236,66 @@ class GatewayService:
             root = await self.store.get("root", self.key(tenant, request.root_task_id))
             if root is None:
                 raise DomainError("ROOT_NOT_REGISTERED", "Register this user's root task first")
-            if request.reserve_units > min(self.config.total_budget_units, root["budget_units"]):
+            # Budgets admit worst cases; windows must hold the request even if it produces
+            # max_tokens, so a queued request is never infeasible forever.
+            worst = self.worst(request)
+            if worst > min(self.config.total_budget_units, root["budget_units"]):
                 raise DomainError("REQUEST_TOO_LARGE", "Request exceeds the budget domain")
             if request.reserve_units > self.config.tokens_per_window:
                 raise DomainError("REQUEST_TOO_LARGE", "Request exceeds the token window capacity")
-            if request.reserve_units > min(account.budget_units, account.tokens_per_window):
+            if worst > account.budget_units or request.reserve_units > account.tokens_per_window:
                 raise DomainError("REQUEST_TOO_LARGE", "Request exceeds the account allowance")
-            if datetime.fromisoformat(request.deadline_at).timestamp() <= time.time():
+            if datetime.fromisoformat(request.deadline_at).timestamp() <= self.clock():
                 raise DomainError("DEADLINE_EXPIRED", "Request deadline already expired")
             queued = [r for r in self.requests.values() if r.state == "QUEUED"]
+            live = [r for r in self.requests.values() if r.state in LIVE_STATES]
             size = sum(len(r.request.model_dump_json().encode()) for r in queued)
-            history_size = sum(
-                len(r.request.model_dump_json().encode()) for r in self.requests.values()
-            )
+            live_size = sum(len(r.request.model_dump_json().encode()) for r in live)
             if (
                 len(queued) >= self.config.max_queue
                 or sum(r.tenant_id == tenant for r in queued) >= self.config.max_tenant_queue
                 or size + len(request.model_dump_json().encode()) > self.config.max_queue_bytes
-                or len(self.requests) >= 1024
-                or history_size + len(request.model_dump_json().encode())
+                or len(live) >= self.max_live_requests
+                or live_size + len(request.model_dump_json().encode())
                 > self.config.max_history_bytes
             ):
                 raise DomainError("QUEUE_FULL", "Admission capacity exhausted", True)
-            record = GatewayRecord(tenant_id=tenant, request=request, payload_hash=payload_hash)
+            record = GatewayRecord(
+                tenant_id=tenant, request=request, payload_hash=payload_hash, created_at=self.now()
+            )
             await self._save(record)
             self.requests[key] = record
             self._enqueue(tenant, request.root_task_id, key)
             return record.model_copy(deep=True)
 
     def get(self, tenant: str, request_id: str) -> GatewayRecord:
+        """Live and recently finished records; `query` also finds pruned ones."""
         record = self.requests.get(self.key(tenant, request_id))
         if record is None:
             raise DomainError("NOT_FOUND", "Request not found")
         return record.model_copy(deep=True)
 
+    async def query(self, tenant: str, request_id: str) -> GatewayRecord:
+        key = self.key(tenant, request_id)
+        if key in self.requests:
+            return self.get(tenant, request_id)
+        stored = await self.store.get("request", key)
+        if stored is None:
+            raise DomainError("NOT_FOUND", "Request not found")
+        return GatewayRecord.model_validate(stored)
+
     async def cancel(self, tenant: str, request_id: str) -> GatewayRecord:
         async with self.lock:
+            if self.key(tenant, request_id) not in self.requests:
+                # Only finished records are pruned; cancelling them changes nothing.
+                return await self.query(tenant, request_id)
             record = self.get(tenant, request_id)
             record.cancel_requested = True
             if record.state == "QUEUED":
                 record.state = "FINISHED"
                 record.outcome = Outcome.CANCELLED
                 record.quiescent = True
-                record.completed_at = utc_now()
+                record.completed_at = self.now()
             await self._save(record)
             self.requests[self.key(tenant, request_id)] = record
             self.wake.set()
@@ -165,41 +303,68 @@ class GatewayService:
 
     def _refresh_window(self) -> None:
         for quota in [self.quota, *self.account_quotas.values()]:
-            if time.time() >= quota.window_start + self.config.window_seconds:
-                quota.window_start = time.time()
+            if self.clock() >= quota.window_start + self.config.window_seconds:
+                quota.window_start = self.clock()
                 quota.window_requests = 0
                 quota.window_tokens = 0
 
     def _account_quota(self, tenant: str) -> QuotaState:
         if tenant not in self.account_quotas:
+            # Derived from memory only for state without a persisted account quota; start()
+            # derives those before pruning, and every later dispatch persists one.
             records = [r for r in self.requests.values() if r.tenant_id == tenant]
             self.account_quotas[tenant] = QuotaState(
-                window_start=self.quota.window_start or time.time(),
+                window_start=self.quota.window_start or self.clock(),
                 consumed_units=sum(r.consumed_units for r in records),
                 reserved_units=sum(r.reserved_units for r in records),
+                worst_units=sum(r.worst_units for r in records),
                 inflight=sum(bool(r.reserved_units) for r in records),
             )
         return self.account_quotas[tenant]
 
+    def worst(self, request: ModelRequest) -> int:
+        return worst_units(request.input_tokens, request.max_tokens, self.prices)
+
+    def _estimate(self, record: GatewayRecord) -> Estimate:
+        request = record.request
+        return self.estimator.estimate(
+            record.tenant_id, request.agent_id, request.input_tokens, request.max_tokens,
+            self.clock(),
+        )  # fmt: skip
+
+    @staticmethod
+    def _in_window(record: GatewayRecord, quota: QuotaState) -> bool:
+        # Dispatch times round-trip through ISO text, exact to the microsecond.
+        dispatched = record.dispatched_at
+        return (
+            dispatched is not None
+            and datetime.fromisoformat(dispatched).timestamp() >= quota.window_start - 1e-6
+        )
+
     def _feasible(self, record: GatewayRecord) -> bool:
         if record.state != "QUEUED":
             return True
+        # Backoff after a pool refusal.
+        not_before = record.not_before
+        if not_before and datetime.fromisoformat(not_before).timestamp() > self.clock():
+            return False
         account = self.accounts.accounts.get(record.tenant_id)
         if account is None:
             return False
         personal = self._account_quota(record.tenant_id)
+        # Budgets hold in-flight worst cases; windows are rates and take the estimate.
+        worst = self.worst(record.request)
+        tokens = self._estimate(record).tokens
         return (
             self.quota.inflight < self.config.pool_capacity
             and self.quota.window_requests < self.config.requests_per_window
-            and self.quota.window_tokens + record.request.reserve_units
-            <= self.config.tokens_per_window
-            and self.quota.consumed_units + self.quota.reserved_units + record.request.reserve_units
+            and self.quota.window_tokens + tokens <= self.config.tokens_per_window
+            and self.quota.consumed_units + self.quota.worst_units + worst
             <= self.config.total_budget_units
             and personal.inflight < account.max_inflight
             and personal.window_requests < account.requests_per_window
-            and personal.window_tokens + record.request.reserve_units <= account.tokens_per_window
-            and personal.consumed_units + personal.reserved_units + record.request.reserve_units
-            <= account.budget_units
+            and personal.window_tokens + tokens <= account.tokens_per_window
+            and personal.consumed_units + personal.worst_units + worst <= account.budget_units
         )
 
     async def _save(
@@ -207,6 +372,7 @@ class GatewayService:
         record: GatewayRecord,
         quota: QuotaState | None = None,
         account_quota: QuotaState | None = None,
+        extra: Sequence[StoredRecord] = (),
     ) -> None:
         records = [
             StoredRecord(
@@ -227,6 +393,7 @@ class GatewayService:
                     {"account_id": record.tenant_id, "quota": account_quota.model_dump()},
                 )
             )
+        records.extend(extra)
         await self.store.apply(
             records,
             {
@@ -236,7 +403,7 @@ class GatewayService:
                 "root_task_id": record.request.root_task_id,
                 "attempt_id": record.request.attempt_id,
                 "type": "request." + record.state.lower(),
-                "occurred_at": utc_now(),
+                "occurred_at": self.now(),
             },
         )
 
@@ -249,17 +416,15 @@ class GatewayService:
                     if old.state != "QUEUED":
                         continue
                     expired = (
-                        datetime.fromisoformat(old.request.deadline_at).timestamp() <= time.time()
+                        datetime.fromisoformat(old.request.deadline_at).timestamp() <= self.clock()
                     )
-                    exhausted = (
-                        self.quota.consumed_units + old.request.reserve_units
-                        > self.config.total_budget_units
-                    )
+                    # Consumption only grows, so a worst case beyond it never fits again.
+                    worst = self.worst(old.request)
+                    exhausted = self.quota.consumed_units + worst > self.config.total_budget_units
                     account = self.accounts.accounts.get(old.tenant_id)
                     if account is not None:
                         exhausted = exhausted or (
-                            self._account_quota(old.tenant_id).consumed_units
-                            + old.request.reserve_units
+                            self._account_quota(old.tenant_id).consumed_units + worst
                             > account.budget_units
                         )
                     if expired or exhausted:
@@ -270,14 +435,18 @@ class GatewayService:
                         rejected.error = "DEADLINE_EXPIRED" if expired else "BUDGET_EXHAUSTED"
                         await self._save(rejected)
                         self.requests[expired_key] = rejected
+                self._prune()
                 while self.quota.inflight < self.config.pool_capacity:
                     key = self._candidate()
                     if key is None:
                         break
-                    record = self.requests[key].model_copy(deep=True)
-                    if record.state != "QUEUED":
+                    if key not in self.requests or self.requests[key].state != "QUEUED":
                         continue
-                    if datetime.fromisoformat(record.request.deadline_at).timestamp() < time.time():
+                    record = self.requests[key].model_copy(deep=True)
+                    if (
+                        datetime.fromisoformat(record.request.deadline_at).timestamp()
+                        < self.clock()
+                    ):
                         record.outcome = Outcome.FAILED
                         record.state = "FINISHED"
                         record.error = "DEADLINE_EXPIRED"
@@ -285,20 +454,17 @@ class GatewayService:
                         await self._save(record)
                         self.requests[key] = record
                         continue
-                    root_records = [
-                        r
+                    root_key = self.key(record.tenant_id, record.request.root_task_id)
+                    root = await self.store.get("root", root_key)
+                    # Consumption is persisted per root, since finished records get pruned.
+                    root_used = await self._root_consumed(root_key) + sum(
+                        r.worst_units
                         for r in self.requests.values()
                         if r.tenant_id == record.tenant_id
                         and r.request.root_task_id == record.request.root_task_id
-                    ]
-                    root = await self.store.get(
-                        "root", self.key(record.tenant_id, record.request.root_task_id)
                     )
-                    root_used = sum(r.reserved_units + r.consumed_units for r in root_records)
-                    if (
-                        root is None
-                        or root_used + record.request.reserve_units > root["budget_units"]
-                    ):
+                    worst = self.worst(record.request)
+                    if root is None or root_used + worst > root["budget_units"]:
                         record.state = "FINISHED"
                         record.outcome = Outcome.FAILED
                         record.error = "ROOT_BUDGET_EXHAUSTED"
@@ -310,21 +476,31 @@ class GatewayService:
                     account_quota = self._account_quota(record.tenant_id).model_copy(deep=True)
                     record.state = "DISPATCH_INTENT"
                     record.pool_request_id = digest([record.tenant_id, record.request.request_id])
-                    record.dispatched_at = utc_now()
-                    record.reserved_units = record.request.reserve_units
-                    quota.reserved_units += record.reserved_units
-                    quota.inflight += 1
-                    quota.window_requests += 1
-                    quota.window_tokens += record.request.reserve_units
-                    account_quota.reserved_units += record.reserved_units
-                    account_quota.inflight += 1
-                    account_quota.window_requests += 1
-                    account_quota.window_tokens += record.request.reserve_units
+                    record.dispatched_at = self.now()
+                    record.upstream_account = self._place(record)
+                    estimate = self._estimate(record)
+                    record.reserved_units = estimate.units
+                    record.worst_units = worst
+                    record.window_tokens = estimate.tokens
+                    for ledger in (quota, account_quota):
+                        ledger.reserved_units += record.reserved_units
+                        ledger.worst_units += record.worst_units
+                        ledger.inflight += 1
+                        ledger.window_requests += 1
+                        ledger.window_tokens += record.window_tokens
+                    self.estimator.dispatched(
+                        key, record.tenant_id, record.request.agent_id,
+                        record.request.input_tokens, self.clock(),
+                    )  # fmt: skip
                     await self._save(record, quota, account_quota)
                     self.requests[key] = record
                     self.quota = quota
                     self.account_quotas[record.tenant_id] = account_quota
                     self._active[key] = asyncio.create_task(self._dispatch(key))
+                    self.policy.on_dispatch(
+                        key, record.tenant_id, record.request.root_task_id, self.clock(),
+                        record.reserved_units,
+                    )  # fmt: skip
             try:
                 await asyncio.wait_for(self.wake.wait(), 0.1)
             except TimeoutError:
@@ -339,8 +515,10 @@ class GatewayService:
             upstream = record.request.model_copy(
                 update={"request_id": self.pool_request_id(record)}
             )
-            reply = await self.provider.generate(upstream)
+            reply = await self.provider.generate(upstream, account=record.upstream_account)
             await self._finish(key, reply)
+        except ProviderRejected as error:
+            await self._rejected(key, error)
         except (Exception, asyncio.CancelledError) as error:
             async with self.lock:
                 current = self.requests[key].model_copy(deep=True)
@@ -353,6 +531,56 @@ class GatewayService:
             self._active.pop(key, None)
             self.wake.set()
 
+    async def _rejected(self, key: str, error: ProviderRejected) -> None:
+        async with self.lock:
+            current = self.requests[key]
+            if current.state != "DISPATCH_INTENT":
+                return
+            record = current.model_copy(deep=True)
+            quota = self.quota.model_copy(deep=True)
+            account_quota = self._account_quota(record.tenant_id).model_copy(deep=True)
+            # Release the reservation and slot. Window counters keep the attempt: windows
+            # meter dispatches offered to the pool, and keeping them also slows retries
+            # against a pool that keeps refusing.
+            for ledger in (quota, account_quota):
+                ledger.reserved_units -= record.reserved_units
+                ledger.worst_units -= record.worst_units
+                ledger.inflight -= 1
+            record.reserved_units = 0
+            record.worst_units = 0
+            record.dispatch_attempts += 1
+            deadline = datetime.fromisoformat(record.request.deadline_at).timestamp()
+            if record.cancel_requested:
+                record.state = "FINISHED"
+                record.outcome = Outcome.CANCELLED
+            elif record.dispatch_attempts >= self.max_pool_rejections or deadline <= self.clock():
+                record.state = "FINISHED"
+                record.outcome = Outcome.FAILED
+                record.error = "POOL_REJECTED"
+            else:
+                # Re-dispatch is safe only because the pool ran and billed nothing; the same
+                # pool request id is reused.
+                record.state = "QUEUED"
+                record.error = "POOL_REJECTED: " + str(error)
+                delay = min(
+                    self.reject_backoff_cap_seconds,
+                    self.reject_backoff_seconds * 2 ** (record.dispatch_attempts - 1),
+                )
+                record.not_before = (
+                    datetime.fromtimestamp(self.clock(), UTC) + timedelta(seconds=delay)
+                ).isoformat()
+            if record.state == "FINISHED":
+                record.quiescent = True
+                record.completed_at = self.now()
+            await self._save(record, quota, account_quota)
+            self.requests[key] = record
+            self.quota = quota
+            self.account_quotas[record.tenant_id] = account_quota
+            # The policy saw a dispatch; the refusal ends it, holding the slot only briefly.
+            self.policy.on_finish(key, self.clock(), 0)
+            if record.state == "QUEUED":
+                self._enqueue(record.tenant_id, record.request.root_task_id, key)
+
     async def _finish(self, key: str, reply: ModelReply) -> None:
         async with self.lock:
             current = self.requests[key]
@@ -361,24 +589,76 @@ class GatewayService:
             record = current.model_copy(deep=True)
             quota = self.quota.model_copy(deep=True)
             account_quota = self._account_quota(record.tenant_id).model_copy(deep=True)
-            quota.reserved_units -= record.reserved_units
-            quota.consumed_units += reply.usage.cost_units
-            quota.inflight -= 1
-            account_quota.reserved_units -= record.reserved_units
-            account_quota.consumed_units += reply.usage.cost_units
-            account_quota.inflight -= 1
+            # Windows dispatched into charged the estimated tokens; true them up to usage.
+            # A window that has rolled over since dispatch keeps what it was charged.
+            actual = reply.usage.input_tokens + reply.usage.output_tokens
+            for ledger in (quota, account_quota):
+                ledger.reserved_units -= record.reserved_units
+                ledger.worst_units -= record.worst_units
+                ledger.consumed_units += reply.usage.cost_units
+                ledger.inflight -= 1
+                if self._in_window(record, ledger):
+                    ledger.window_tokens = max(
+                        0, ledger.window_tokens + actual - record.window_tokens
+                    )
             record.reserved_units = 0
+            record.worst_units = 0
             record.consumed_units = reply.usage.cost_units
             record.reply = reply
             record.state = "FINISHED"
             record.outcome = Outcome.CANCELLED if record.cancel_requested else Outcome.SUCCEEDED
             record.quiescent = True
-            record.completed_at = utc_now()
+            record.completed_at = self.now()
             record.error = None
-            await self._save(record, quota, account_quota)
+            root_key = self.key(record.tenant_id, record.request.root_task_id)
+            root_consumed = await self._root_consumed(root_key) + record.consumed_units
+            await self._save(
+                record,
+                quota,
+                account_quota,
+                [self._root_usage(root_key, record.tenant_id, root_consumed)],
+            )
             self.requests[key] = record
             self.quota = quota
             self.account_quotas[record.tenant_id] = account_quota
+            self.policy.on_finish(key, self.clock(), reply.usage.cost_units)
+            if self.placement is not None:
+                self.placement.released(self._chain(record), record.upstream_account, self.clock())
+            if record.dispatched_at is not None:
+                held = self.clock() - datetime.fromisoformat(record.dispatched_at).timestamp()
+                self.holds.learn(record.tenant_id, self._chain(record), max(0.0, held))
+            self.estimator.settled(
+                key, record.tenant_id, record.request.agent_id, reply.usage.input_tokens,
+                reply.usage.output_tokens, reply.usage.cost_units, self.clock(),
+            )  # fmt: skip
+
+    async def _root_consumed(self, root_key: str) -> int:
+        row = await self.store.get("root_usage", root_key)
+        return int(row["consumed_units"]) if row else 0
+
+    @staticmethod
+    def _root_usage(root_key: str, tenant: str, consumed: int) -> StoredRecord:
+        return StoredRecord(
+            "root_usage", root_key, tenant, {"root_key": root_key, "consumed_units": consumed}
+        )
+
+    def _prune(self) -> None:
+        """Drop finished records past retention; the store keeps them for queries and dedupe."""
+        if self.clock() < self._next_prune:
+            return
+        self._next_prune = self.clock() + 1
+
+        def finished_at(record: GatewayRecord) -> float:
+            return datetime.fromisoformat(record.completed_at or record.created_at).timestamp()
+
+        finished = sorted(
+            (finished_at(r), k) for k, r in self.requests.items() if r.state == "FINISHED"
+        )
+        horizon = self.clock() - self.finished_retention_seconds
+        excess = len(finished) - self.max_finished_records
+        for index, (at, key) in enumerate(finished):
+            if index < excess or at < horizon:
+                del self.requests[key]
 
     @staticmethod
     def pool_request_id(record: GatewayRecord) -> str:
@@ -389,7 +669,9 @@ class GatewayService:
             if record.state != "UNKNOWN":
                 continue
             try:
-                reply = await self.provider.reconcile(self.pool_request_id(record))
+                reply = await self.provider.reconcile(
+                    self.pool_request_id(record), account=record.upstream_account
+                )
                 if reply is not None:
                     await self._finish(key, reply)
             except Exception:
@@ -402,7 +684,8 @@ class GatewayService:
             "quota": self.quota.model_dump(),
             "queued": sum(r.state == "QUEUED" for r in self.requests.values()),
             "unknown": sum(r.state == "UNKNOWN" for r in self.requests.values()),
-            "policy": "tenant/root round-robin",
+            "policy": self.policy.name,
+            "upstream_accounts": [a.account_id for a in self.config.pool_accounts],
             "platform_id": self.accounts.platform_id,
             "accounts": len(self.accounts.accounts),
             "pool_capacity": self.config.pool_capacity,
@@ -418,10 +701,12 @@ class GatewayService:
             queued = sum(
                 r.tenant_id == tenant and r.state == "QUEUED" for r in self.requests.values()
             )
-            window_blocked = (
+            account_blocked = (
                 personal.window_requests >= account.requests_per_window
                 or personal.window_tokens >= account.tokens_per_window
-                or self.quota.window_requests >= self.config.requests_per_window
+            )
+            shared_blocked = (
+                self.quota.window_requests >= self.config.requests_per_window
                 or self.quota.window_tokens >= self.config.tokens_per_window
             )
             remaining = max(
@@ -433,11 +718,31 @@ class GatewayService:
                 - self.quota.consumed_units
                 - self.quota.reserved_units,
             )
-            retry = (
-                max(0.1, self.quota.window_start + self.config.window_seconds - time.time())
-                if window_blocked
-                else 0.2
+            # What budget admission can still take: consumption plus in-flight worst cases.
+            headroom = max(
+                0,
+                min(
+                    account.budget_units - personal.consumed_units - personal.worst_units,
+                    self.config.total_budget_units
+                    - self.quota.consumed_units
+                    - self.quota.worst_units,
+                ),
             )
+            # Sending resumes once every blocking window has rolled over.
+            resets = [
+                quota.window_start + self.config.window_seconds - self.clock()
+                for quota, blocked in ((personal, account_blocked), (self.quota, shared_blocked))
+                if blocked
+            ]
+            retry = max(0.1, *resets) if resets else 0.2
+            blocked_by: Literal["budget", "window", "queue"] | None = None
+            if headroom <= 0:
+                blocked_by = "budget"
+            elif resets:
+                blocked_by = "window"
+            elif queued >= 1:
+                blocked_by = "queue"
+            expected = self.estimator.expected_output(tenant)
             return PlatformFeedback(
                 platform_id=self.accounts.platform_id,
                 account_id=tenant,
@@ -460,8 +765,15 @@ class GatewayService:
                 account_window_tokens_remaining=max(
                     0, account.tokens_per_window - personal.window_tokens
                 ),
-                can_submit=not window_blocked and queued < 1 and remaining > 0 and shared > 0,
+                can_submit=blocked_by is None,
                 retry_after_seconds=retry,
+                account_inflight_worst_units=personal.worst_units,
+                account_admission_headroom_units=headroom,
+                output_price=self.prices.output,
+                cache_read_price=self.prices.cache_read,
+                cache_write_price=self.prices.cache_write,
+                expected_output_tokens=None if expected is None else math.ceil(expected),
+                blocked_by=blocked_by,
             )
 
     async def close(self) -> None:

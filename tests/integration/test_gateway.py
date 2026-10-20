@@ -26,7 +26,7 @@ class ControlledProvider:
         self.roots = []
         self.identities = []
 
-    async def generate(self, request: ModelRequest) -> ModelReply:
+    async def generate(self, request: ModelRequest, account: str | None = None) -> ModelReply:
         self.calls += 1
         self.roots.append(request.root_task_id)
         self.identities.append(request.request_id)
@@ -42,7 +42,7 @@ class ControlledProvider:
             content="verified", usage=Usage(input_tokens=1, output_tokens=1, cost_units=2)
         )
 
-    async def reconcile(self, request_id: str) -> ModelReply | None:
+    async def reconcile(self, request_id: str, account: str | None = None) -> ModelReply | None:
         return self.reply() if self.receipt else None
 
     async def close(self) -> None:
@@ -257,7 +257,7 @@ async def test_legacy_unknown_request_keeps_its_original_pool_receipt(tmp_path) 
     from taskloom.domain.ports import StoredRecord
 
     class ReceiptProvider(ControlledProvider):
-        async def reconcile(self, request_id):
+        async def reconcile(self, request_id, account=None):
             assert request_id == "legacy-request"
             return self.reply()
 
@@ -291,6 +291,73 @@ async def test_legacy_unknown_request_keeps_its_original_pool_receipt(tmp_path) 
         assert service.quota.inflight == service.quota.reserved_units == 0
         assert service.quota.consumed_units == 2
         assert service.account_quotas["alice"].consumed_units == 2
+    finally:
+        await service.close()
+        await store.close()
+
+
+async def test_http_provider_maps_only_unambiguous_refusals() -> None:
+    import httpx
+
+    from taskloom.adapters.provider import HTTPProvider
+    from taskloom.gateway.ports import ProviderRejected
+
+    outcomes: list[Exception | int] = []
+
+    def answer(_request: httpx.Request) -> httpx.Response:
+        outcome = outcomes.pop(0)
+        if isinstance(outcome, Exception):
+            raise outcome
+        return httpx.Response(outcome, json={})
+
+    provider = HTTPProvider("http://pool", "taskloom-fixed-model")
+    await provider.client.aclose()
+    provider.client = httpx.AsyncClient(
+        base_url="http://pool", transport=httpx.MockTransport(answer)
+    )
+    try:
+        for refusal in (429, 503, httpx.ConnectError("refused")):
+            outcomes.append(refusal)
+            with pytest.raises(ProviderRejected):
+                await provider.generate(request("refused"))
+        # Failures after the request may have reached the pool stay ambiguous.
+        for ambiguous in (500, 502, httpx.ReadTimeout("slow")):
+            outcomes.append(ambiguous)
+            with pytest.raises(httpx.HTTPError) as error:
+                await provider.generate(request("ambiguous"))
+            assert not isinstance(error.value, ProviderRejected)
+    finally:
+        await provider.close()
+
+
+async def test_pool_refusal_requeues_and_releases_the_slot(tmp_path) -> None:
+    from taskloom.gateway.ports import ProviderRejected
+
+    class RefusingProvider(ControlledProvider):
+        async def generate(self, request: ModelRequest, account: str | None = None) -> ModelReply:
+            self.calls += 1
+            if self.calls == 1:
+                raise ProviderRejected("pool busy")
+            return self.reply()
+
+    store = SQLiteRepository(tmp_path / "gateway.db")
+    provider = RefusingProvider()
+    service = GatewayService(store, provider, PlatformConfig(pool_capacity=1))
+    service.reject_backoff_seconds = 0.05
+    await service.start()
+    await service.accounts.register(AccountLogin(username="alice", password="test-password-123"))
+    try:
+        await service.register_root("alice", RootRegistration(root_task_id="root"))
+        await service.submit("alice", request("refused-once"))
+        await until(lambda: service.get("alice", "refused-once").state == "FINISHED")
+        record = service.get("alice", "refused-once")
+        assert (record.outcome, record.dispatch_attempts, provider.calls) == (
+            Outcome.SUCCEEDED,
+            1,
+            2,
+        )
+        assert service.quota.inflight == service.quota.reserved_units == 0
+        assert (await store.get("root_usage", "alice:root"))["consumed_units"] == 2
     finally:
         await service.close()
         await store.close()
