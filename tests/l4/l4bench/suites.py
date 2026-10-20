@@ -41,7 +41,7 @@ SLOTS_PER_ACCOUNT = 2
 # bench.py sets these per run in each worker, so configs and pools read them when built.
 PoolPlacement = Literal["gateway", "rotate", "sticky"]
 PLACEMENT: PoolPlacement = "gateway"
-POLICY: PolicyName = "rr"
+POLICY: PolicyName = "hybrid"
 # PlatformConfig fields every case sets (bench.py run --set), for development sweeps.
 OVERRIDES: dict[str, Any] = {}
 

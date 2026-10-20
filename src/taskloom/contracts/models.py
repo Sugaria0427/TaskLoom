@@ -284,19 +284,16 @@ class PlatformConfig(Contract):
     output_price: float = Field(default=1.0, gt=0, le=1000)
     cache_read_price: float = Field(default=1.0, ge=0, le=1000)
     cache_write_price: float = Field(default=1.0, ge=0, le=1000)
-    # WP5 policy switch: tenant/root round-robin, cumulative fairness in slot-seconds (drr) or
-    # cost units (costdrr), max-min of the slots each tenant and root holds right now, or
-    # max-min first with slot-second usage breaking ties (hybrid).
-    scheduling_policy: Literal["rr", "drr", "costdrr", "maxmin", "hybrid"] = "rr"
+    # L4 order: max-min of the slots each tenant (and root) holds now, recent slot-seconds
+    # breaking ties (hybrid, default); tenant/root round-robin (rr, pre-WP5); cumulative
+    # slot-second fairness (drr); or max-min alone (maxmin).
+    scheduling_policy: Literal["rr", "drr", "maxmin", "hybrid"] = "hybrid"
     # Empty: one upstream account from pool_url/pool_key/pool_capacity, as before. Otherwise
     # pool_capacity is the sum of the account capacities (set here when left unspecified).
     pool_accounts: list[PoolAccount] = Field(default_factory=list, max_length=64)
     # How long a request may step aside while the account holding its chain's prompt cache is
     # full, before it is placed on another account (delay scheduling). 0 places at once.
     cache_wait_seconds: float = Field(default=0.0, ge=0, le=600)
-    # How long a finished call's slot stays kept for the same chain's next call (anticipatory
-    # scheduling). 0 releases it at once.
-    anticipate_seconds: float = Field(default=0.0, ge=0, le=600)
 
     @model_validator(mode="after")
     def consistent_pool(self) -> "PlatformConfig":

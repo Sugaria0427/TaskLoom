@@ -1,6 +1,6 @@
 """Platform L4 scheduling policies: which queued model request takes the next pool slot.
 
-Provisional interface (WP5 first cut). The gateway owns admission, quotas and the ledger; a
+The gateway owns admission, quotas and the ledger; a
 policy only orders queued request keys. It sees plain values (tenant, root, key, clock time,
 cost units), never records, so it stays standard-library only and testable on its own.
 
@@ -14,6 +14,10 @@ Call protocol, all under the gateway lock:
   on_finish(key, now, cost_units)    the slot was released with a settled reply
 
 The feedback switch on the client never reaches this module: both modes use the same policy.
+
+The default is `hybrid`; `rr` (the pre-WP5 order), `drr` and `maxmin` are kept for
+comparison. Measurements, including the plan's cost-unit DRR that was dropped, are in
+docs/engineering/TaskLoom_WP5_L4调度策略设计.md.
 """
 
 from collections import OrderedDict, deque
@@ -23,7 +27,7 @@ from typing import Literal, Protocol
 
 from taskloom.policies.fair import FairQueue
 
-PolicyName = Literal["rr", "drr", "costdrr", "maxmin", "hybrid"]
+PolicyName = Literal["rr", "drr", "maxmin", "hybrid"]
 
 
 class SchedulingPolicy(Protocol):
@@ -92,13 +96,10 @@ class _Flow:
     running: dict[str, tuple[float, float]] = field(default_factory=dict)  # key -> (start, est)
     queued: int = 0
 
-    def usage(self, now: float, timed: bool = True) -> float:
+    def usage(self, now: float) -> float:
         # A running request counts at least its estimate, so one pass cannot hand every free
-        # slot to the same flow before anything has finished. Untimed (cost) usage cannot
-        # grow while running, so it counts exactly the estimate.
-        return self.charged + sum(
-            max(est, now - start) if timed else est for start, est in self.running.values()
-        )
+        # slot to the same flow before anything has finished.
+        return self.charged + sum(max(est, now - start) for start, est in self.running.values())
 
     @property
     def active(self) -> bool:
@@ -131,7 +132,6 @@ class OccupancyDrrPolicy:
     """
 
     name = "drr"
-    TIMED = True  # usage is slot-seconds, growing while a request runs
     ALPHA = 0.2  # EWMA weight of the newest finished request in a tenant's estimate
     DEFAULT_ESTIMATE = 1.0  # slot-seconds assumed before anything has finished
     MAX_ROOTS = 4096  # remembered root flows; idle ones beyond this are forgotten (LRU)
@@ -175,7 +175,7 @@ class OccupancyDrrPolicy:
         if key in self._running:
             return
         state, flow = self._flows(tenant, root)
-        estimate = self._expected(state, units)
+        estimate = state.estimate or self._estimate or self.DEFAULT_ESTIMATE
         state.running[key] = (now, estimate)
         flow.running[key] = (now, estimate)
         self._running[key] = (tenant, root)
@@ -188,7 +188,7 @@ class OccupancyDrrPolicy:
         state = self._tenants[tenant]
         start, _ = state.running.pop(key)
         state.roots[root].running.pop(key, None)
-        held = self._charge(start, now, cost_units)
+        held = max(0.0, now - start)
         state.charged += held
         state.roots[root].charged += held
         state.estimate = self._ewma(state.estimate, held)
@@ -201,17 +201,10 @@ class OccupancyDrrPolicy:
     def usage(self, tenant: str, now: float) -> float:
         """Slot-seconds charged to a tenant so far (diagnostics and tests)."""
         state = self._tenants.get(tenant)
-        return state.usage(now, self.TIMED) if state else 0.0
+        return state.usage(now) if state else 0.0
 
     def _rank(self, flow: _Flow, now: float) -> tuple[float, ...]:
-        return (flow.usage(now, self.TIMED), flow.order)
-
-    def _expected(self, state: _Tenant, units: int) -> float:
-        return state.estimate or self._estimate or self.DEFAULT_ESTIMATE
-
-    @staticmethod
-    def _charge(start: float, now: float, cost_units: int) -> float:
-        return max(0.0, now - start)
+        return (flow.usage(now), flow.order)
 
     def _ewma(self, previous: float | None, value: float) -> float:
         return value if previous is None else (1 - self.ALPHA) * previous + self.ALPHA * value
@@ -228,7 +221,7 @@ class OccupancyDrrPolicy:
         return state, flow
 
     def _lift(self, flow: _Flow, peers: list[_Flow], now: float) -> None:
-        active = [peer.usage(now, self.TIMED) for peer in peers if peer is not flow and peer.active]
+        active = [peer.usage(now) for peer in peers if peer is not flow and peer.active]
         if active:
             flow.charged = max(flow.charged, min(active))
 
@@ -242,28 +235,8 @@ class OccupancyDrrPolicy:
             del self._tenants[old_tenant].roots[old_root]
 
 
-class CostDrrPolicy(OccupancyDrrPolicy):
-    """The project plan's cost DRR: the same two-level least-attained-service, charged in cost
-    units instead of slot-seconds.
-
-    A running request counts the gateway's expected charge for it (its estimate reservation)
-    and is trued up to the actual charge when it settles, which is the plan's "依据真实用量
-    校正". Work-conserving with no idle credit, like the slot-second version.
-    """
-
-    name = "costdrr"
-    TIMED = False
-
-    def _expected(self, state: _Tenant, units: int) -> float:
-        return float(units) if units > 0 else super()._expected(state, units)
-
-    @staticmethod
-    def _charge(start: float, now: float, cost_units: int) -> float:
-        return float(cost_units)
-
-
 class HybridPolicy(OccupancyDrrPolicy):
-    """Max-min on the slots held now, then least attained slot-seconds among equals.
+    """Max-min on the slots held now, then least attained slot-seconds among equals. Default.
 
     The first key decides who is shortchanged at this instant, which a non-preemptive pool can
     only correct at dispatch time (MaxMinPolicy). Among parties holding the same number of
@@ -274,7 +247,7 @@ class HybridPolicy(OccupancyDrrPolicy):
     name = "hybrid"
 
     def _rank(self, flow: _Flow, now: float) -> tuple[float, ...]:
-        return (len(flow.running), flow.usage(now, self.TIMED), flow.order)
+        return (len(flow.running), flow.usage(now), flow.order)
 
 
 class _Party:
@@ -381,12 +354,10 @@ class MaxMinPolicy:
 
 
 def scheduling_policy(name: PolicyName) -> SchedulingPolicy:
-    if name == "drr":
-        return OccupancyDrrPolicy()
-    if name == "costdrr":
-        return CostDrrPolicy()
-    if name == "maxmin":
-        return MaxMinPolicy()
-    if name == "hybrid":
-        return HybridPolicy()
-    return RoundRobinPolicy()
+    policies: dict[str, Callable[[], SchedulingPolicy]] = {
+        "rr": RoundRobinPolicy,
+        "drr": OccupancyDrrPolicy,
+        "maxmin": MaxMinPolicy,
+        "hybrid": HybridPolicy,
+    }
+    return policies[name]()

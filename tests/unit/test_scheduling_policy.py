@@ -7,9 +7,8 @@ from pydantic import ValidationError
 
 from taskloom.contracts.models import PlatformConfig, PoolAccount
 from taskloom.policies.fair import FairQueue
-from taskloom.policies.placement import AffinityPlacement, HoldEstimator
+from taskloom.policies.placement import AffinityPlacement
 from taskloom.policies.scheduling import (
-    CostDrrPolicy,
     HybridPolicy,
     MaxMinPolicy,
     OccupancyDrrPolicy,
@@ -178,7 +177,6 @@ def test_occupancy_policy_bypasses_infeasible_work_and_skips_unknown_finishes() 
 def test_policy_factory_names() -> None:
     assert scheduling_policy("rr").name == "rr"
     assert scheduling_policy("drr").name == "drr"
-    assert scheduling_policy("costdrr").name == "costdrr"
     assert scheduling_policy("maxmin").name == "maxmin"
     assert scheduling_policy("hybrid").name == "hybrid"
 
@@ -218,35 +216,6 @@ def test_delay_scheduling_holds_a_request_back_for_its_full_account_for_a_bounde
     # Placing it clears the wait; the next time a1 is full it waits afresh.
     assert not placement.ready("chain", {"a1": 1}, 12.0)
     assert AffinityPlacement({"a0": 1}).ready("chain", {"a0": 1}, 0.0)
-    # An account expected to stay full longer than the wait allows is left at once.
-    assert placement.ready("chain", {"a1": 1}, 13.0, free_in={"a1": 30.0})
-    assert not placement.ready("chain", {"a1": 1}, 13.0, free_in={"a1": 5.0})
-
-
-def test_hold_estimator_falls_back_from_chain_to_tenant_to_everyone() -> None:
-    holds = HoldEstimator()
-    assert holds.expect("t", "c") is None
-    holds.learn("t", "c", 10.0)
-    holds.learn("t", "c", 20.0)
-    assert holds.expect("t", "c") == pytest.approx(13.0)
-    assert holds.expect("t", "other") == pytest.approx(13.0)
-    assert holds.expect("u", "x") == pytest.approx(13.0)
-
-
-def test_anticipation_keeps_a_finished_chains_slot_for_its_next_call_for_a_while() -> None:
-    placement = AffinityPlacement({"a0": 1, "a1": 1}, anticipate_seconds=5.0)
-    assert placement.choose("chain", {}, 0.0) == "a0"
-    placement.released("chain", "a0", 10.0)
-    # Others see a0 as taken and go to a1; with a1 busy they cannot be placed at all.
-    assert placement.ready("other", {}, 11.0)
-    assert placement.choose("other", {}, 11.0) == "a1"
-    assert not placement.ready("late", {"a1": 1}, 12.0)
-    assert placement.ready("chain", {"a1": 1}, 12.0)
-    assert placement.choose("chain", {"a1": 1}, 12.0) == "a0"
-    # The keep is used up; an expired keep frees the slot for everyone.
-    placement.released("chain", "a0", 20.0)
-    assert placement.ready("late", {"a1": 1}, 25.0)
-    assert placement.has_free({"a1": 1})
 
 
 def _drive(policy: SchedulingPolicy, held: dict[str, int], queued: dict[str, int]) -> str | None:
@@ -300,26 +269,10 @@ def test_maxmin_balances_roots_inside_a_tenant_and_bypasses_infeasible_heads() -
     assert policy.pick(lambda k: k != "n1", 1.0) == "w3"
 
 
-def test_cost_drr_charges_the_estimate_while_running_and_the_actual_cost_after() -> None:
-    policy = CostDrrPolicy()
-    policy.push("big", "big", "b0", 0.0)
-    policy.push("small", "small", "s0", 0.0)
-    assert policy.pick(lambda _: True, 0.0) == "b0"
-    policy.on_dispatch("b0", "big", "big", 0.0, units=1000)
-    assert policy.usage("big", 50.0) == 1000  # not growing with time
-    assert policy.pick(lambda _: True, 0.0) == "s0"
-    policy.on_dispatch("s0", "small", "small", 0.0, units=10)
-    policy.on_finish("b0", 60.0, 400)
-    assert policy.usage("big", 60.0) == 400
-    policy.push("big", "big", "b1", 61.0)
-    policy.push("small", "small", "s1", 61.0)
-    assert policy.pick(lambda _: True, 61.0) == "s1"
-
-
 def test_single_account_config_is_unchanged_and_accounts_define_capacity() -> None:
     legacy = PlatformConfig(pool_capacity=3)
     assert legacy.pool_accounts == [] and legacy.pool_capacity == 3
-    assert legacy.scheduling_policy == "rr"
+    assert legacy.scheduling_policy == "hybrid"
     pooled = PlatformConfig(
         pool_accounts=[PoolAccount(account_id="a0", capacity=2), {"account_id": "a1"}]
     )

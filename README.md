@@ -81,4 +81,4 @@ python tools/project.py verify-isolated
 
 check 检查格式、lint、严格类型和模块边界；test 包含领域、集成与完整进程流程。Linux 专项验证真实 OOM、守护重启和 cgroup 回收。verify 执行 locked 安装、静态检查、测试、构建与包审计；verify-isolated 从干净副本和新环境验证，再安装 wheel 到源码之外执行双账户 self-test。
 
-当前基础轮转保留为算法对照。平台配置 `scheduling_policy` 选择 `rr`（默认，用户/根任务轮转）或 `drr`（按槽位秒计费的两级占用公平，暂定版本）；`pool_accounts` 列出多个上游账号时，网关在派发时按缓存亲和选择账号，留空则与单账号配置相同。下一阶段先增加多工具和子 Agent 工作负载，再比较成本 DRR、阶段银行家、期限/老化与自适应反馈的真实增量。
+平台配置 `scheduling_policy` 默认是 `hybrid`：空槽先给当前占槽最少的用户、用户内部再给占槽最少的根任务，占槽相同时近期槽位秒少的优先。`rr`（原用户/根任务轮转）、`drr`、`maxmin` 保留为对照，实验数据见 [WP5 调度策略设计](docs/engineering/TaskLoom_WP5_L4调度策略设计.md)。`pool_accounts` 列出多个上游账号时，网关在派发时按缓存亲和选择账号，留空则与单账号配置相同。下一阶段先增加多工具和子 Agent 工作负载，再比较成本 DRR、阶段银行家、期限/老化与自适应反馈的真实增量。

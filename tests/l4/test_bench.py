@@ -68,8 +68,14 @@ def test_gate_zeroes_inconsistent_runs_and_anchors_are_monotone() -> None:
     assert scoring.run_score(worse) < scoring.run_score(m)
 
 
-def test_round_robin_lets_decode_heavy_users_hold_the_pool() -> None:
-    """Baseline the WP5 policy must beat: rr shares dispatches, not slot time."""
+@pytest.mark.parametrize(("policy", "passes"), [("rr", False), ("hybrid", True)])
+def test_decode_heavy_users_hold_the_pool_under_rr_but_not_hybrid(
+    policy: str, passes: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """rr shares dispatches, so long decodes keep slots while others wait; hybrid gives a
+    free slot to whoever holds the fewest. The attacker's total share barely changes: what
+    differs is who holds the slots while someone is waiting."""
+    monkeypatch.setattr(suites, "POLICY", policy)
     probe = suites.PROBES["decode-heavy"]
     case = probe.build(1, "attack")
     result = run_scenario(
@@ -78,7 +84,7 @@ def test_round_robin_lets_decode_heavy_users_hold_the_pool() -> None:
     attack = {**measure(result), **(probe.extract(result, case) if probe.extract else {})}
     assert attack["consistent"]
     assert attack["attacker_share"] > 0.5  # four accounts, one of them holds most slot time
-    assert probe.judge(attack, None) < scoring.PASS
+    assert (probe.judge(attack, None) >= scoring.PASS) is passes
 
 
 @pytest.mark.skipif(

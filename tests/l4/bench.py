@@ -48,7 +48,7 @@ def execute(run: dict[str, Any]) -> dict[str, Any]:
     started = time.monotonic()
     # Worker processes build their own pools; suites.pool() reads this at call time.
     suites.PLACEMENT = run.get("placement", "rotate")
-    suites.POLICY = run.get("policy", "rr")
+    suites.POLICY = run.get("policy", "hybrid")
     suites.OVERRIDES = run.get("overrides", {})
     case, probe = build(run)
     result = run_scenario(
@@ -73,7 +73,7 @@ def plan(
     probes: list[str],
     seeds: int,
     placement: suites.PoolPlacement = "gateway",
-    policy: str = "rr",
+    policy: str = "hybrid",
     samples: int | None = None,
     loads: tuple[float, ...] | None = None,
     uncoordinated: bool = True,
@@ -228,7 +228,7 @@ def main() -> None:
     runner.add_argument("--jobs", type=int, default=8)
     runner.add_argument("--out", type=Path)
     runner.add_argument("--placement", choices=("gateway", "rotate", "sticky"), default="gateway")
-    runner.add_argument("--policy", choices=get_args(PolicyName), default="rr")
+    runner.add_argument("--policy", choices=get_args(PolicyName), default="hybrid")
     # Development subsets and sweeps; the reported benchmark uses the defaults.
     runner.add_argument("--samples", type=int, help="first N general samples per family")
     runner.add_argument("--loads", type=float, nargs="*", help="general loads to run")

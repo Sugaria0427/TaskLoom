@@ -22,7 +22,7 @@ from taskloom.domain.model import DomainError, Outcome
 from taskloom.domain.ports import Repository, StoredRecord
 from taskloom.gateway.accounts import AccountService
 from taskloom.gateway.ports import ModelProvider, ProviderRejected
-from taskloom.policies.placement import AffinityPlacement, HoldEstimator
+from taskloom.policies.placement import AffinityPlacement
 from taskloom.policies.reservation import Estimate, Prices, ReservationEstimator, worst_units
 from taskloom.policies.scheduling import scheduling_policy
 
@@ -65,12 +65,10 @@ class GatewayService:
             AffinityPlacement(
                 {a.account_id: a.capacity for a in config.pool_accounts},
                 config.cache_wait_seconds,
-                config.anticipate_seconds,
             )
             if config.pool_accounts
             else None
         )
-        self.holds = HoldEstimator()
         self.lock = asyncio.Lock()
         self.wake = asyncio.Event()
         self._loop: asyncio.Task[None] | None = None
@@ -142,7 +140,6 @@ class GatewayService:
         # more slots than its own; otherwise a heavier tenant would take the free slot, often
         # for minutes, and caching would undo max-min fairness.
         ceiling: int | None = None
-        free_in = self._free_in(busy, now)
 
         def feasible(item: str) -> bool:
             nonlocal ceiling
@@ -155,31 +152,12 @@ class GatewayService:
                 return False
             if not self._feasible(record):
                 return False
-            if self.placement is None or self.placement.ready(
-                self._chain(record), busy, now, free_in
-            ):
+            if self.placement is None or self.placement.ready(self._chain(record), busy, now):
                 return True
             ceiling = held if ceiling is None else min(ceiling, held)
             return False
 
         return self.policy.pick(feasible, now)
-
-    def _free_in(self, busy: Counter[str], now: float) -> dict[str, float]:
-        """Expected seconds until each full upstream account frees a slot."""
-        if self.placement is None or self.placement.wait_seconds <= 0:
-            return {}
-        left: dict[str, float] = {}
-        for record in self.requests.values():
-            account = record.upstream_account
-            if account is None or record.state not in ("DISPATCH_INTENT", "UNKNOWN"):
-                continue
-            if busy[account] < self.placement.capacities.get(account, 0):
-                continue
-            expected = self.holds.expect(record.tenant_id, self._chain(record)) or 0.0
-            started = datetime.fromisoformat(record.dispatched_at or self.now()).timestamp()
-            remaining = max(0.0, expected - (now - started))
-            left[account] = min(left.get(account, remaining), remaining)
-        return left
 
     def _chain(self, record: GatewayRecord) -> str:
         # A chain is one agent of one user: the unit that carries a prompt cache.
@@ -622,11 +600,6 @@ class GatewayService:
             self.quota = quota
             self.account_quotas[record.tenant_id] = account_quota
             self.policy.on_finish(key, self.clock(), reply.usage.cost_units)
-            if self.placement is not None:
-                self.placement.released(self._chain(record), record.upstream_account, self.clock())
-            if record.dispatched_at is not None:
-                held = self.clock() - datetime.fromisoformat(record.dispatched_at).timestamp()
-                self.holds.learn(record.tenant_id, self._chain(record), max(0.0, held))
             self.estimator.settled(
                 key, record.tenant_id, record.request.agent_id, reply.usage.input_tokens,
                 reply.usage.output_tokens, reply.usage.cost_units, self.clock(),

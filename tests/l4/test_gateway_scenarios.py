@@ -75,7 +75,7 @@ def test_mixed_load_completes_when_capacity_is_ample() -> None:
 
 @pytest.mark.parametrize("coordinated", [False, True])
 def test_round_robin_equalizes_dispatches_not_cost(coordinated: bool) -> None:
-    """Baseline for cost DRR: count fairness lets long requests take most pool service."""
+    """The rr baseline: count fairness lets long requests take most pool service."""
     workload = Workload(
         (account("heavy"), account("light")),
         (
@@ -91,7 +91,8 @@ def test_round_robin_equalizes_dispatches_not_cost(coordinated: bool) -> None:
             ),
         ),
     )  # fmt: skip
-    result = run_scenario(Scenario(workload, ROOMY, coordinated=coordinated))
+    config = ROOMY.model_copy(update={"scheduling_policy": "rr"})
+    result = run_scenario(Scenario(workload, config, coordinated=coordinated))
     assert result.violations == []
     # Compare only the contended period, before either account runs alone.
     cut = min(t.finished for t in result.tasks if t.finished is not None)

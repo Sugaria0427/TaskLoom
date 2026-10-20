@@ -51,7 +51,7 @@ benchmark 的用途是：用同一套负载、同一组指标和同样的随机�
 ```bash
 uv run --locked python tests/l4/bench.py run                  # 完整运行：一般样本 × 两档负载，探针 × 3 个种子
 uv run --locked python tests/l4/bench.py run --quick          # 冒烟：每类 2 个样本、每个探针 1 个种子
-uv run --locked python tests/l4/bench.py run --policy drr     # 网关按槽位占用时间公平调度（暂定）
+uv run --locked python tests/l4/bench.py run --policy rr      # 对照：原用户/根任务轮转
 uv run --locked python tests/l4/bench.py run --placement rotate  # 网关不放置，由模型池轮转放置（WP5 前的设置）
 uv run --locked python tests/l4/bench.py compare OLD NEW      # 两次结果在相同样本和种子上做配对差值
 uv run --locked python tests/l4/bench.py facts                # 用本地轨迹重算校准常数，列出偏差
@@ -91,7 +91,7 @@ uv run --locked python tests/l4/bench.py export-traces --abyss PATH/abyss.sqlite
 - **上游账号与缓存**：模型池由多个上游账号组成，每个账号 `SLOTS_PER_ACCOUNT` 个槽位，各自持有独立的提示缓存。链的缓存只留在服务过它的账号上，并随空闲时间衰减（`facts.cache_retention`）；调用落到别的账号时，未命中部分按未缓存价格补计，记入该次计费。链的第一次调用缓存状态未知，按计划计费。依据是 Aether 自 2026-09-05 起的数据（此后每个提供商是独立账号，统计输入不少于 2 万 token 的请求）。口径是"该用户最近是否用过这个上游 Key"，而不是与上一个请求比较：
   - 99.6% 的后续请求落在近期用过的上游上，命中率 0.93；从未用过的上游命中率只有 0.12（仅与其他用户共享的前缀）；
   - 缓存没有固定的 TTL，而是在约一小时内逐渐衰减：空闲 5–10 分钟命中 0.81，10–30 分钟 0.70，30–60 分钟 0.57，1–6 小时 0.31。
-- **调度策略**：`run --policy` 设置 `PlatformConfig.scheduling_policy`：`rr`（默认）是用户/根任务轮转，`drr` 是按实测槽位秒计费的两级占用公平（暂定版本，见 `taskloom/policies/scheduling.py`）。
+- **调度策略**：`run --policy` 设置 `PlatformConfig.scheduling_policy`，默认 `hybrid`；`rr`、`drr`、`maxmin` 为对照，见 `taskloom/policies/scheduling.py`。`--samples`、`--loads`、`--no-uncoordinated`、`--set KEY=JSON` 用于开发时跑子集和扫参数，正式结果使用默认值。
 - **账号放置**：`run --placement` 选择由谁选上游账号：`gateway`（默认）在 `PlatformConfig.pool_accounts` 中列出模型池的账号（`a0`、`a1`……），由网关在派发时放置（缓存亲和：链上次用的账号有空槽就留在原处，否则选负载最低的账号）；`rotate` 和 `sticky` 不列账号，网关不指定账号，由模型池的替身放置：`rotate` 是不看缓存的轮转负载均衡，`sticky` 优先选最近服务过该链的账号，用于和 WP5 之前的结果比较。策略和放置方式写进每次运行的 `run` 字段和 `provenance`；`compare` 只按样本、负载、探针和种子配对，因此可以直接比较不同策略或放置方式的两次结果。
 
 ### 4.4 一般样本
