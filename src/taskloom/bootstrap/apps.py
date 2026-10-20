@@ -35,6 +35,7 @@ from taskloom.contracts.models import (
     PlatformFeedback,
     PlatformLogin,
     PoolConfig,
+    PriorityUpdate,
     RootRegistration,
     TaskCreate,
     TaskState,
@@ -421,6 +422,10 @@ def client_app(base: Path, config: ClientConfig) -> FastAPI:
     @app.post("/api/v1/tasks/{task_id}/cancel")
     async def cancel(task_id: str) -> TaskState:
         return await service.cancel(task_id)
+
+    @app.post("/api/v1/tasks/{task_id}/priority")
+    async def update_priority(task_id: str, body: PriorityUpdate) -> TaskState:
+        return await service.update_priority(task_id, body.priority)
 
     @app.post("/api/v1/tasks/{task_id}/resume")
     async def resume(task_id: str) -> TaskState:

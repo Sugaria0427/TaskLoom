@@ -465,6 +465,21 @@ class ClientService:
         await self.reconcile()
         return self.get(task_id)
 
+    async def update_priority(self, task_id: str, priority: str) -> TaskState:
+        if priority not in {"low", "normal", "high"}:
+            raise DomainError("INVALID_PRIORITY", "Priority must be low, normal, or high")
+        async with self.lock:
+            task = self.get(task_id)
+            if task.outcome != Outcome.PENDING or task.cancel_requested:
+                raise DomainError("TASK_NOT_PENDING", "Only pending tasks can change priority")
+            task.specification.priority = priority
+            await self._save_task(task)
+            for attempt in self.attempts.values():
+                if attempt.root_task_id == task_id and attempt.outcome == Outcome.PENDING:
+                    self.models.set_priority(attempt.attempt_id, priority)
+                    self.tools.set_priority(attempt.attempt_id, priority)
+            return self.get(task_id)
+
     async def resume(self, task_id: str) -> TaskState:
         async with self.lock:
             task = self.get(task_id)
@@ -575,7 +590,13 @@ class ClientService:
                     await self._save_attempt(attempt)
                 raise
 
-        return await self.models.submit(attempt.attempt_id, task_id, Resources(slots=1), execute)
+        return await self.models.submit(
+            attempt.attempt_id,
+            task_id,
+            Resources(slots=1),
+            execute,
+            priority=self.get(task_id).specification.priority,
+        )
 
     async def tool(self, task_id: str, call: ToolCall) -> JsonObject:
         attempt = await self._attempt(task_id, f"{task_id}-tool-{call.call_id}", "tool")
@@ -667,7 +688,13 @@ class ClientService:
                 await self._save_attempt(attempt)
                 raise QuarantinedExecution("Executor transport failed") from error
 
-        return await self.tools.submit(attempt.attempt_id, task_id, self._tool_demand(), execute)
+        return await self.tools.submit(
+            attempt.attempt_id,
+            task_id,
+            self._tool_demand(),
+            execute,
+            priority=self.get(task_id).specification.priority,
+        )
 
     async def _settle_tool(self, attempt: AttemptState, state: ToolState) -> None:
         attempt.quiescent = state.quiescent
