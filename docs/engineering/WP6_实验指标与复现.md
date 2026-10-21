@@ -46,6 +46,14 @@ python3 tools/wp6_report.py /tmp/wp6-snapshot.json --run-manifest /tmp/wp6-run.j
 
 `wp6_simulate.py` 使用固定种子和同一到达序列，在四种工具/API 容量条件下运行两阶段 FIFO 离散事件模型。输入文件必须标明 `synthetic-fixture` 或 `measured`；后者还必须给出实测来源。仓库附带的示例仅为合成夹具，不能作为 TaskLoom 性能收益证据。
 
+短期实测完成后，可以从同一次运行的快照与清单生成实测校准输入：
+
+```bash
+python3 tools/wp6_calibrate.py --snapshot /tmp/wp6-capture.json --manifest /tmp/wp6-run.json --output /tmp/wp6-measured-calibration.json
+```
+
+校准器只接受成功且通过质量检查、消费已结算的根任务；缺失或含糊的样本会报错，不会用合成值补齐。模型阶段的区间可能仍包含平台 L4 等待，使用结果时须保留这一限制。
+
 ```bash
 python3 tools/wp6_simulate.py --calibration configs/experiments/synthetic_calibration.json --seed 1 --days 30 --arrivals-per-day 24 --output /tmp/wp6-simulated.json
 python3 tools/wp6_plot.py --input /tmp/wp6-simulated.json --output /tmp/wp6-simulated.svg
