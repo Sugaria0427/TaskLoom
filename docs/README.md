@@ -1,40 +1,38 @@
 # TaskLoom「织序」文档入口
 
-本目录保存正式说明书、开发路线、工程计划、开题报告、设计图和引用审查。阅读顺序为当前完整说明书、工程搭建计划、系统图示及引用依据；编写工具、素材、构建输出与原始研究材料分别在仓库的对应目录维护。
+更新日期：2026-10-20。当前文档沿“痛点发现、问题解决、架构设计、技术实施与验收”展开。先用项目说明书理解总体方案，再按当前实现记录参与开发；研究证据与历史稿分别保存。
 
-## 1. 正式文档
+## 1. 项目与研究
 
-| 阅读目的 | 文件 |
+本组文档回答“为什么做、解决什么、按什么边界做”。研究方案中的算法与当前代码状态分别标明。
+
+| 阅读目的 | 权威入口 |
 |---|---|
-| 了解当前完整项目、两端设计、OS 技术和验收。 | [项目说明书：当前完整方案](TaskLoom_项目说明书_当前完整方案.md) |
-| 从 Gitee 加入团队、生成成员邀请链接、认领工作包和提交 PR。 | [Gitee 协作说明](engineering/TaskLoom_Gitee协作说明.md) |
-| 从零建立本机代码骨架，明确模块、接口、工程约束和验收。 | [工程骨架搭建计划](engineering/TaskLoom_工程骨架搭建计划.md) |
-| 了解当前代码结构、运行进程、状态所有权及扩展接口。 | [基础工程架构](engineering/TaskLoom_基础工程架构.md) |
-| 复现启动、测试、Linux 保护与独立安装结果。 | [基础工程验收记录](engineering/TaskLoom_基础工程验收记录.md) |
-| 了解当前统一系统、账户与固定模型池改造及验证。 | [统一系统改造与验收](engineering/TaskLoom_统一系统改造与验收.md) |
-| 了解自研范围、OpenClaw 的角色与对照实验。 | [开发路线与 OpenClaw 对照方案](TaskLoom_开发路线与OpenClaw对照方案.md) |
-| 了解银行家算法、死锁控制和优先级继承。 | [OS 算法补充说明](TaskLoom_OS算法补充说明.md) |
-| 查阅前版说明与详细技术计划。 | [前版分层说明书](TaskLoom_项目说明书_分层清晰版.md) · [Markdown 计划书](TaskLoom_开题项目计划书.md) · [Word 计划书](TaskLoom_开题项目计划书.docx) |
-| 准备答辩及团队讲述。 | [答辩 Q&A](TaskLoom_答辩Q&A.md) · [答辩 PPT](presentations/TaskLoom_答辩修订版/TaskLoom_开题报告_答辩修订版.pptx) · [PDF 预览](presentations/TaskLoom_答辩修订版/TaskLoom_开题报告_答辩修订版.pdf) |
+| 理解痛点、目标、两端四层架构、OS 方法、团队分工与评价。 | [当前完整项目说明书](TaskLoom_项目说明书_当前完整方案.md) |
+| 核查四层问题、已有覆盖、剩余严重度和公开证据。 | [Agent 调研资料库](../research/agent-orchestrate/README.md) |
+| 明确自研运行时主线及真实 OpenClaw 对照。 | [开发路线与 OpenClaw 对照方案](TaskLoom_开发路线与OpenClaw对照方案.md) |
+| 理解阶段银行家、死锁预防与优先级继承的条件和实验。 | [OS 算法补充说明](TaskLoom_OS算法补充说明.md) |
 
-个人端包含 L1 本地资源、L2 Harness 任务管理与 L3 请求管理；平台端提供注册账号、L4 和统一固定模型池。个人端使用本平台账号 API Key，所有模型请求经本平台。模型配置与总服务容量在比较中保持固定，性能指标通过后续实验测量。
+## 2. 实现与开发
 
-2026-10-15 完整说明书、工程架构与搭建计划已对齐 0.2 统一系统。基础工程验收记录保存 0.1 基线，最新结果见统一系统改造记录。前版说明、PPT 和图稿作为历史设计保存，正式展示前按当前账号与服务池模型同步。
+本组文档回答“现在做到哪里、在哪里开发、怎样交付”。当前能力只按已合并代码认定；PR 审查快照集中维护在状态文档中。
 
-## 2. 图稿、引用与审查
-
-| 目录 | 内容 |
+| 阅读目的 | 权威入口 |
 |---|---|
-| [pictures/](pictures/README.md) | 前版 UML 与思维导图，保留可编辑 draw.io 与导出；展示前按 0.2 账号及模型池关系同步。 |
-| [diagrams/](diagrams/README.md) | 前版建模图稿，保留 PlantUML 和可编辑源文件，供追溯使用。 |
-| [presentations/](presentations/) | 当前答辩稿、前版 PPT/PDF，以及各自的修改说明和方案。 |
-| [references/](references/) | [引用核查](references/final_citation_audit.md)、[选材说明](references/source_selection.md)及来源索引。 |
-| [reviews/](reviews/) | [原 PPT 审查意见](reviews/TaskLoom_PPT_20260930/审查意见.md)和计划书技术审查。 |
+| 查看已实现、待合并、待研究能力及最新验证。 | [当前实现与开发状态](engineering/TaskLoom_当前实现与开发状态.md) |
+| 启动系统和运行统一检查。 | [根 README](../README.md) |
+| 理解代码模块、实际进程、接口、配置和账本所有权。 | [基础工程架构](engineering/TaskLoom_基础工程架构.md) |
+| 按阶段推进工程、对齐工作包接口及验收条件。 | [工程搭建与后续开发计划](engineering/TaskLoom_工程骨架搭建计划.md) |
+| 理解工作台、会话、任务与指标口径。 | [个人端工作台与验收](engineering/TaskLoom_个人端工作台与验收.md) |
 
-## 3. 工作区与调研
+## 3. 协作与历史
 
-[Agent 工作区](../agent-workspace/README.md)集中维护编写程序、文档素材、原始输入与检查输出。[Agent 调研入口](../research/agent-orchestrate/README.md)维护四层材料及统一报告；[文档输入材料归档](../research/agent-orchestrate/materials/_archive/documentation_inputs/README.md)保存附件与早期 OS 材料。历史备份统一保存在[backup](../backup/)中。
+长期工程规则位于根 [AGENTS.md](../AGENTS.md)；实际检查由 `tools/project.py` 定义。
 
-## 4. 使用与维护
+| 阅读目的 | 入口 |
+|---|---|
+| 加入仓库、邀请成员、认领工作包。 | [Gitee 协作说明](engineering/TaskLoom_Gitee协作说明.md) |
+| 准备可独立验收的提交、核对契约并记录验证。 | [PR 提交与验收约定](engineering/TaskLoom_PR提交与验收约定.md)、[PR 模板](../.gitee/PULL_REQUEST_TEMPLATE.md) |
+| 追溯旧说明书、开题计划、图稿和历史验收。 | [备份索引](../backup/README.md) |
 
-修改说明书时维护 Markdown 正文；修改正式图稿时使用对应的可编辑源文件。运行生成程序前，确认工作区说明及输出位置。当前分层说明书独立维护，原计划书的构建程序负责技术版计划书。
+当前正式正文以本目录入口列出的文档为准。前版图稿和答辩材料保存为历史版本；后续展示按当前完整说明书与实际实现重绘、同步。论文原文、网页快照及编写输出保留在本地，公开核查从研究来源索引访问原始网址。

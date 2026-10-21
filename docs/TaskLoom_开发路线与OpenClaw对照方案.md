@@ -2,21 +2,21 @@
 
 > 自研调度核心与轻量执行框架，采用 OpenClaw 的成熟机制建立对照，并保留真实系统接入路径。
 
-**日期** 2026-10-14 · **状态** 当前开发建议 · **读者** 项目成员与指导教师
+**更新日期** 2026-10-20 · **证据截至** 2026-10-14 · **状态** 已确定开发路线 · **读者** 项目成员与指导教师
 
 本文依次说明路线选择及报告取舍、系统设计与 OS 方法、对照实验、实施与验证条件。TaskLoom 延续个人端 L1—L3 与平台端 L4 的四层模型，比较中固定模型能力、资源与额度，并评价完整任务的交付质量。
 
-证据分为两类：附加报告记录了作者在 OpenClaw 2026.10.3 环境中的 mock 模型服务接入；仓库调研记录了固定版本的接口、源码和问题状态。自研框架的功能、调度收益与 OpenClaw 兼容性属于后续实施和验证内容。
+证据分为两类：附加报告记录了作者在 OpenClaw 2026.10.3 环境中的 mock 模型服务接入；仓库调研记录了固定版本的接口、源码和问题状态。自研运行时的 0.2 基线已形成；多工具与高级调度仍在开发，收益通过后续实验评价。已合并与待合并范围见[当前实现与开发状态](engineering/TaskLoom_当前实现与开发状态.md)。
 
-**完整方案入口（2026-10-15）** 系统范围、两端架构、技术与首版验收见[当前完整项目说明书](TaskLoom_项目说明书_当前完整方案.md)。本文作为路线选择与对照原则的专题依据。
+**完整方案入口** 系统范围、两端架构、技术与首版验收见[当前完整项目说明书](TaskLoom_项目说明书_当前完整方案.md)。本文作为路线选择与对照原则的专题依据。
 
 ---
 
 ## 1. 路线选择与报告取舍
 
-### 1.1 当前开发建议
+### 1.1 已确定的开发主线
 
-建议将首版主线调整为：**独立开发 TaskLoom 调度核心与轻量 Agent 执行框架，以 OpenClaw 的相关机制作为方法对照，以真实 OpenClaw 作为后续集成和应用验证对象。**
+首版主线为：**独立开发 TaskLoom 调度核心与轻量 Agent 执行框架，采用 OpenClaw 的相关机制作为方法对照，将真实原版 OpenClaw 对照纳入首版实验，完整兼容接入作为后续扩展。**
 
 这项调整改变的是实现载体，保留原有问题和目标：在个人电脑上协调工具资源与模型请求，在平台上分配多用户的共享请求机会，使相同资源和额度支持更多及时、合格完成的任务。
 
@@ -24,7 +24,7 @@
 
 ### 1.2 为什么调整 OpenClaw 的角色
 
-OpenClaw 已经具备会话串行化、并发限制、容量组、优先级与老化、父子任务交接和进程清理等能力。项目的主要贡献应围绕根任务份额、工具资源成本、请求额度与跨阶段等待展开。[OC-D06](../research/agent-orchestrate/materials/L2_harness_tasks/OC-D06/queue.md)、[OC-S02](../research/agent-orchestrate/materials/L2_harness_tasks/OC-S02/command-queue.types.ts)
+OpenClaw 已经具备会话串行化、并发限制、容量组、优先级与老化、父子任务交接和进程清理等能力。项目的主要贡献应围绕根任务份额、工具资源成本、请求额度与跨阶段等待展开。[OC-D06](https://github.com/openclaw/openclaw/blob/6a64431a10b638958cdeccc782f2b36074274776/docs/concepts/queue.md)、[OC-S02](https://github.com/openclaw/openclaw/blob/6a64431a10b638958cdeccc782f2b36074274776/src/process/command-queue.types.ts)
 
 原生队列的 `taskIdentity` 用于诊断，相关准入字段主要描述容量、类别和等待。按完整任务计量成本和分配服务份额，仍具有可检验的机制空间。
 
@@ -33,14 +33,14 @@ OpenClaw 已经具备会话串行化、并发限制、容量组、优先级与�
 | 路线 | 主要收益 | 主要投入与适用定位 |
 |---|---|---|
 | 基于 OpenClaw 插件与外部服务开发。 | 能复用真实 Agent 循环、工具和已有生命周期。 | 需要衔接外部队列与原生运行许可，适合作为接入路线。 |
-| 自研调度核心与轻量执行框架。 | 能直接管理步骤状态、资源许可和续接，便于策略对照与 OS 展示。 | 需要实现最小可靠执行底座，建议作为首版主线。 |
+| 自研调度核心与轻量执行框架。 | 能直接管理步骤状态、资源许可和续接，便于策略对照与 OS 展示。 | 0.2 底座已形成，后续完善可验收工作负载与调度机制。 |
 | 重建完整 Agent 成品平台。 | 产品形态可以全面自定义。 | 渠道、插件生态和多运行时会显著扩大范围，首版投入集中在执行与调度能力。 |
 
 独立开发带来的是控制与验证条件。课设价值来自明确场景下的机制设计和量化改善，性能研究需要与合理配置的成熟方案比较。
 
 ### 1.3 附加报告中可采用的部分
 
-附加报告《TaskLoom 是否修改 OpenClaw 源码利弊分析》提供了接入经验和工程取舍。以下四组内容进入本方案；原报告保存在[工作输入目录](../agent-workspace/inputs/reports/TaskLoom_是否修改OpenClaw源码_利弊分析.md)，引用使用同一份文件。
+附加报告《TaskLoom 是否修改 OpenClaw 源码利弊分析》提供了接入经验和工程取舍。以下四组内容进入本方案；原报告保存在工作输入目录（本地留存：`agent-workspace/inputs/reports/TaskLoom_是否修改OpenClaw源码_利弊分析.md`），引用使用同一份文件。
 
 | 内容 | 采用方式 | 证据与设计处理 |
 |---|---|---|
@@ -55,7 +55,7 @@ OpenClaw 已经具备会话串行化、并发限制、容量组、优先级与�
 
 ### 1.4 版本与证据范围
 
-报告中的运行环境为 OpenClaw 2026.10.3。仓库核查同时保留稳定版 `59cb44796b0f1f0daa0e37af8b1495abb45d9bc1` 与 main 快照 `6a64431a10b638958cdeccc782f2b36074274776`，版本记录见[OC-M01](../research/agent-orchestrate/materials/L2_harness_tasks/OC-M01/pin.json)。
+报告中的运行环境为 OpenClaw 2026.10.3。仓库核查同时保留稳定版 `59cb44796b0f1f0daa0e37af8b1495abb45d9bc1` 与 main 快照 `6a64431a10b638958cdeccc782f2b36074274776`，版本记录见[OC-M01](https://github.com/openclaw/openclaw/releases/tag/v2026.10.3)。
 
 已核查稳定版采用严格类别优先；main 快照增加有界优先超越与老化。因此，机制对照建议采用固定的 main 快照，稳定版保留作接入和版本对照。真实运行的代码、配置与修复集合在实验前登记。
 
@@ -80,7 +80,7 @@ OpenClaw 已经具备会话串行化、并发限制、容量组、优先级与�
 
 ### 2.2 轻量执行框架的范围
 
-首版实现模型调用、工具注册、任务分支、动态依赖、状态保存和调度接口。模型 SDK、数据库和子进程管理库可以复用成熟组件，TaskLoom 自行定义任务推进和资源许可协议。
+首版目标覆盖模型调用、工具注册、任务分支、动态依赖、状态保存和调度接口；当前合并基线是有界文档统计循环、单工具与基础轮转，后续按工作包扩展。模型 SDK、数据库和子进程管理库可以复用成熟组件，TaskLoom 自行定义任务推进和资源许可协议。
 
 一次任务按以下过程运行，每一步都产生可追踪的状态和事件。
 
@@ -89,7 +89,7 @@ OpenClaw 已经具备会话串行化、并发限制、容量组、优先级与�
 3. **取得执行许可。** 工具步骤进入 L1，模型步骤进入 L3，随后由 L4 安排平台模型池派发。等待原因、许可和实际开始分别记录。
 4. **接收结果并推进。** 结果保存后解锁后续步骤；失败、取消与恢复按具体尝试处理。根任务按成果验收确认交付。
 
-Task、Agent、Step 与 Attempt 的含义沿用[项目说明书](TaskLoom_项目说明书_分层清晰版.md)。完整未来依赖由执行逐步揭示，所有策略获得相同的已知信息。
+Task、Agent、Step 与 Attempt 的含义沿用[当前完整项目说明书](TaskLoom_项目说明书_当前完整方案.md)。未来依赖由执行逐步揭示，所有策略获得相同的已知信息。
 
 ### 2.3 等待、许可释放与可靠续接
 
@@ -99,7 +99,7 @@ Task、Agent、Step 与 Attempt 的含义沿用[项目说明书](TaskLoom_项目
 
 这个机制处理一个重要场景：两个长任务已经进入执行循环，随后等待模型额度，新的短任务仍应能够获得执行机会。等待状态与正在执行的状态分开管理，使空闲 CPU 和可用工具资源能够继续服务其他任务。
 
-许可申请还需要处理迟到授权。申请取消或失效后，即使调度服务稍后返回授权，执行器也要核验当前状态与代次，撤销失效预留。OpenClaw 的 hook 超时规则同样说明：结束等待后，handler 可能继续运行。[OC-D18](../research/agent-orchestrate/materials/L2_harness_tasks/OC-D18/reference.md)
+许可申请还需要处理迟到授权。申请取消或失效后，即使调度服务稍后返回授权，执行器也要核验当前状态与代次，撤销失效预留。OpenClaw 的 hook 超时规则同样说明：结束等待后，handler 可能继续运行。[OC-D18](https://github.com/openclaw/openclaw/blob/6a64431a10b638958cdeccc782f2b36074274776/docs/plugins/hooks/reference.md)
 
 ### 2.4 OS 方法与核心研究机制
 
@@ -172,7 +172,7 @@ Task、Agent、Step 与 Attempt 的含义沿用[项目说明书](TaskLoom_项目
 
 独立调度核心通过适配器连接执行框架。OpenClaw 接入时优先复用自定义 Provider 和官方插件，将请求与事件送入同一任务账本。已有 mock 接入成果继续作为这条路径的起点。
 
-结构化 hook 上下文提供 `runId`、`sessionKey`、`sessionId` 等信息；Provider 的 `resolveTransportTurnState` 支持每轮 headers 和 metadata。适配器据此建立根任务、步骤与尝试关系，并由平台结合认证身份核验归属。[OC-S18](../research/agent-orchestrate/materials/L2_harness_tasks/OC-S18/hook-agent-context.types.ts)、[OC-D21](../research/agent-orchestrate/materials/L3_client_requests/OC-D21/runtime-hooks.md)
+结构化 hook 上下文提供 `runId`、`sessionKey`、`sessionId` 等信息；Provider 的 `resolveTransportTurnState` 支持每轮 headers 和 metadata。适配器据此建立根任务、步骤与尝试关系，并由平台结合认证身份核验归属。[OC-S18](https://github.com/openclaw/openclaw/blob/6a64431a10b638958cdeccc782f2b36074274776/src/plugins/hook-agent-context.types.ts)、[OC-D21](https://github.com/openclaw/openclaw/blob/6a64431a10b638958cdeccc782f2b36074274776/docs/plugins/sdk-provider-plugins/runtime-hooks.md)
 
 源码适配依据三类具体缺口决定。
 
@@ -192,7 +192,7 @@ OpenClaw 已有能力进入成熟对照。项目的叙事集中在“相同电�
 
 以下四组材料分别承担项目范围、报告输入、原生机制和扩展契约的依据。引用直接指向已有材料，研究总索引继续由 `research` 维护。
 
-- **项目范围与 OS 设计。** [分层项目说明书](TaskLoom_项目说明书_分层清晰版.md)、[统一编码主题报告](../research/agent-orchestrate/reports/01_layered_theme_report.md)、[OS 设计与验证](../research/agent-orchestrate/reports/03_os_design_and_validation.md)。
-- **组内接入与工程分析。** [是否修改 OpenClaw 源码利弊分析](../agent-workspace/inputs/reports/TaskLoom_是否修改OpenClaw源码_利弊分析.md)。其 mock 闭环与抓包记录来自报告作者，采用为接入证据。
-- **OpenClaw 原生机制。** [固定版本记录 OC-M01](../research/agent-orchestrate/materials/L2_harness_tasks/OC-M01/pin.json)、[队列文档 OC-D06](../research/agent-orchestrate/materials/L2_harness_tasks/OC-D06/queue.md)、[队列类型 OC-S02](../research/agent-orchestrate/materials/L2_harness_tasks/OC-S02/command-queue.types.ts)、[lane 控制 OC-S08](../research/agent-orchestrate/materials/L2_harness_tasks/OC-S08/lane-controller.ts)。
-- **插件与传输契约。** [hook 参考 OC-D18](../research/agent-orchestrate/materials/L2_harness_tasks/OC-D18/reference.md)、[hook 上下文 OC-S18](../research/agent-orchestrate/materials/L2_harness_tasks/OC-S18/hook-agent-context.types.ts)、[Provider 运行时接口 OC-D21](../research/agent-orchestrate/materials/L3_client_requests/OC-D21/runtime-hooks.md)。
+- **项目范围与 OS 设计。** [当前完整项目说明书](TaskLoom_项目说明书_当前完整方案.md)、[统一编码主题报告](../research/agent-orchestrate/reports/01_layered_theme_report.md)、[OS 设计与验证](../research/agent-orchestrate/reports/03_os_design_and_validation.md)。
+- **组内接入与工程分析。** 是否修改 OpenClaw 源码利弊分析（本地留存：`agent-workspace/inputs/reports/TaskLoom_是否修改OpenClaw源码_利弊分析.md`）。其 mock 闭环与抓包记录来自报告作者，采用为接入证据。
+- **OpenClaw 原生机制。** [固定版本记录 OC-M01](https://github.com/openclaw/openclaw/releases/tag/v2026.10.3)、[队列文档 OC-D06](https://github.com/openclaw/openclaw/blob/6a64431a10b638958cdeccc782f2b36074274776/docs/concepts/queue.md)、[队列类型 OC-S02](https://github.com/openclaw/openclaw/blob/6a64431a10b638958cdeccc782f2b36074274776/src/process/command-queue.types.ts)、[lane 控制 OC-S08](https://github.com/openclaw/openclaw/blob/6a64431a10b638958cdeccc782f2b36074274776/src/agents/embedded-agent-runner/run/lane-controller.ts)。
+- **插件与传输契约。** [hook 参考 OC-D18](https://github.com/openclaw/openclaw/blob/6a64431a10b638958cdeccc782f2b36074274776/docs/plugins/hooks/reference.md)、[hook 上下文 OC-S18](https://github.com/openclaw/openclaw/blob/6a64431a10b638958cdeccc782f2b36074274776/src/plugins/hook-agent-context.types.ts)、[Provider 运行时接口 OC-D21](https://github.com/openclaw/openclaw/blob/6a64431a10b638958cdeccc782f2b36074274776/docs/plugins/sdk-provider-plugins/runtime-hooks.md)。
