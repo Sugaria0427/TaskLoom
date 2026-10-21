@@ -202,9 +202,16 @@ class ModelScheduler:
         return True
 
     async def close(self) -> None:
-        """取消排队、在途请求和执行任务，然后停掉循环。"""
-        if self._loop is not None:
-            self._loop.cancel()
+        """取消排队、在途请求和执行任务，然后停掉循环。
+
+        循环指针会一并清掉，之后的 :meth:`submit` 直接被拒；不清的话
+        :meth:`submit` 的启动检查会一直放行，而循环已经死了，调用者
+        只会永久挂在 future 上。
+        """
+        loop_task = self._loop
+        if loop_task is not None:
+            loop_task.cancel()
+        self._loop = None
         executions = list(self._executions)
         for execution in executions:
             execution.cancel()
@@ -216,8 +223,8 @@ class ModelScheduler:
         self._queued.clear()
         self._queued_at.clear()
         self._feedback_failures.clear()
-        if self._loop is not None:
-            await asyncio.gather(self._loop, return_exceptions=True)
+        if loop_task is not None:
+            await asyncio.gather(loop_task, return_exceptions=True)
         if executions:
             await asyncio.gather(*executions, return_exceptions=True)
 
@@ -370,7 +377,7 @@ class ModelScheduler:
         request_id = pending.request.request_id
         try:
             outcome: object = pending.callback(pending.request)
-            if asyncio.iscoroutine(outcome):
+            if inspect.isawaitable(outcome):
                 record = await cast(Awaitable[GatewayRecord], outcome)
             else:
                 record = cast(GatewayRecord, outcome)

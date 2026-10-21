@@ -359,3 +359,33 @@ async def test_submit_before_start_is_rejected() -> None:
     scheduler = _scheduler()
     with pytest.raises(RuntimeError):
         await scheduler.submit(_request("r1", "root-a"), _record)
+
+
+async def test_submit_after_close_is_rejected() -> None:
+    """关掉调度器之后再提交必须被拒，不能让调用者永久挂在 future 上。"""
+    scheduler = _scheduler()
+    await scheduler.start()
+    await scheduler.close()
+    with pytest.raises(RuntimeError):
+        await asyncio.wait_for(scheduler.submit(_request("r1", "root-a"), _record), timeout=1.0)
+
+
+async def test_awaitable_returning_sync_callback_is_awaited() -> None:
+    """同步 callback 返回 awaitable 时也必须 await，否则 future 拿到的是协程。"""
+    scheduler = _scheduler()
+
+    def callback(request: ModelRequest) -> Any:
+        async def read() -> GatewayRecord:
+            return _record(request)
+
+        return read()
+
+    await scheduler.start()
+    try:
+        record = await asyncio.wait_for(
+            scheduler.submit(_request("r1", "root-a"), callback), timeout=2.0
+        )
+        assert isinstance(record, GatewayRecord)
+        assert record.request.request_id == "r1"
+    finally:
+        await scheduler.close()
