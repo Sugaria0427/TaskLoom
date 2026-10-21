@@ -91,3 +91,98 @@ def test_report_cli_writes_deterministic_json_and_csv(tmp_path) -> None:
     assert table.read_bytes() == first_csv
     assert json.loads(first_json)["on_time_quality_rate"] == 1
     assert "a,alice,SUCCEEDED" in first_csv.decode()
+
+
+def _manifest(*rows: dict) -> dict:
+    return {
+        "source": "observed-local-api",
+        "scenario": "unconstrained",
+        "seed": 7,
+        "tasks": list(rows),
+    }
+
+
+def _run_manifest_report(
+    tmp_path: Path, records: list[dict], manifest: dict
+) -> subprocess.CompletedProcess[str]:
+    snapshot = tmp_path / "capture.json"
+    run = tmp_path / "run.json"
+    report = tmp_path / "report.json"
+    snapshot.write_text(json.dumps({"tasks": records}), encoding="utf-8")
+    run.write_text(json.dumps(manifest), encoding="utf-8")
+    script = Path(__file__).resolve().parents[2] / "tools" / "wp6_report.py"
+    return subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            str(snapshot),
+            "--run-manifest",
+            str(run),
+            "--json",
+            str(report),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_run_manifest_limits_denominator_and_supplies_quality(tmp_path: Path) -> None:
+    result = _run_manifest_report(
+        tmp_path,
+        [task("historical", "FAILED", 15), task("selected", "SUCCEEDED", 5)],
+        _manifest({"task_id": "selected", "quality_passed": True}),
+    )
+    assert result.returncode == 0, result.stderr
+    report = json.loads((tmp_path / "report.json").read_text(encoding="utf-8"))
+    assert report["submitted_tasks"] == 1
+    assert report["on_time_quality_rate"] == 1
+    assert [row["task_id"] for row in report["tasks"]] == ["selected"]
+    assert report["provenance"]["run_manifest"] == str(tmp_path / "run.json")
+
+
+def test_run_manifest_rejects_missing_and_duplicate_ids(tmp_path: Path) -> None:
+    selected = {"task_id": "selected", "quality_passed": True}
+    cases = [
+        ([task("other", "SUCCEEDED", 5)], _manifest(selected)),
+        ([task("selected", "SUCCEEDED", 5)], _manifest(selected, selected)),
+        ([task("selected", "SUCCEEDED", 5), task("selected", "SUCCEEDED", 5)], _manifest(selected)),
+    ]
+    for records, manifest in cases:
+        result = _run_manifest_report(tmp_path, records, manifest)
+        assert result.returncode != 0
+        assert "task_id" in result.stderr
+
+
+def test_run_manifest_rejects_missing_quality_verdict(tmp_path: Path) -> None:
+    result = _run_manifest_report(
+        tmp_path, [task("selected", "SUCCEEDED", 5)], _manifest({"task_id": "selected"})
+    )
+    assert result.returncode != 0
+    assert "quality_passed" in result.stderr
+
+
+def test_run_manifest_and_quality_flags_are_exclusive(tmp_path: Path) -> None:
+    result = _run_manifest_report(
+        tmp_path,
+        [task("selected", "SUCCEEDED", 5)],
+        _manifest({"task_id": "selected", "quality_passed": True}),
+    )
+    assert result.returncode == 0
+    script = Path(__file__).resolve().parents[2] / "tools" / "wp6_report.py"
+    conflict = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            str(tmp_path / "capture.json"),
+            "--run-manifest",
+            str(tmp_path / "run.json"),
+            "--quality",
+            str(tmp_path / "run.json"),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert conflict.returncode != 0
+    assert "not allowed with argument" in conflict.stderr
