@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`taskloom.client.feedback_source`."""
+"""反馈快照复用适配器的单元测试。"""
 
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta

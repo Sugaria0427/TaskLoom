@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`taskloom.policies.cost_drr`."""
+"""成本轮转队列的单元测试。"""
 
 import pytest
 
@@ -24,7 +24,7 @@ def test_leftover_credit_drains_the_backlog_in_one_round() -> None:
     queue: CostDRR[str] = CostDRR(quantum=10, cost=lambda _: 1)
     for index in range(4):
         queue.push("alice", f"a{index}")
-    # All four cost 1 each, so one visit at quantum 10 clears the lot.
+    # 四条各值 1，量子 10，一轮访问就全发完。
     assert queue.pop() == ["a0", "a1", "a2", "a3"]
 
 
@@ -33,9 +33,8 @@ def test_expensive_item_waits_for_enough_credit() -> None:
     queue.push("alice", "x" * 250)
     queue.push("alice", "q")
     queue.push("bob", "y")
-    # Alice needs three rounds to afford 250 at quantum 100. Bob pays out
-    # in the meantime, and when Alice is served it is the expensive head:
-    # the cheap tail behind it is never jumped over.
+    # 量子 100，alice 的 250 要攒三轮。这期间 bob 在出数；等 alice 轮到，
+    # 发的仍是那条贵的队首——它后面便宜的尾巴不会被越过。
     assert queue.pop() == ["y"]
     assert queue.pop() == []
     assert queue.deficit("alice") == 200
@@ -72,9 +71,9 @@ def test_cumulative_cost_share_is_fair_across_heterogeneous_loads() -> None:
         refill()
 
     assert units["heavy"] > 0 and units["light"] > 0
-    # Counts must be wildly lopsided: that is the whole point.
+    # 条数必须悬殊，这正是这条测试的全部意义。
     assert counts["light"] > counts["heavy"] * 5
-    # Units actually served must land close to even.
+    # 真正服务出去的成本总量必须基本持平。
     assert abs(units["heavy"] - units["light"]) < 0.05 * max(units["heavy"], units["light"])
 
 
@@ -105,12 +104,11 @@ def test_take_charges_the_owner() -> None:
     queue.push("alice", "z" * 12)
     queue.push("bob", "b")
     assert queue.take("alice") == "abcd"
-    # A promotion spends real budget: alice is four into debt, and the
-    # debt survives because she still has queued work.
+    # 提升要真花额度：alice 欠了 4，因为她还有排队中的活，欠账留着。
     assert queue.deficit("alice") == -4
     assert len(queue) == 2
-    # Her next visit tops the deficit up to 6, still short of the 12-unit
-    # head, so bob is served instead of alice being served early.
+    # 她下次轮到只把欠账补到 6，还不够 12 的队首，于是发 bob，
+    # alice 不会被提前发出去。
     assert queue.pop() == ["b"]
     assert queue.deficit("alice") == 6
 
@@ -123,8 +121,7 @@ def test_charge_rejects_negative_amount() -> None:
 
 def test_refund_returns_credit_to_a_queued_owner() -> None:
     queue: CostDRR[str] = CostDRR(quantum=10, cost=len)
-    # The 15-unit head is too expensive for one quantum, so alice stays on
-    # the ring with a readable deficit.
+    # 15 的队首一个量子买不起，alice 留在轮转环上，欠账可读。
     queue.push("alice", "x" * 15)
     assert queue.pop() == []
     assert queue.deficit("alice") == 10
@@ -148,8 +145,7 @@ def test_refund_carries_over_for_an_owner_that_left_the_ring() -> None:
     assert "alice" not in queue
     queue.refund("alice", 5)
     assert queue.deficit("alice") == 0
-    # Without the carried 5 the 13-unit head would need two rounds; with it
-    # the first round tops the deficit to 15 and clears the head.
+    # 没有结转的 5，13 的队首要两轮才够；有结转则第一轮补到 15 直接发。
     queue.push("alice", "x" * 13)
     queue.push("alice", "y")
     assert queue.pop() == ["x" * 13, "y"]

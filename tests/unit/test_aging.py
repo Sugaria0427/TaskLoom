@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`taskloom.policies.aging`."""
+"""期限老化队列的单元测试。"""
 
 from collections.abc import Callable
 
@@ -74,8 +74,8 @@ def test_urgent_head_is_promoted_ahead_of_rotation() -> None:
     queue.push("alice", "urgent")
     queue.push("alice", "calm")
     queue.push("bob", "calm-b")
-    # remaining = 10s is inside the 60s window, so the urgent head is
-    # pulled off before the normal round; the rest comes out by rotation.
+    # 还剩 10 秒，落在 60 秒窗口内，紧急队首在正常轮转之前被提走；
+    # 其余按轮转出队。
     assert queue.pop() == ["urgent", "calm", "calm-b"]
 
 
@@ -94,15 +94,15 @@ def test_aged_head_wins_when_nothing_else_is_pending() -> None:
     queue.push("alice", "alice-1")
     clock.advance(25.0)  # alice 已老化
     queue.push("busy", "busy-1")  # busy 刚到，没老化
-    # Alice is promoted even though she is not next in the rotation.
+    # alice 明明不在轮转环的下一个，仍被提升。
     assert queue.pop()[0] == "alice-1"
 
 
 def test_sustained_urgent_arrivals_cannot_starve_the_background() -> None:
-    """Regression guard for the review finding on unbounded promotion.
+    """守住评审提的"提升次数无上限"那条回归。
 
-    A background root waits past the aging window, then a hundred urgent
-    items arrive. Without a burst cap the background never gets served.
+    后台根任务等过老化窗口，随后连着来一百个紧急条目。没有连续提升上限
+    的话，后台一次都轮不上。
     """
     clock = _Clock()
     queue: AgingQueue[str] = AgingQueue(
@@ -124,7 +124,7 @@ def test_sustained_urgent_arrivals_cannot_starve_the_background() -> None:
         served.extend(queue.pop())
 
     assert "bg" in served, "后台必须拿到服务机会"
-    # And the urgent flow still dominates: it keeps roughly its share.
+    # 紧急那条流仍然是主导：它基本保住了自己那份。
     assert len([item for item in served if item.startswith("urgent-")]) > 90
 
 
@@ -143,9 +143,8 @@ def test_promotion_is_charged_to_the_promoted_owner() -> None:
     queue.push("alice", "z" * 12)
     queue.push("bob", "b")
     assert queue.pop() == ["abcd", "b"]
-    # The promotion put alice four units into debt. The same round's
-    # top-up brings her back to only 6, still short of the 12-unit head,
-    # so she gets nothing else this round and has to keep earning.
+    # 这次提升让 alice 欠了 4 个额度。同一轮的补充只把她拉回 6，
+    # 仍不够 12 的队首，所以她这轮再拿不到什么，只能继续攒。
     assert queue.deficit("alice") == 6
 
 
@@ -156,7 +155,7 @@ def test_requeue_preserves_queue_age() -> None:
     original_enqueue = clock.t
     clock.advance(25.0)
     queue.requeue("alice", "a1", original_enqueue)
-    # The item is still reported as aged: its wait was not reset.
+    # 该条目依然算老化：它的等待时长没有被清零。
     assert queue.pop()[0] == "a1"
 
 
@@ -181,7 +180,6 @@ def test_expired_items_are_left_for_the_callers_predicate() -> None:
     )
     queue.push("alice", "soon")
     clock.t = 1500.0  # 已过期
-    # Deadline expiry is a terminal state the scheduler owns; the queue
-    # just refuses to serve what the caller's predicate rejects.
+    # 过期终态由调度器负责收尾；队列只负责不发调用方谓词拒掉的条目。
     assert queue.pop(lambda item: False) == []
     assert len(queue) == 1

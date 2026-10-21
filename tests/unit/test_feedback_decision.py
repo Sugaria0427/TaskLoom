@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`taskloom.client.feedback_decision`."""
+"""反馈准入判定的单元测试。"""
 
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
@@ -53,8 +53,8 @@ def test_uncoordinated_always_submits(fresh_feedback: Callable[[], PlatformFeedb
 
 
 def test_stale_feedback_waits(fresh_feedback: Callable[[], PlatformFeedback]) -> None:
-    # observed_at is older than STALE_FEEDBACK_SECONDS; fix now() to a
-    # far-future epoch so the diff is well-defined.
+    # observed_at 比陈旧阈值还老，把 now() 顶到远未来的纪元秒，
+    # 这样时间差才是确定的。
     old = (datetime.now(UTC) - timedelta(seconds=STALE_FEEDBACK_SECONDS + 10)).isoformat()
     feedback = fresh_feedback(observed_at=old, retry_after_seconds=1.5)
     decision = decide(

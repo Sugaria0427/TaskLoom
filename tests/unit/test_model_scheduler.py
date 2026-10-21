@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`taskloom.client.model_scheduler`."""
+"""模型请求调度器的单元测试。"""
 
 import asyncio
 from datetime import UTC, datetime, timedelta
