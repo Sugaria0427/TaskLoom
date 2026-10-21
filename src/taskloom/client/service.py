@@ -30,6 +30,7 @@ from taskloom.contracts.models import (
 )
 from taskloom.domain.model import Agent, DomainError, Outcome, Resources, Step, WorkState
 from taskloom.domain.ports import Repository, StoredRecord
+from taskloom.execution.catalog import max_demand, tool_profile
 from taskloom.runtime.agent import FILE_STATS_TOOL, run_agent
 
 
@@ -106,7 +107,7 @@ class ClientService:
         await self.reconcile()
         for attempt in self.attempts.values():
             if attempt.kind == "tool" and not attempt.quiescent:
-                if not self.tools.pool.reserve(attempt.attempt_id, self._tool_demand()):
+                if not self.tools.pool.reserve(attempt.attempt_id, max_demand()):
                     raise RuntimeError("Unresolved tool occupancy exceeds the configured capacity")
                 self.tools.quarantined.add(attempt.attempt_id)
         for task in list(self.tasks.values()):
@@ -116,9 +117,6 @@ class ClientService:
                 self.runners[task.task_id] = asyncio.create_task(self._run(task.task_id))
         self.reconciler = asyncio.create_task(self._reconcile_loop())
         self.ready = True
-
-    def _tool_demand(self) -> Resources:
-        return Resources(slots=1, memory_bytes=134217728, artifact_bytes=3145728)
 
     def get(self, task_id: str) -> TaskState:
         if task_id not in self.tasks:
@@ -578,6 +576,11 @@ class ClientService:
         return await self.models.submit(attempt.attempt_id, task_id, Resources(slots=1), execute)
 
     async def tool(self, task_id: str, call: ToolCall) -> JsonObject:
+        try:
+            profile = tool_profile(call.name)
+        except ValueError:
+            raise DomainError("INVALID_TOOL", "Unsupported tool requested") from None
+        demand = profile.demand
         attempt = await self._attempt(task_id, f"{task_id}-tool-{call.call_id}", "tool")
         if attempt.outcome == Outcome.SUCCEEDED and attempt.result is not None:
             return attempt.result
@@ -589,7 +592,7 @@ class ClientService:
             if self.get(task_id).cancel_requested:
                 raise asyncio.CancelledError
             if (
-                self.artifact_size() + self._tool_demand().artifact_bytes
+                self.artifact_size() + demand.artifact_bytes
                 > self.config.artifact_budget_mib * 1048576
             ):
                 raise DomainError("ARTIFACT_BUDGET", "Retained artifacts fill the local budget")
@@ -598,9 +601,14 @@ class ClientService:
                 root_task_id=task_id,
                 tenant_id=task.tenant_id,
                 generation=attempt.generation,
+                tool_name=profile.name,
                 input_version=task.input_version,
                 work_iterations=task.specification.work_iterations,
                 emit_bytes=task.specification.emit_bytes,
+                memory_bytes=demand.memory_bytes,
+                cpu_quota=profile.cpu_quota,
+                cpu_period=profile.cpu_period,
+                arguments=call.arguments,
             )
             attempt.state = WorkState.RUNNING
             attempt.quiescent = False
@@ -667,7 +675,7 @@ class ClientService:
                 await self._save_attempt(attempt)
                 raise QuarantinedExecution("Executor transport failed") from error
 
-        return await self.tools.submit(attempt.attempt_id, task_id, self._tool_demand(), execute)
+        return await self.tools.submit(attempt.attempt_id, task_id, demand, execute)
 
     async def _settle_tool(self, attempt: AttemptState, state: ToolState) -> None:
         attempt.quiescent = state.quiescent

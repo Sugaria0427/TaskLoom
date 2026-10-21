@@ -200,12 +200,15 @@ class ToolRun(Contract):
     root_task_id: str = Field(pattern=r"^[a-zA-Z0-9_-]{1,96}$")
     tenant_id: str
     generation: int = Field(ge=0)
-    tool_name: Literal["file_stats"] = "file_stats"
+    tool_name: Literal["file_stats", "list_files", "top_words"] = "file_stats"
     input_version: str
     work_iterations: int = Field(default=1, ge=1, le=5000000)
     emit_bytes: int = Field(default=0, ge=0, le=8388608)
     memory_bytes: int = Field(default=134217728, ge=16777216)
+    cpu_quota: int = Field(default=100000, ge=1000, le=100000)
+    cpu_period: int = Field(default=100000, ge=1000, le=1000000)
     timeout_seconds: float = Field(default=60, gt=0, le=3600)
+    arguments: JsonObject = Field(default_factory=dict)
 
 
 class ToolState(Contract):
@@ -221,6 +224,10 @@ class ToolState(Contract):
     stdout_bytes: int = 0
     stderr_bytes: int = 0
     output_truncated: bool = False
+    peak_memory_bytes: int | None = None
+    cpu_seconds: float | None = None
+    artifact_bytes: int | None = None
+    oom: bool = False
     created_at: str = Field(default_factory=utc_now)
 
 

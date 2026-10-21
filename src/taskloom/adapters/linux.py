@@ -102,7 +102,9 @@ class CgroupDomain:
             if not self.root.is_dir() or not os.access(self.root, os.W_OK):
                 raise RuntimeError("The configured cgroup directory is not writable")
 
-    def create(self, identity: str, memory: int) -> Path | None:
+    def create(
+        self, identity: str, memory: int, cpu_quota: int = 100000, cpu_period: int = 100000
+    ) -> Path | None:
         if self.root is None:
             return None
         path = self.root / ("tl-" + identity)
@@ -112,10 +114,34 @@ class CgroupDomain:
             ("memory.swap.max", "0"),
             ("memory.oom.group", "1"),
             ("pids.max", "32"),
-            ("cpu.max", "100000 100000"),
+            ("cpu.max", f"{cpu_quota} {cpu_period}"),
         ):
             (path / filename).write_text(value)
         return path
+
+    def metrics(self, path: str) -> dict[str, int]:
+        """Peak memory, OOM count and CPU time read before the group is removed."""
+        group = Path(path)
+        result: dict[str, int] = {}
+        if self.root is None or not group.exists():
+            return result
+        try:
+            result["peak_memory"] = int((group / "memory.peak").read_text().strip())
+        except (OSError, ValueError):
+            pass
+        try:
+            events = dict(
+                line.split() for line in (group / "memory.events").read_text().splitlines()
+            )
+            result["oom_kill"] = int(events.get("oom_kill", 0))
+        except (OSError, ValueError):
+            pass
+        try:
+            cpu = dict(line.split() for line in (group / "cpu.stat").read_text().splitlines())
+            result["cpu_usec"] = int(cpu.get("usage_usec", 0))
+        except (OSError, ValueError):
+            pass
+        return result
 
     def stopped(self, path: str) -> bool:
         group = Path(path)
