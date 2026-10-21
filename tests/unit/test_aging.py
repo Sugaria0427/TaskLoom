@@ -7,55 +7,62 @@ import pytest
 from taskloom.policies.aging import AgingQueue
 
 
-@pytest.fixture
-def clock() -> Callable[[], float]:
-    state = {"t": 1000.0}
-    state["now"] = lambda: state["t"]
-    state["advance"] = lambda delta: (state.__setitem__("t", state["t"] + delta))
-    return state["now"]  # type: ignore[return-value]
-
-
-def _make(clock: Callable[[], float], deadline_at: float = 1e9) -> AgingQueue[str]:
+def _make(
+    now: Callable[[], float],
+    deadline_at: float = 1e9,
+    urgency_burst: int = 2,
+) -> AgingQueue[str]:
     return AgingQueue(
         quantum=10,
         cost=lambda _: 1,
         deadline=lambda _: deadline_at,
-        now=clock,
+        now=now,
         urgency_window=60.0,
         aging_window=20.0,
+        urgency_burst=urgency_burst,
     )
 
 
+class _Clock:
+    """可推进的时钟替身。"""
+
+    def __init__(self, start: float = 1000.0) -> None:
+        self.t = start
+
+    def __call__(self) -> float:
+        return self.t
+
+    def advance(self, delta: float) -> None:
+        self.t += delta
+
+
 def test_windows_must_be_positive() -> None:
-    with pytest.raises(ValueError):
-        AgingQueue(
-            quantum=10,
-            cost=lambda _: 1,
-            deadline=lambda _: 1e9,
-            now=lambda: 0.0,
-            urgency_window=0.0,
-            aging_window=20.0,
-        )
-    with pytest.raises(ValueError):
-        AgingQueue(
-            quantum=10,
-            cost=lambda _: 1,
-            deadline=lambda _: 1e9,
-            now=lambda: 0.0,
-            urgency_window=60.0,
-            aging_window=-1.0,
-        )
+    for urgency, aging in ((0.0, 20.0), (60.0, -1.0)):
+        with pytest.raises(ValueError):
+            AgingQueue(
+                quantum=10,
+                cost=lambda _: 1,
+                deadline=lambda _: 1e9,
+                now=lambda: 0.0,
+                urgency_window=urgency,
+                aging_window=aging,
+            )
 
 
-def test_drr_still_applies_when_no_urgency_or_aging(clock: Callable[[], float]) -> None:
-    queue = _make(clock)
+def test_urgency_burst_must_be_at_least_one() -> None:
+    with pytest.raises(ValueError):
+        _make(lambda: 0.0, urgency_burst=0)
+
+
+def test_drr_still_applies_when_no_urgency_or_aging() -> None:
+    queue = _make(_Clock())
     queue.push("alice", "a1")
     queue.push("bob", "b1")
-    assert queue.pop() == "a1"
-    assert queue.pop() == "b1"
+    assert queue.pop() == ["a1", "b1"]
 
 
-def test_near_deadline_item_is_promoted(clock: Callable[[], float]) -> None:
+def test_urgent_head_is_promoted_ahead_of_rotation() -> None:
+    clock = _Clock()
     queue: AgingQueue[str] = AgingQueue(
         quantum=10,
         cost=lambda _: 1,
@@ -67,71 +74,114 @@ def test_near_deadline_item_is_promoted(clock: Callable[[], float]) -> None:
     queue.push("alice", "urgent")
     queue.push("alice", "calm")
     queue.push("bob", "calm-b")
-    # At clock=1000, "urgent" deadline=1010 → remaining=10s < 60s window.
-    # Urgency is checked on the head of each owner; alice's head is
-    # "urgent" so it gets promoted ahead of the normal DRR rotation.
-    assert queue.pop() == "urgent"
-    # Once the urgent head is gone, DRR rotation resumes normally.
-    assert queue.pop() == "calm"
+    # remaining = 10s is inside the 60s window, so the urgent head is
+    # pulled off before the normal round; the rest comes out by rotation.
+    assert queue.pop() == ["urgent", "calm", "calm-b"]
 
 
-def test_aged_item_is_promoted_for_background_owner(clock: Callable[[], float]) -> None:
-    state = {"t": 1000.0}
+def test_aged_head_is_promoted_for_background_owner() -> None:
+    clock = _Clock()
+    queue = _make(clock)
+    queue.push("busy", "busy-1")
+    queue.push("alice", "alice-1")
+    assert queue.pop() == ["busy-1", "alice-1"]
+    assert queue.pop() == []
 
-    def now() -> float:
-        return state["t"]
 
+def test_aged_head_wins_when_nothing_else_is_pending() -> None:
+    clock = _Clock()
+    queue = _make(clock)
+    queue.push("alice", "alice-1")
+    clock.advance(25.0)  # alice 已老化
+    queue.push("busy", "busy-1")  # busy 刚到，没老化
+    # Alice is promoted even though she is not next in the rotation.
+    assert queue.pop()[0] == "alice-1"
+
+
+def test_sustained_urgent_arrivals_cannot_starve_the_background() -> None:
+    """Regression guard for the review finding on unbounded promotion.
+
+    A background root waits past the aging window, then a hundred urgent
+    items arrive. Without a burst cap the background never gets served.
+    """
+    clock = _Clock()
     queue: AgingQueue[str] = AgingQueue(
         quantum=10,
         cost=lambda _: 1,
-        deadline=lambda _: 1e9,
-        now=now,
+        deadline=lambda item: 1001.0 if item.startswith("urgent-") else 1e9,
+        now=clock,
         urgency_window=60.0,
         aging_window=20.0,
+        urgency_burst=2,
     )
-    queue.push("busy", "busy-1")
-    # alice gets stuck behind busy.
-    queue.push("alice", "alice-1")
-    # First pop serves "busy-1" via DRR.
-    assert queue.pop() == "busy-1"
-    # Now "busy" has another head; advance the clock so alice ages.
-    state["t"] += 25.0
-    # alice's head is aged past 20s window → promoted.
-    assert queue.pop() == "alice-1"
+    queue.push("background", "bg")
+    clock.advance(25.0)  # 后台已老化
+    for index in range(100):
+        queue.push("urgent", f"urgent-{index}")
+
+    served: list[str] = []
+    for _ in range(100):
+        served.extend(queue.pop())
+
+    assert "bg" in served, "后台必须拿到服务机会"
+    # And the urgent flow still dominates: it keeps roughly its share.
+    assert len([item for item in served if item.startswith("urgent-")]) > 90
 
 
-def test_remove_cleans_up_records(clock: Callable[[], float]) -> None:
+def test_promotion_is_charged_to_the_promoted_owner() -> None:
+    clock = _Clock()
+    queue: AgingQueue[str] = AgingQueue(
+        quantum=10,
+        cost=len,
+        deadline=lambda _: 1001.0,
+        now=clock,
+        urgency_window=60.0,
+        aging_window=20.0,
+        urgency_burst=1,
+    )
+    queue.push("alice", "abcd")
+    queue.push("alice", "z" * 12)
+    queue.push("bob", "b")
+    assert queue.pop() == ["abcd", "b"]
+    # The promotion put alice four units into debt. The same round's
+    # top-up brings her back to only 6, still short of the 12-unit head,
+    # so she gets nothing else this round and has to keep earning.
+    assert queue.deficit("alice") == 6
+
+
+def test_requeue_preserves_queue_age() -> None:
+    clock = _Clock()
     queue = _make(clock)
     queue.push("alice", "a1")
+    original_enqueue = clock.t
+    clock.advance(25.0)
+    queue.requeue("alice", "a1", original_enqueue)
+    # The item is still reported as aged: its wait was not reset.
+    assert queue.pop()[0] == "a1"
+
+
+def test_remove_cleans_up_records() -> None:
+    queue = _make(_Clock())
+    queue.push("alice", "a1")
     queue.push("alice", "a2")
-    removed = queue.remove(lambda item: item == "a1")
-    assert removed == [("alice", "a1")]
-    assert queue.pop() == "a2"
-    assert queue.pop() is None
+    assert queue.remove(lambda item: item == "a1") == [("alice", "a1")]
+    assert queue.pop() == ["a2"]
+    assert queue.pop() == []
 
 
-def test_expired_deadline_filtered_by_eligibility(clock: Callable[[], float]) -> None:
-    state = {"t": 1000.0}
-
-    def now() -> float:
-        return state["t"]
-
-    def deadline(item: str) -> float:
-        return 1010.0 if item == "soon" else 1e9
-
+def test_expired_items_are_left_for_the_callers_predicate() -> None:
+    clock = _Clock()
     queue: AgingQueue[str] = AgingQueue(
         quantum=10,
         cost=lambda _: 1,
-        deadline=deadline,
-        now=now,
+        deadline=lambda item: 1010.0 if item == "soon" else 1e9,
+        now=clock,
         urgency_window=60.0,
         aging_window=20.0,
     )
     queue.push("alice", "soon")
-    # Advance past deadline.
-    state["t"] = 1500.0
-    # Outside urgency window; deadline is in the past, so urgency no longer promotes.
-    # DRR still tries; the AgingQueue's pop() doesn't filter by itself — that's
-    # the caller's eligibility predicate. Default predicate keeps it.
-    result = queue.pop()
-    assert result in {"soon"}  # either promotes or DRR-serves, both are "soon"
+    clock.t = 1500.0  # 已过期
+    # Deadline expiry is a terminal state the scheduler owns; the queue
+    # just refuses to serve what the caller's predicate rejects.
+    assert queue.pop(lambda item: False) == []
+    assert len(queue) == 1
