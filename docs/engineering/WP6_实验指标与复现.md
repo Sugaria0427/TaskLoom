@@ -1,0 +1,54 @@
+# WP6 实验指标与复现
+
+本工作包用同一份任务输入和质量判定比较调度条件。原始事件和任务记录来自个人端账本；模拟数据只用于解释容量变化，不能替代实际运行结论。当前版本的模型池是固定容量仿真，个人端工具与任务账本实际运行。
+
+## 数据流与边界
+
+```text
+固定负载 → 本地客户端与平台 → TaskState / 事件 / 资源快照
+                                ↓
+                         指标报告与逐任务 CSV
+
+实测耗时和用量分布 → 30 天离散事件仿真 → 原始事件 / 汇总 / SVG 图
+```
+
+普通客户端只导出当前 profile 的任务与事件。平台公共容量通过已存在的反馈展示；本工具不跨账号收集任务，也不把平台 Key 写入导出文件。`wp6_capture.py` 对事件按序号分页，超过 100 条仍完整采集。采集结果是一次快照，任务状态和资源占用可能继续变化；正式报告应在负载结束并完成核对后采集。
+
+## 最小混合负载与运行命令
+
+负载定义见 [`configs/experiments/workload.json`](../../configs/experiments/workload.json)。首批四类任务按短/长期限和轻/重工具工作量组合，固定输入、预算、种子及提交顺序。当前 Agent 只支持文档统计，质量检查验证返回的文件数和词数。受控分支、代码任务和问答任务需要 WP2 提供对应工作流与可验证成果后再加入，不能用文档统计冒充。
+
+在项目支持的 Linux/WSL2 环境中，先按所需条件启动独立状态目录的开发拓扑，再运行负载。以下是宽松参照的命令；其余三个条件将 `unconstrained` 替换为 `tool_constrained`、`api_constrained` 或 `both_constrained`。运行器会核对实际工具槽位和模型池容量，条件不符就退出。
+
+```bash
+python3 tools/project.py dev --scenario unconstrained
+python3 tools/wp6_run.py --base-url http://127.0.0.1:8795 --scenario unconstrained --seed 1 --output /tmp/wp6-run.json
+python3 tools/wp6_capture.py --client http://127.0.0.1:8795 --output /tmp/wp6-snapshot.json
+python3 tools/wp6_report.py /tmp/wp6-snapshot.json --run-manifest /tmp/wp6-run.json --json /tmp/wp6-report.json --csv /tmp/wp6-tasks.csv
+```
+
+每个条件需要独立 profile/状态目录以免上一组任务进入报告分母。报告命令只选择运行清单中的任务 ID，发现遗漏、重复或质量结果不完整时应失败。配对比较还须保持模型版本、输入、到达顺序、额度和质量标准一致，并记录 Git 版本、配置、机器及实际运行环境。
+
+## 指标字典
+
+| 指标 | 当前计算口径 | 来源与限制 |
+|---|---|---|
+| 按时合格完成率 | 在期限内完成、`SUCCEEDED` 且成果通过预定义质量检查的根任务数 / 本组全部提交根任务数。 | `TaskState` 创建、截止、完成时间及运行清单质量结果；失败、取消、超时和未知状态都留在分母。缺失成功任务的质量判定时不输出率。 |
+| 任务 P95 | 已成功且有完整创建/完成时间的根任务历时，最近秩第 95 百分位。 | 时间从创建到完成，含排队和恢复；报告样本数须与总提交数分开。 |
+| 后台最长等待 | 后台任务在各资源/额度队列的等待区间最大值。 | 现有 `TaskState` 没有后台分类和完整等待区间，当前报告标记不可用；页面显示当前阶段已持续时间，不当作历史累计等待。 |
+| 服务份额 | 账号及根任务在相同观察窗口内获得的实际模型/工具服务量。 | 当前平台反馈只给账号聚合，缺少完整逐根任务服务账本，正式组间指标暂不可用。 |
+| 资源与额度开销 | 工具槽位/内存预留、模型已结算单位、未结算预留分别记录。 | 内存是调度预留量，不是 RSS；`consumed_units` 不是货币费用。CPU/RSS 实测由 WP4 接入后再报告。 |
+| 失败与超时 | 分别保留任务结果、超时原因和未知状态计数。 | 未完成任务不能记作成功；观察窗口结束时的未知/在途任务另列。 |
+
+页面的“本地排队优先级”由个人端后端确认并影响本地模型/工具队列；它不代表平台共享队列优先级。取消先记录意图，实际停止、资源归还和费用结算会异步核对。页面上的当前阶段时长与资源分配来自后端事件和快照；无真实采集值时显示不可用。
+
+## 30 天仿真与图表
+
+`wp6_simulate.py` 使用固定种子和同一到达序列，在四种工具/API 容量条件下运行两阶段 FIFO 离散事件模型。输入文件必须标明 `synthetic-fixture` 或 `measured`；后者还必须给出实测来源。仓库附带的示例仅为合成夹具，不能作为 TaskLoom 性能收益证据。
+
+```bash
+python3 tools/wp6_simulate.py --calibration configs/experiments/synthetic_calibration.json --seed 1 --days 30 --arrivals-per-day 24 --output /tmp/wp6-simulated.json
+python3 tools/wp6_plot.py --input /tmp/wp6-simulated.json --output /tmp/wp6-simulated.svg
+```
+
+保存校准输入、命令参数、原始事件 JSON、汇总 JSON 和图表 SVG，就可以重新生成同一结果。仿真只描述 FIFO 容量效应，不实现 TaskLoom 的 B00、B10、B01、B11、B11+FB 策略，也不复现 OpenClaw。真实五组对照需要 WP1 提供策略开关与统一事件、WP2 提供混合工作流、WP3/WP5 提供调度策略和份额、WP4 提供真实资源采集，再使用配对运行和实测校准。结果届时应分别标明真实执行、机制复现与模拟，并报告相对改善、重复运行波动、失败/超时及调度开销。

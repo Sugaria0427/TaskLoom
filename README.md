@@ -82,3 +82,5 @@ python tools/project.py verify-isolated
 check 检查格式、lint、严格类型和模块边界；test 包含领域、集成与完整进程流程。Linux 专项验证真实 OOM、守护重启和 cgroup 回收。verify 执行 locked 安装、静态检查、测试、构建与包审计；verify-isolated 从干净副本和新环境验证，再安装 wheel 到源码之外执行双账户 self-test。
 
 当前基础轮转保留为算法对照。下一阶段先增加多工具和子 Agent 工作负载，再比较成本 DRR、阶段银行家、期限/老化与自适应反馈的真实增量。
+
+WP6 的固定混合负载、真实账本采集、任务指标报告和带来源标记的 30 天容量仿真见 [实验指标与复现](docs/engineering/WP6_实验指标与复现.md)。当前仿真使用 FIFO 和合成示例校准数据；五组策略对照及真实成本/资源结论须在相应工作包能力和实测数据接入后生成。
