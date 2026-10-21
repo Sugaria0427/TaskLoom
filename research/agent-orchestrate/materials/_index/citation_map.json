@@ -1,5 +1,5 @@
 {
-  "specification": "docs/TaskLoom_项目说明书_当前完整方案.md",
+  "specification": "backup/2026-10-20/docs/TaskLoom_项目说明书_分层清晰版.md",
   "mappings": [
     {
       "citation_id": "S01",
@@ -242,6 +242,17 @@
     }
   ],
   "historical_specification": "backup/2026-10-20/docs/TaskLoom_项目说明书_分层清晰版.md",
-  "citation_scope": "Historical S01–S23 numbering is retained for research provenance; use source IDs and canonical URLs in the current specification.",
-  "navigation_updated_at": "2026-10-20"
+  "citation_scope": "S01–S23 maps the archived layered specification; S21–S23 are reused by the current OS supplement. The current complete specification uses source IDs and public links.",
+  "navigation_updated_at": "2026-10-21",
+  "current_specification": "docs/TaskLoom_项目说明书_当前完整方案.md",
+  "additional_consumers": [
+    {
+      "document": "docs/TaskLoom_OS算法补充说明.md",
+      "citation_ids": [
+        "S21",
+        "S22",
+        "S23"
+      ]
+    }
+  ]
 }

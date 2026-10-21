@@ -63,7 +63,7 @@ agent-orchestrate/
 | 编码规则 | [codebook.md](materials/_index/codebook.md) | 四层含义、字段、状态判定和后续维护方式。 |
 | 来源导航 | [source_index.md](materials/_index/source_index.md)、[source_catalog.json](materials/_index/source_catalog.json) | 按来源ID查文本、类型、主层、关联主题及核查记录。 |
 | 主题归纳 | [analysis_catalog.json](materials/_index/analysis_catalog.json)、[theme_matrix.csv](materials/_index/theme_matrix.csv) | 按层、状态、证据和严重度筛选16个主题。CSV采用UTF-8 BOM，可直接用于表格筛选。 |
-| 正式引用映射 | [citation_map.json](materials/_index/citation_map.json) | 对应项目说明书S01–S23，保留已映射和外部引用项。 |
+| 历史引用映射 | [citation_map.json](materials/_index/citation_map.json) | 对应归档分层说明书的S01–S23；OS补充沿用其中S21–S23，现行完整说明书按来源编号和公开链接引用。 |
 
 来源总索引同时提供公开链接与本地定位，保留原有177条记录，并新增OpenClaw 72条，共249条。它们包含论文、文档、问题单、源码和数据记录，数量按来源类型解释。当前尚未保存独立产品复现或TaskLoom性能测量结果。
 
