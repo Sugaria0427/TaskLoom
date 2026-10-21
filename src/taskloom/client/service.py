@@ -517,6 +517,9 @@ class ClientService:
         attempt.result = record.reply.model_dump(mode="json") if record.reply else None
         attempt.settled = record.state == "FINISHED"
         attempt.error = record.error
+        # 结果未知的请求保留预留、等核对结论，不在这里回补公平账本。
+        if record.state == "FINISHED":
+            self.models.settle(attempt.root_task_id, record.reserved_units, record.consumed_units)
         await self._save_attempt(attempt)
 
     async def model(self, task_id: str, messages: list[JsonObject], round_index: int) -> ModelReply:

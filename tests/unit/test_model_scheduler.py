@@ -389,3 +389,29 @@ async def test_awaitable_returning_sync_callback_is_awaited() -> None:
         assert record.request.request_id == "r1"
     finally:
         await scheduler.close()
+
+
+async def test_settle_returned_credit_unblocks_the_next_request() -> None:
+    """预留高于实付时，退回的额度要让下一个更贵的请求能发出去。
+
+    ``quantum`` 是 100，第一条预留 90 的请求发完账上只剩 10。接着来一条
+    预留 150 的请求：没有结转时一轮补到 110，不够；退回 80 之后一轮补到
+    190，够了。不退回就是拿实际用量偏低当借口继续罚它。
+    """
+    scheduler = _scheduler(quantum=100)
+    await scheduler.start()
+    try:
+        assert (await scheduler.submit(_request("r1", "root-a", cost=90), _record)).state
+        scheduler.settle("root-a", 90, 10)
+        record = await asyncio.wait_for(
+            scheduler.submit(_request("r2", "root-a", cost=150), _record), timeout=2.0
+        )
+        assert record.request.request_id == "r2"
+    finally:
+        await scheduler.close()
+
+
+def test_settle_rejects_negative_units() -> None:
+    scheduler = _scheduler()
+    with pytest.raises(ValueError, match="non-negative"):
+        scheduler.settle("root-a", -1, 10)

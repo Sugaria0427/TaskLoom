@@ -43,6 +43,8 @@ class CostDRR[T]:
         * 额度不足的一方本轮不发，额度保留到下一轮继续累积。
         * 普通出队不产生欠账，额度始终非负；只有老化层主动提升
           才可能把额度扣成负数，那是刻意的欠账。
+        * 退场的一方额度归零，但 :meth:`refund` 给它的结转修正单独记账，
+          下次 :meth:`push` 时并入初始额度，不让它白拿好处也不让它吃亏。
     """
 
     def __init__(self, quantum: int, cost: Callable[[T], int]) -> None:
@@ -53,6 +55,7 @@ class CostDRR[T]:
         self._owners: deque[str] = deque()
         self._items: dict[str, deque[T]] = {}
         self._deficit: dict[str, int] = {}
+        self._carried: dict[str, int] = {}
 
     @property
     def quantum(self) -> int:
@@ -62,12 +65,12 @@ class CostDRR[T]:
     def push(self, owner: str, item: T) -> None:
         """把 ``item`` 挂到 ``owner`` 名下排队。
 
-        新的一方加入轮转环，额度从零开始，下一轮轮到时才会增长。
+        新的一方加入轮转环，额度从结转值开始，下一轮轮到时才会增长。
         """
         if owner not in self._items:
             self._items[owner] = deque()
             self._owners.append(owner)
-            self._deficit[owner] = 0
+            self._deficit[owner] = self._carried.pop(owner, 0)
         self._items[owner].append(item)
 
     def pop(self, eligible: Callable[[T], bool] = lambda _: True) -> list[T]:
@@ -108,6 +111,24 @@ class CostDRR[T]:
     def deficit(self, owner: str) -> int:
         """``owner`` 当前可用额度；未知的一方返回零。"""
         return self._deficit.get(owner, 0)
+
+    def refund(self, owner: str, amount: int) -> None:
+        """把 ``amount`` 额度退还给 ``owner``，``amount`` 可为负数。
+
+        负数等价于 :meth:`charge`，正数把多预扣的部分还给这一方。
+
+        队列里没有的一方走结转账本：该方多半刚把最后一条发出去，
+        额度已随退场清零，直接丢掉结转会让它下次回来时白拿或白欠。
+        结转值在它重新 :meth:`push` 时并入初始额度。
+
+        Args:
+            owner: 要记账的一方。
+            amount: 退回的额度，负数表示补记。
+        """
+        if owner in self._items:
+            self._deficit[owner] += amount
+        elif amount:
+            self._carried[owner] = self._carried.get(owner, 0) + amount
 
     def charge(self, owner: str, amount: int) -> None:
         """从 ``owner`` 的额度里扣掉 ``amount``，允许扣成负数。

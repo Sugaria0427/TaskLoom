@@ -185,6 +185,19 @@ class AgingQueue[T]:
         """``owner`` 当前可用额度。"""
         return self._drr.deficit(owner)
 
+    def refund(self, owner: str, amount: int) -> None:
+        """把 ``amount`` 额度退还给 ``owner``。
+
+        派发时按 :class:`ModelRequest` 的预估预留记账，实际消费结算后才
+        知道。预留高于实付时把差额退回，避免那些请求白白比别人贵；
+        预留低于实付时传负数，等于补记欠账。
+
+        Args:
+            owner: 根任务标识。
+            amount: 退回的额度，可为负数以表示补记。
+        """
+        self._drr.refund(owner, amount)
+
     def __len__(self) -> int:
         """所有根任务排队条目的总数。"""
         return len(self._drr)

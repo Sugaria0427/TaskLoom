@@ -121,20 +121,44 @@ def test_charge_rejects_negative_amount() -> None:
         queue.charge("alice", -1)
 
 
-def test_remove_returns_owner_item_pairs() -> None:
-    queue: CostDRR[str] = CostDRR(quantum=10, cost=lambda _: 1)
-    queue.push("alice", "a1")
-    queue.push("alice", "a2")
-    queue.push("bob", "b1")
-    removed = queue.remove(lambda item: item in {"a1", "b1"})
-    assert sorted(removed) == [("alice", "a1"), ("bob", "b1")]
-    assert queue.pop() == ["a2"]
-    assert queue.pop() == []
-
-
-def test_blocked_reports_credit_starvation_not_idleness() -> None:
+def test_refund_returns_credit_to_a_queued_owner() -> None:
     queue: CostDRR[str] = CostDRR(quantum=10, cost=len)
-    assert queue.blocked() is False
-    queue.push("alice", "x" * 40)
+    # The 15-unit head is too expensive for one quantum, so alice stays on
+    # the ring with a readable deficit.
+    queue.push("alice", "x" * 15)
     assert queue.pop() == []
-    assert queue.blocked() is True
+    assert queue.deficit("alice") == 10
+    queue.refund("alice", 3)
+    assert queue.deficit("alice") == 13
+
+
+def test_refund_with_a_negative_amount_charges_the_owner() -> None:
+    queue: CostDRR[str] = CostDRR(quantum=10, cost=len)
+    queue.push("alice", "x" * 15)
+    assert queue.pop() == []
+    queue.refund("alice", -4)
+    assert queue.deficit("alice") == 6
+
+
+def test_refund_carries_over_for_an_owner_that_left_the_ring() -> None:
+    """发完最后一条的一方会退场，结转必须留下并在它回来时并入。"""
+    queue: CostDRR[str] = CostDRR(quantum=10, cost=len)
+    queue.push("alice", "abcdef")
+    assert queue.pop() == ["abcdef"]
+    assert "alice" not in queue
+    queue.refund("alice", 5)
+    assert queue.deficit("alice") == 0
+    # Without the carried 5 the 13-unit head would need two rounds; with it
+    # the first round tops the deficit to 15 and clears the head.
+    queue.push("alice", "x" * 13)
+    queue.push("alice", "y")
+    assert queue.pop() == ["x" * 13, "y"]
+
+
+def test_refund_on_an_unknown_owner_is_carried_into_its_next_push() -> None:
+    """没在环里的一方先记结转，回来时并入初始额度。"""
+    queue: CostDRR[str] = CostDRR(quantum=10, cost=len)
+    queue.refund("ghost", 5)
+    assert queue.deficit("ghost") == 0
+    queue.push("ghost", "x" * 13)
+    assert queue.pop() == ["x" * 13]

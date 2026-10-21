@@ -197,6 +197,22 @@ class ModelScheduler:
             self._wake.set()
             raise
 
+    def settle(self, owner: str, reserved: int, consumed: int) -> None:
+        """按实际消费校正 ``owner`` 的公平账本。
+
+        派发时按 :attr:`ModelRequest.reserve_units` 预扣，那只是估算。
+        结算后多扣的退回、少扣的补记，否则预留偏高的请求会被长期惩罚，
+        预留偏低的那一方则能占便宜。
+
+        Args:
+            owner: 根任务标识，与提交时的 ``root_task_id`` 一致。
+            reserved: 派发时预扣的额度。
+            consumed: 实际消费；``0`` 且结果未知时不要调用本方法。
+        """
+        if reserved < 0 or consumed < 0:
+            raise ValueError("Settled units must be non-negative")
+        self._queue.refund(owner, reserved - consumed)
+
     async def cancel(self, request_id: str) -> bool:
         """取消一个尚未派发的请求。
 
