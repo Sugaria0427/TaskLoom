@@ -26,6 +26,7 @@ from taskloom.contracts.models import (
     ToolState,
     digest,
     identity,
+    tool_step_id,
     utc_now,
 )
 from taskloom.domain.model import Agent, DomainError, Outcome, Resources, Step, WorkState
@@ -330,13 +331,24 @@ class ClientService:
             return task.model_copy(deep=True)
 
     async def _attempt(
-        self, task_id: str, step: str, kind: Literal["model", "tool"]
+        self,
+        task_id: str,
+        step: str,
+        kind: Literal["model", "tool"],
+        request_payload: JsonObject | None = None,
+        model_round: int | None = None,
     ) -> AttemptState:
         async with self.lock:
             task = self.get(task_id)
             old_id = task.step_attempts.get(step)
             if old_id:
                 old = self.attempts[old_id]
+                if old.kind != kind or (
+                    request_payload is not None and old.request_payload != request_payload
+                ):
+                    raise DomainError(
+                        "ATTEMPT_CONFLICT", "A step identity was reused for a different request"
+                    )
                 if old.outcome in (Outcome.SUCCEEDED, Outcome.UNKNOWN) or (
                     old.outcome == Outcome.PENDING
                     and (old.generation == task.cancel_generation or not old.quiescent)
@@ -352,12 +364,16 @@ class ClientService:
                 tenant_id=task.tenant_id,
                 kind=kind,
                 generation=task.cancel_generation,
+                request_payload=request_payload,
             )
             task.step_attempts[step] = attempt.attempt_id
+            tool_model_round = (
+                model_round if model_round is not None else task.checkpoint.model_round - 1
+            )
             predecessors = (
-                tuple(f"{task_id}-tool-{call_id}" for call_id in task.checkpoint.completed_tools)
+                tuple(task.checkpoint.completed_tools)
                 if kind == "model"
-                else (f"{task_id}-model-{task.checkpoint.model_round - 1}",)
+                else (f"{task_id}-model-{tool_model_round}",)
             )
             for predecessor in predecessors:
                 prior = task.step_attempts.get(predecessor)
@@ -401,6 +417,7 @@ class ClientService:
             )
             result = await run_agent(
                 TaskHost(self, task_id, generation),
+                task_id,
                 task.specification,
                 task.checkpoint,
                 self.config.max_steps,
@@ -580,8 +597,12 @@ class ClientService:
 
         return await self.models.submit(attempt.attempt_id, task_id, Resources(slots=1), execute)
 
-    async def tool(self, task_id: str, call: ToolCall) -> JsonObject:
-        attempt = await self._attempt(task_id, f"{task_id}-tool-{call.call_id}", "tool")
+    async def tool(self, task_id: str, call: ToolCall, model_round: int) -> JsonObject:
+        spec = self.registry.require(call.name)
+        spec.check(call)
+        step_id = tool_step_id(task_id, model_round, call.call_id)
+        request_payload = {"tool_name": call.name, "arguments": call.arguments}
+        attempt = await self._attempt(task_id, step_id, "tool", request_payload, model_round)
         if attempt.outcome == Outcome.SUCCEEDED and attempt.result is not None:
             return attempt.result
         task = self.get(task_id)
@@ -822,8 +843,8 @@ class TaskHost:
     async def model(self, messages: list[JsonObject], round_index: int) -> ModelReply:
         return await self.service.model(self.task_id, messages, round_index)
 
-    async def tool(self, call: ToolCall) -> JsonObject:
-        return await self.service.tool(self.task_id, call)
+    async def tool(self, call: ToolCall, model_round: int) -> JsonObject:
+        return await self.service.tool(self.task_id, call, model_round)
 
     async def checkpoint(self, checkpoint: Checkpoint) -> None:
         async with self.service.lock:

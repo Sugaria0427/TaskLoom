@@ -1,11 +1,9 @@
 """Bounded tool registry for the personal agent runtime.
 
-Replaces the hard-coded single-tool loop in the agent runtime with a
-registry-driven routing layer (WP2 Phase 1).  Each tool is described by a
-:class:`ToolSpec` carrying its name, description, JSON parameter schema and
-resource demand.  The registry bounds the number of registered tools and
-keeps names unique, so the model can only request tools the host actually
-supports.
+The registry is the admission boundary between model-authored tool calls and
+host execution.  It bounds the tool surface to the same limit as a model
+request, enforces each tool's structural argument contract, and then invokes
+any tool-specific semantic validator.
 """
 
 from __future__ import annotations
@@ -13,19 +11,37 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
-from taskloom.contracts.models import JsonObject, ToolCall
+from taskloom.contracts.models import MAX_MODEL_TOOLS, JsonObject, ToolCall
 from taskloom.domain.model import DomainError, Resources
+
+
+def _matches_json_type(value: object, expected: str) -> bool:
+    if expected == "string":
+        return isinstance(value, str)
+    if expected == "integer":
+        return isinstance(value, int) and not isinstance(value, bool)
+    if expected == "number":
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+    if expected == "boolean":
+        return isinstance(value, bool)
+    if expected == "object":
+        return isinstance(value, dict)
+    if expected == "array":
+        return isinstance(value, list)
+    if expected == "null":
+        return value is None
+    return False
 
 
 @dataclass(frozen=True)
 class ToolSpec:
     """A registered tool contract.
 
-    ``parameters`` uses the OpenAPI/JSON Schema property form; an empty
-    mapping means the tool takes no arguments.  ``demand`` is the resource
-    footprint charged against the personal tool domain when the tool runs.
-    ``validate`` is an optional hook that checks a concrete call before it is
-    dispatched (e.g. argument names, versions or allowed values).
+    ``parameters`` uses the OpenAPI/JSON Schema property form.  Every declared
+    property is currently required, matching the repository's minimal tool
+    surface.  ``demand`` is the resource footprint charged when the tool runs.
+    ``validate`` remains available for semantic checks after structural
+    validation, such as allowed values that cannot be expressed by a type.
     """
 
     name: str
@@ -44,6 +60,7 @@ class ToolSpec:
                 "parameters": {
                     "type": "object",
                     "properties": self.parameters,
+                    "required": list(self.parameters),
                     "additionalProperties": False,
                 },
             },
@@ -53,23 +70,58 @@ class ToolSpec:
         """Reject a call that does not fit the registered contract."""
         if call.name != self.name:
             raise DomainError("INVALID_TOOL", "Tool call does not match its registered spec")
-        if not self.parameters and call.arguments:
-            raise DomainError("INVALID_TOOL", f"Tool {self.name!r} takes no arguments")
+
+        declared = set(self.parameters)
+        supplied = set(call.arguments)
+        unexpected = sorted(supplied - declared)
+        if unexpected:
+            raise DomainError(
+                "INVALID_TOOL",
+                f"Tool {self.name!r} received undeclared argument(s): {', '.join(unexpected)}",
+            )
+        missing = sorted(declared - supplied)
+        if missing:
+            raise DomainError(
+                "INVALID_TOOL",
+                f"Tool {self.name!r} is missing required argument(s): {', '.join(missing)}",
+            )
+
+        for name, raw_schema in self.parameters.items():
+            parameter_schema = raw_schema if isinstance(raw_schema, dict) else None
+            expected = parameter_schema.get("type") if parameter_schema else None
+            if not isinstance(expected, str) or expected not in {
+                "string",
+                "integer",
+                "number",
+                "boolean",
+                "object",
+                "array",
+                "null",
+            }:
+                raise DomainError(
+                    "INVALID_TOOL", f"Tool {self.name!r} has an invalid schema for {name!r}"
+                )
+            if not _matches_json_type(call.arguments[name], expected):
+                raise DomainError(
+                    "INVALID_TOOL",
+                    f"Argument {name!r} for tool {self.name!r} must be {expected}",
+                )
+
         if self.validate is not None:
             self.validate(call)
 
 
 class ToolRegistry:
-    """Name-keyed registry with a bounded capacity.
+    """Name-keyed registry bounded by the model request tool limit."""
 
-    Registration is the only way a tool becomes reachable by the model; the
-    registry therefore acts as the admission boundary between model output and
-    host execution.
-    """
-
-    def __init__(self, capacity: int = 16) -> None:
+    def __init__(self, capacity: int = MAX_MODEL_TOOLS) -> None:
         if capacity < 1:
             raise ValueError("Tool registry capacity must be at least one")
+        if capacity > MAX_MODEL_TOOLS:
+            raise DomainError(
+                "TOOL_LIMIT",
+                f"Tool registry capacity must not exceed the model limit of {MAX_MODEL_TOOLS}",
+            )
         self.capacity = capacity
         self._tools: dict[str, ToolSpec] = {}
 
@@ -105,13 +157,7 @@ class ToolRegistry:
 
 
 def default_registry() -> ToolRegistry:
-    """The STEP 1 tool set: verified staged-file statistics plus content search.
-
-    ``file_stats`` is byte-for-byte compatible with the previous
-    ``FILE_STATS_TOOL`` constant so existing requests and acceptance remain
-    unchanged.  ``grep`` adds a second real tool so the runtime can run
-    multi-step chains that exercise two distinct tool operations.
-    """
+    """The current tool set: staged-file statistics plus literal search."""
     registry = ToolRegistry()
     registry.register(
         ToolSpec(

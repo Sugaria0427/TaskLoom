@@ -161,3 +161,27 @@ async def test_input_version_checks_actual_file_contents(tmp_path) -> None:
         assert not executor.processes
     finally:
         await executor.close()
+
+
+async def test_unknown_tool_fails_without_publishing_result(tmp_path) -> None:
+    profile, version = staged(tmp_path)
+    executor = ProcessExecutor(profile, CgroupDomain(None))
+    await executor.start()
+    try:
+        await executor.run(
+            ToolRun(
+                attempt_id="unknown",
+                root_task_id="root",
+                tenant_id="alice",
+                generation=0,
+                tool_name="rm_rf",
+                input_version=version,
+            )
+        )
+        result = await tool_finished(executor, "unknown")
+        assert result.outcome == Outcome.FAILED
+        assert result.quiescent
+        assert result.result is None
+        assert not (profile / "tasks/root/attempts/unknown/output/result.json").exists()
+    finally:
+        await executor.close()

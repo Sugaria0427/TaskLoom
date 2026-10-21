@@ -94,10 +94,13 @@ def main() -> None:
     actual = {path.name: path.read_bytes().decode("utf-8") for path in inputs.iterdir()}
     if digest(actual) != spec["input_version"]:
         raise ValueError("Staged file contents changed")
-    if spec.get("tool_name") == "grep":
+    tool_name = spec.get("tool_name")
+    if tool_name == "file_stats":
+        result = run_file_stats(spec, inputs)
+    elif tool_name == "grep":
         result = run_grep(spec, actual)
     else:
-        result = run_file_stats(spec, inputs)
+        raise ValueError(f"Unsupported tool: {tool_name!r}")
     emit = spec["emit_bytes"]
     while emit:
         chunk = b"x" * min(4096, emit)

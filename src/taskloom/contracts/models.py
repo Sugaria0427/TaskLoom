@@ -11,6 +11,12 @@ from taskloom.domain.identity import utc_now as utc_now
 from taskloom.domain.model import Outcome, WorkState
 
 JsonObject = dict[str, Any]
+MAX_MODEL_TOOLS = 8
+
+
+def tool_step_id(task_id: str, model_round: int, call_id: str) -> str:
+    """Stable tool-step identity scoped to the model round that produced it."""
+    return f"{task_id}-model-{model_round}-tool-{call_id}"
 
 
 def mock_tokens(value: object) -> int:
@@ -55,7 +61,7 @@ class ModelRequest(Contract):
     attempt_id: str
     cancel_generation: int = Field(default=0, ge=0)
     messages: list[JsonObject] = Field(min_length=1, max_length=32)
-    tools: list[JsonObject] = Field(default_factory=list, max_length=8)
+    tools: list[JsonObject] = Field(default_factory=list, max_length=MAX_MODEL_TOOLS)
     max_tokens: int = Field(default=512, ge=1, le=4096)
     deadline_at: str
 
@@ -131,6 +137,7 @@ class Checkpoint(Contract):
     messages: list[JsonObject] = Field(default_factory=list)
     pending_tools: list[ToolCall] = Field(default_factory=list)
     completed_tools: dict[str, JsonObject] = Field(default_factory=dict)
+    completed_tool_calls: dict[str, ToolCall] = Field(default_factory=dict)
     model_round: int = 0
 
 

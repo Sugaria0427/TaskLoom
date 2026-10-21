@@ -1,114 +1,164 @@
 # TaskLoom WP2 工具注册与父子任务最小设计
 
-> 个人端 Agent/Harness、多步骤与 OpenClaw 接入 · 首批设计
+> 个人端 Agent/Harness、多阶段工具执行与 OpenClaw 接入
 
-**日期** 2026-10-19 · **状态** 首批开发建议 · **读者** 项目成员与指导教师
+**日期** 2026-10-21 · **状态** STEP 1 已实现，STEP 2 及之后为设计 · **读者** 项目成员与指导教师
 
-## 1. 背景与目标
+## 1. 范围与状态
 
-WP2 工作包目标：将当前文档统计循环扩展为能够推进多步骤、多工具和受控子 Agent 的个人端运行时，为资源调度提供真实、可追踪的任务；并建立固定版本 OpenClaw 的接入与对照路径（见 [Gitee Issue IKM3JQ](https://gitee.com/Sugaria/TaskLoom/issues/IKM3JQ)）。
+WP2 的目标是把个人端运行时从单一文档统计流程扩展为可审计的多步骤、多工具和受控子 Agent 执行面，并为资源调度实验提供真实工作负载；OpenClaw 接入属于独立的后续对照工作。
 
-当前 0.2 运行时的关键约束：
+本文区分三类内容：
 
-- `runtime/agent.py` 的 `run_agent` 硬编码单一工具 `file_stats`，其余工具直接抛 `INVALID_TOOL`；模型请求的工具面来自常量 `FILE_STATS_TOOL`。
-- 每条用户消息建立一个独立根任务；`domain/model.py` 中 `Agent.parent_agent_id`、`Step.predecessors`、`WorkState.WAIT_DEPENDENCY` 已定义但运行时不使用。
-- 等待只区分 `WAIT_RESOURCE`（工具资源）与 `WAIT_QUOTA`（模型额度）两类，未区分依赖等待与个人请求名额等待。
+1. **已实现并可由代码与测试核验的约束**，见第 2—4 节；
+2. **为后续实现设定但尚未落地的父子任务设计**，见第 5 节；
+3. **尚未接入的 OpenClaw 对照路径**，见第 6 节。
 
-本设计先交付第一阶段（Phase 1）：**有边界的工具注册表**，将硬编码单工具循环改为注册表驱动的多工具路由，为多步骤工作流和受控子 Agent 提供准入边界；同时给出父子任务的最小设计，作为 Phase 2 的实施依据。
+当前结论只覆盖仓库中可直接检查的实现。平台专用执行测试依赖 Linux；Windows 编辑环境不能替代 Ubuntu 虚拟机或 WSL2 上的真实子进程、cgroup 与 `fcntl` 验证。
 
-## 2. 工具注册表设计（Phase 1，本 PR 实现）
+## 2. STEP 1 前的基线
 
-### 2.1 数据结构
+在本次整改前，运行时存在以下边界问题：
 
-新增 `runtime/registry.py`，提供两个核心对象：
+- `run_agent` 的工具面以 `file_stats` 为中心，执行器遇到未知工具时会回退到文件统计，违反“未知输入必须失败关闭”的原则；
+- 工具步骤只使用 `call_id` 标识，不同模型轮次重复使用同一 `call_id` 时会错误复用旧 Attempt 或旧结果；
+- 工具参数主要依赖注册钩子检查，未统一拒绝未声明字段、缺失字段和错误 JSON 类型；
+- 工具注册容量与 `ModelRequest.tools` 的上限不一致；
+- 最终结果可从 `grep` 的命中词数或其他工具结果取得 `files/words`，无法保证最终报告对应全文统计口径。
 
-```python
-@dataclass(frozen=True)
-class ToolSpec:
-    name: str
-    description: str
-    parameters: JsonObject                      # JSON Schema 属性形式，空表示无参数
-    demand: Resources                           # 工具资源需求（槽位/内存/产物）
-    validate: Callable[[ToolCall], None] | None  # 派发前的业务校验钩子
+上述描述是整改前的状态，不代表当前代码。
+
+## 3. 当前已实现：有界工具与可审计执行
+
+### 3.1 注册容量与模型工具面一致
+
+`MAX_MODEL_TOOLS = 8` 同时约束两处：
+
+- `ModelRequest.tools` 的长度不得超过 8；
+- `ToolRegistry` 的默认容量为 8，显式配置超过 8 时在构造阶段以 `TOOL_LIMIT` 拒绝。
+
+注册表继续拒绝同名工具（`DUPLICATE_TOOL`）和超过容量的注册请求（`TOOL_LIMIT`）。注册表是模型输出与主机执行之间的准入边界，但不替代执行器自身的失败关闭检查。
+
+### 3.2 参数结构校验
+
+`ToolSpec.parameters` 使用 JSON Schema 属性形式。当前实现固定采用以下最小语义：
+
+- 所有已声明参数均为必需；
+- 未声明字段一律拒绝；
+- 支持 `string`、`integer`、`number`、`boolean`、`object`、`array`、`null` 七种顶层类型；
+- Python `bool` 不视为 `integer`；
+- 结构校验先于工具特有的语义校验钩子 `validate`；
+- schema 向模型声明 `required` 和 `additionalProperties: false`。
+
+结构或业务校验失败统一使用 `INVALID_TOOL`。当前限制是有意为之：在引入外部 JSON Schema 依赖或可空参数约定前，不宣称支持完整 JSON Schema。
+
+### 3.3 工具执行显式分派
+
+执行器当前显式支持 `file_stats` 与 `grep`：
+
+- `file_stats` 返回全文文件数与按空白分词的全文词数；
+- `grep` 返回字面量搜索的文件数、命中行词数、命中数和有限行样本；
+- 其他工具名一律抛出错误，不产生 `result.json`，Attempt 以失败且静止的状态结束。
+
+客户端宿主在创建工具 Attempt 前也再次调用 `ToolRegistry.require()` 与 `ToolSpec.check()`。因此正常调用中的未知工具稳定返回 `INVALID_TOOL`，不会进入执行器；执行器测试则单独证明即使绕过宿主，未知工具仍会失败关闭。这构成双层保护，而不是依赖单一入口。
+
+### 3.4 轮次化工具步骤身份
+
+工具步骤身份定义为：
+
+```text
+{task_id}-model-{model_round}-tool-{call_id}
 ```
 
-```python
-class ToolRegistry:
-    capacity: int                               # 注册上限，默认 16
-    def register(spec: ToolSpec) -> ToolSpec    # 唯一性 + 容量准入
-    def get(name: str) -> ToolSpec | None
-    def require(name: str) -> ToolSpec          # 未注册抛 INVALID_TOOL
-    def schemas() -> list[JsonObject]           # 模型工具面，注册序
-    def names() -> tuple[str, ...]
+同一 `call_id` 出现在不同模型轮次时，对应不同 Step 与 Attempt。Attempt 同时保存请求摘要：
+
+```json
+{"tool_name": "...", "arguments": {}}
 ```
 
-### 2.2 准入规则
+复用规则如下：
 
-- **注册准入**：同名工具拒绝注册（`DUPLICATE_TOOL`）；超过容量上限拒绝（`TOOL_LIMIT`）。模型只能请求已注册工具，注册表即模型输出与主机执行之间的边界。
-- **调用校验**（`ToolSpec.check`）：未注册工具抛 `INVALID_TOOL`（保持原错误码与语义）；无参数定义的工具收到参数时拒绝；有参数定义的工具将具体参数交给 `validate` 钩子做业务校验（如必填项、枚举值），避免引入外部 JSON Schema 依赖。
-- **资源需求**：`demand` 沿用个人端工具域的资源口径（槽位、内存、产物字节），与 `client/service.py` 的 `Dispatcher` 准入保持一致；WP4 扩展真实工具进程时按同一字段提供成本。
+- 同一步骤身份、同一工具、同一参数：复用已有成功结果；
+- 同一步骤身份，但工具名或参数不同：返回 `ATTEMPT_CONFLICT`；
+- 历史 Attempt 缺少请求摘要：不得猜测等价性，按冲突处理并失败关闭；
+- 冲突检查发生在资源准入和执行器调用之前，不覆盖旧结果，也不启动新的执行。
 
-### 2.3 与现有实现的兼容
+模型步骤的前驱直接引用已完成的轮次化工具步骤键；工具步骤的前驱引用产生该调用的模型轮次。
 
-- `default_registry()` 注册与旧 `FILE_STATS_TOOL` **字节级一致**的 `file_stats` schema，`ModelRequest.tools` 内容不变，已有请求与验收不感知变化。
-- `run_agent` 增加 `registry: ToolRegistry` 参数；`client/service.py` 在 `ClientService.__init__` 持有 `self.registry = default_registry()`，`model()` 的 `tools=self.registry.schemas()`。
-- `ToolRun.tool_name` 的 `Literal["file_stats"]` 保持不变；executor 层工具执行在本阶段不扩展，由 Phase 2 统一处理。
+### 3.5 最终统计口径
 
-### 2.4 本阶段改动文件
+最终结果的 `files` 与 `words` 只接受最近一次成功 `file_stats` 的结果作为权威来源。规则为：
 
-| 文件 | 改动 |
-|---|---|
-| `src/taskloom/runtime/registry.py` | 新增：`ToolSpec`、`ToolRegistry`、`default_registry` |
-| `src/taskloom/runtime/agent.py` | `run_agent` 注册表驱动；删除 `FILE_STATS_TOOL` 常量 |
-| `src/taskloom/client/service.py` | 注入默认注册表；`tools` 改由 `registry.schemas()` 提供 |
-| `tests/unit/test_registry.py` | 新增：注册/查重/容量/参数校验/schema 输出 |
-| `tests/unit/test_agent.py` | 新增：注册表驱动闭环、未注册工具拒绝、参数工具路由、步数上限 |
+- 只有 `grep` 或其他工具结果时，返回 `UNVERIFIED_RESULT`；
+- 使用 `grep.words` 取代全文词数时，返回 `RESULT_MISMATCH`；
+- 多次 `file_stats` 时，以完成顺序中的最近一次结果为准；
+- 历史检查点中没有工具调用元数据的旧结果，不能成为新的权威来源。
 
-## 3. 父子任务最小设计（Phase 2）
+`grep.words` 的语义是命中行的词数，不是全文词数；这一点在数据结构、测试与报告口径中必须保持区分。
 
-### 3.1 现状
+## 4. 关键不变量与稳定错误码
 
-`Agent(agent_id, root_task_id, parent_agent_id=None)` 已具备父子字段；`ClientService.create()` 创建根任务时只建一个 Agent，`budget_units` 在根任务独立核算，未共享。
-
-### 3.2 设计要点
-
-1. **建立父子关系**：`create()` 支持可选 `parent_task_id` / `parent_agent_id`；子任务登记时生成 `Agent(agent_id, root_task_id=根任务, parent_agent_id=父 Agent)`，写入 `agent` 记录供查询。
-2. **根任务归属**：所有子 Agent 的步骤、尝试、产物继续以根任务为记账单位（`AttemptState.root_task_id` 不变），界面按根任务聚合。
-3. **共享预算与服务份额**：子 Agent 不新增根任务预算；`_save_attempt` 的 `PRIVATE_BUDGET` 检查仍以根任务 `budget_units` 为准，分支数增加不放大份额（与现有 `test_root_fanout_does_not_create_extra_round_robin_turns` 的公平语义一致）。
-4. **分支与步骤上限**：`Agent` 增加分支数上限（如每个 Agent 至多派生 N 个子 Agent），子 Agent 自身受根任务 `max_steps` 约束，防止失控扇出。
-5. **父等待子结果**：父任务等待子 Agent 结果时，将其持有的模型/工具运行许可让出（`Dispatcher` 释放），等待原因记为 `WAIT_DEPENDENCY`；子结果到达产生唤醒事件，调度器复查条件后原子取得许可继续。
-
-### 3.3 就绪步骤契约（向 WP3 输出）
-
-子 Agent 产生的模型步骤进入个人端就绪队列时，携带：
-
-- `root_task_id`（根任务归属）
-- `agent_id` / `parent_agent_id`（分支归属）
-- `priority`（继承根任务优先级）
-- `deadline_at`（根任务期限）
-- `cost`（`reserve_units`，成本信息）
-
-## 4. 多工具推进与 OpenClaw 接入（Phase 3—4）
-
-- **多工具推进**：在注册表基础上扩展 executor 工具执行（`ToolRun.tool_name` 去 Literal 限制），引入真实第二工具（如 `grep`、`wc`），使 `run_agent` 出现"模型→工具A→模型→工具B→模型"的多步链；`Step.predecessors` 据此登记真实依赖。
-- **OpenClaw 接入**：按[开发路线与 OpenClaw 对照方案](../TaskLoom_开发路线与OpenClaw对照方案.md)固定版本（稳定版 `59cb44796b0f1f0daa0e37af8b1495abb45d9bc1` 与 main 快照 `6a64431a10b638958cdeccc782f2b36074274776`），先交付最小模型请求接入样例（自定义 Provider + `baseUrl`），再核验 Session/Run → Task/Step/Attempt 映射与工具调用、取消的接入位置。
-
-## 5. 协作接口
-
-| 协作方 | 本工作包交付 |
-|---|---|
-| WP1 | 公共任务及事件契约（含本设计新增的工具注册事件） |
-| WP3 | 带根任务归属、优先级、期限、成本的就绪模型步骤 |
-| WP4 | 工具名称、输入版本、取消代次与阶段需求 |
-| WP6 | 实际依赖、等待原因及状态事件 |
-
-涉及 `client/service.py` 的调度接入点与 WP3 使用小 PR 协作。
-
-## 6. 分阶段交付与验收
-
-| 阶段 | 内容 | 验收依据 |
+| 不变量 | 实现位置 | 违规结果 |
 |---|---|---|
-| Phase 1（本 PR） | 工具注册表 + 注册表驱动 Agent 循环 | 单元测试通过；`file_stats` 行为不变；模型工具面字节级兼容 |
-| Phase 2 | 受控子 Agent 与依赖等待 | 两个根任务 + 子 Agent 并行，父子可查，分支不增预算；`WAIT_DEPENDENCY` 定向测试 |
-| Phase 3 | 多工具真实推进 | 多模型请求 + 两类真实工具的工作流产出可校验成果，依赖顺序正确 |
-| Phase 4 | OpenClaw 接入 | 固定版本最小接入配置、脱敏运行记录、覆盖范围说明 |
+| 工具面不超过模型请求上限 | `contracts/models.py`、`runtime/registry.py` | `TOOL_LIMIT` |
+| 工具名必须已注册 | Agent 与客户端宿主双重校验 | `INVALID_TOOL` |
+| 参数不含额外字段且类型正确 | `ToolSpec.check()` | `INVALID_TOOL` |
+| 工具步骤按模型轮次隔离 | `tool_step_id()` 与工具 Attempt | 独立 Attempt |
+| 同身份不同请求不得复用 | `ClientService._attempt()` | `ATTEMPT_CONFLICT` |
+| 未知执行器工具不得回退 | `execution/tool.py` | 失败且无结果产物 |
+| 最终全文统计只能来自 `file_stats` | `runtime/agent.py` | `UNVERIFIED_RESULT` / `RESULT_MISMATCH` |
+
+## 5. 尚未实现：受控子 Agent 与依赖等待
+
+以下内容是 STEP 2 的设计依据，当前运行时尚未提供父子任务创建、并行分支或 `WAIT_DEPENDENCY` 状态转换。
+
+### 5.1 父子关系与归属
+
+`Agent(agent_id, root_task_id, parent_agent_id=None)` 已具备字段，但 `ClientService.create()` 当前只创建根任务 Agent。后续设计为：
+
+1. 子任务登记时生成带 `parent_agent_id` 的 Agent 记录；
+2. 子 Agent 的 Step、Attempt 与产物继续以根任务作为记账和聚合单位；
+3. 父子关系可查询，但界面仍按根任务聚合。
+
+### 5.2 预算与分支上限
+
+子 Agent 不新增根任务预算或服务份额。所有分支共享根任务预算，并对每个 Agent 的派生数量、根任务总分支数和步骤数设置硬上限，避免扇出导致预算失真或调度饥饿。
+
+### 5.3 依赖等待
+
+父任务等待子结果时应释放模型或工具许可，并记录 `WAIT_DEPENDENCY`。子结果到达后产生唤醒事件，调度器重新检查依赖与资源条件，再原子取得许可继续执行。该状态不得与 `WAIT_RESOURCE`、`WAIT_QUOTA` 混用。
+
+### 5.4 向 WP3 输出的就绪步骤契约
+
+子 Agent 产生的模型步骤进入个人端就绪队列时，应携带 `root_task_id`、`agent_id`、`parent_agent_id`、继承的优先级与期限，以及可核算的成本信息。该契约目前是设计输出，不是已实现接口。
+
+## 6. 尚未实现：OpenClaw 接入
+
+OpenClaw 作为独立对照对象，后续按[开发路线与 OpenClaw 对照方案](../TaskLoom_开发路线与OpenClaw对照方案.md)固定版本，先完成最小模型请求接入，再核验 Session/Run 与 Task/Step/Attempt 的映射、工具调用和取消语义。当前代码没有 OpenClaw 接入，也不以现有固定模型夹具代替其运行证据。
+
+## 7. 协作接口
+
+| 协作方 | 已提供或待设计内容 | 状态 |
+|---|---|---|
+| WP1 | 任务、Step、Attempt 与工具结果契约 | STEP 1 已实现 |
+| WP3 | 带根任务归属、优先级、期限和成本的就绪步骤 | 待设计 |
+| WP4 | 工具名、输入版本、取消代次与资源需求 | `file_stats`、`grep` 已实现 |
+| WP6 | 依赖、等待原因与状态事件 | 待实现 |
+
+涉及 `client/service.py` 的调度接口变更应与 WP3 使用小范围变更协作，避免同时修改公共契约、调度策略和执行适配器。
+
+## 8. 阶段与验收边界
+
+| 阶段 | 内容 | 状态与验收条件 |
+|---|---|---|
+| STEP 1 | 有界注册表、`file_stats + grep`、多轮调用、轮次化身份、参数校验、统计口径 | 已实现；单元和客户端集成测试通过，Linux 真实执行器测试待复核 |
+| STEP 2 | 受控子 Agent、共享预算、依赖等待 | 未实现；需父子查询、分支不增预算和 `WAIT_DEPENDENCY` 定向测试 |
+| STEP 3 | 调度实验工作负载 | 未实现；应在 STEP 2 完成后固定基线与测量口径 |
+| STEP 4 | OpenClaw 最小接入与对照 | 未实现；需固定版本、脱敏运行记录与覆盖范围说明 |
+
+## 9. 验证边界
+
+- Windows 可执行注册表、Agent、客户端宿主和不依赖 Linux 适配器的集成测试；
+- 真实工具子进程、cgroup 和文件系统清理需在 Ubuntu Linux 虚拟机或 WSL2 中运行；
+- Windows 缺少 `fcntl` 时的导入失败属于平台边界，不得通过修改 Linux 适配器规避；
+- 只有在 Linux 环境实际运行并保留输出后，才能宣称真实执行器、Linux 专项或完整验收通过。
