@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Literal
 
 from taskloom.client.dispatcher import Dispatcher, QuarantinedExecution
+from taskloom.client.feedback_source import FeedbackSource
 from taskloom.client.model_scheduler import ModelScheduler
 from taskloom.client.ports import ExecutorPort, GatewayPort
 from taskloom.contracts.models import (
@@ -60,6 +61,9 @@ class ClientService:
         self.attempts: dict[str, AttemptState] = {}
         self.runners: dict[str, asyncio.Task[None]] = {}
         self.lock = asyncio.Lock()
+        self.platform_feedback_source = FeedbackSource(
+            self.gateway.feedback, config.feedback_interval_seconds
+        )
         self.models = ModelScheduler(
             max_inflight=config.max_inflight,
             coordinated=config.coordinated,
@@ -67,7 +71,7 @@ class ClientService:
             urgency_window=_URGENCY_WINDOW_SECONDS,
             aging_window=_AGING_WINDOW_SECONDS,
             urgency_burst=_URGENCY_BURST,
-            feedback=self.gateway.feedback,
+            feedback=self.platform_feedback_source,
         )
         self.tools = Dispatcher(
             Resources(
@@ -744,7 +748,10 @@ class ClientService:
             self.platform_error = None
 
     async def refresh_platform(self) -> PlatformFeedback:
-        feedback = await self.gateway.feedback()
+        # 先作废缓存再经来源读，调度器与对账循环因此共用同一份快照，
+        # 不会一个读到旧的、一个读到新的。
+        self.platform_feedback_source.invalidate()
+        feedback = await self.platform_feedback_source()
         await self.bind_platform(feedback)
         return feedback
 
