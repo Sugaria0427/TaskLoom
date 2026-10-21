@@ -95,6 +95,7 @@ class Topology:
             pool_url=self.pool_url,
             pool_key=self.pool_key,
             pool_capacity=self.pool_capacity,
+            account_max_inflight=self.pool_capacity,
             model=self.pool_config().model,
         )
 
@@ -172,6 +173,15 @@ class Topology:
                     issued = http.post("/v1/accounts/login", json=body)
                 issued.raise_for_status()
                 key = issued.json()["api_key"]
+            feedback = http.get("/v1/account", headers={"Authorization": "Bearer " + key})
+            feedback.raise_for_status()
+            actual_limit = feedback.json()["account_max_inflight"]
+            if actual_limit != self.pool_capacity:
+                raise RuntimeError(
+                    f"The existing account {profile} has inflight limit {actual_limit}; "
+                    f"scenario {self.scenario} requires {self.pool_capacity}. "
+                    "Use a fresh --state-dir for this scenario."
+                )
             atomic_json(credentials, {"platform_url": self.platform_url, "api_key": key})
         config = self.client_config(profile, port)
         path = directory / "client.toml"

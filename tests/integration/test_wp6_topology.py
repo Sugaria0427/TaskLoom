@@ -1,10 +1,13 @@
+import json
 import subprocess
 import sys
 from pathlib import Path
 
+import httpx
 import pytest
 
 from taskloom import cli
+from taskloom.bootstrap import development
 from taskloom.bootstrap.development import Topology
 
 
@@ -26,6 +29,7 @@ def test_wp6_scenario_has_expected_capacity(
     assert topology.client_config("alice", 8795).tool_slots == tool_slots
     assert topology.pool_config().capacity == pool_capacity
     assert topology.platform_config().pool_capacity == pool_capacity
+    assert topology.platform_config().account_max_inflight == pool_capacity
 
 
 def test_default_topology_preserves_two_by_two(tmp_path) -> None:
@@ -103,3 +107,26 @@ def test_project_dev_help_documents_wp6_flags() -> None:
     assert result.returncode == 0
     for value in ("--scenario", "--tool-slots", "--pool-capacity", "both_constrained"):
         assert value in result.stdout
+
+
+def test_reused_account_with_stale_inflight_limit_fails_before_client_start(
+    tmp_path, monkeypatch
+) -> None:
+    topology = Topology(tmp_path, scenario="unconstrained")
+    credentials = tmp_path / "clients/alice/platform-credentials.json"
+    credentials.parent.mkdir(parents=True)
+    credentials.write_text(json.dumps({"api_key": "existing-key"}))
+    original_client = httpx.Client
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/v1/account"
+        return httpx.Response(200, json={"account_max_inflight": 1})
+
+    monkeypatch.setattr(
+        development.httpx,
+        "Client",
+        lambda **kwargs: original_client(transport=httpx.MockTransport(respond), **kwargs),
+    )
+    with pytest.raises(RuntimeError, match="existing account.*inflight"):
+        topology._provision_client("alice", 8795)
+    assert not (tmp_path / "clients/alice/client.toml").exists()
