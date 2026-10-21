@@ -14,6 +14,13 @@ from taskloom.adapters.linux import OwnerLock, atomic_json
 from taskloom.adapters.supervisor import process_record, stop_record, write_configuration
 from taskloom.contracts.models import ClientConfig, PlatformConfig, PoolConfig
 
+WP6_CAPACITIES: dict[str, tuple[int, int]] = {
+    "unconstrained": (2, 2),
+    "tool_constrained": (1, 2),
+    "api_constrained": (2, 1),
+    "both_constrained": (1, 1),
+}
+
 
 def free_port() -> int:
     with socket.socket() as connection:
@@ -32,7 +39,20 @@ class Topology:
         pool_port: int | None = None,
         second_client_port: int | None = None,
         with_second_client: bool = False,
+        scenario: str = "unconstrained",
+        tool_slots: int | None = None,
+        pool_capacity: int | None = None,
     ) -> None:
+        if scenario not in WP6_CAPACITIES:
+            raise ValueError(f"Unknown WP6 scenario: {scenario}")
+        expected_tool_slots, expected_pool_capacity = WP6_CAPACITIES[scenario]
+        if tool_slots is not None and tool_slots != expected_tool_slots:
+            raise ValueError(f"{scenario} requires tool_slots={expected_tool_slots}")
+        if pool_capacity is not None and pool_capacity != expected_pool_capacity:
+            raise ValueError(f"{scenario} requires pool_capacity={expected_pool_capacity}")
+        self.scenario = scenario
+        self.tool_slots = expected_tool_slots
+        self.pool_capacity = expected_pool_capacity
         self.base = base
         chosen: set[int] = set()
 
@@ -57,6 +77,26 @@ class Topology:
         self.children: list[subprocess.Popen[bytes]] = []
         self.records: list[dict[str, Any]] = []
         self.lock: OwnerLock | None = None
+
+    def client_config(self, profile: str, port: int) -> ClientConfig:
+        return ClientConfig(
+            profile=profile,
+            tenant_id=profile,
+            client_port=port,
+            platform_url=self.platform_url,
+            tool_slots=self.tool_slots,
+        )
+
+    def pool_config(self) -> PoolConfig:
+        return PoolConfig(key=self.pool_key, capacity=self.pool_capacity)
+
+    def platform_config(self) -> PlatformConfig:
+        return PlatformConfig(
+            pool_url=self.pool_url,
+            pool_key=self.pool_key,
+            pool_capacity=self.pool_capacity,
+            model=self.pool_config().model,
+        )
 
     def _spawn(
         self, role: str, configuration: Path, port: int | None = None, label: str | None = None
@@ -133,9 +173,7 @@ class Topology:
                 issued.raise_for_status()
                 key = issued.json()["api_key"]
             atomic_json(credentials, {"platform_url": self.platform_url, "api_key": key})
-        config = ClientConfig(
-            profile=profile, tenant_id=profile, client_port=port, platform_url=self.platform_url
-        )
+        config = self.client_config(profile, port)
         path = directory / "client.toml"
         write_configuration(path, config)
         self._spawn(
@@ -169,20 +207,12 @@ class Topology:
                 self.pool_key = tomllib.loads(pool_path.read_text())["key"]
             else:
                 self.pool_key = secrets.token_urlsafe(32)
-            pool = PoolConfig(key=self.pool_key)
+            pool = self.pool_config()
             write_configuration(pool_path, pool)
             self._spawn("model-pool", pool_path, self.pool_port)
             self.wait(self.pool_url)
             platform_path = self.base / "platform/platform.toml"
-            write_configuration(
-                platform_path,
-                PlatformConfig(
-                    pool_url=self.pool_url,
-                    pool_key=self.pool_key,
-                    pool_capacity=pool.capacity,
-                    model=pool.model,
-                ),
-            )
+            write_configuration(platform_path, self.platform_config())
             self._spawn("platform", platform_path, self.platform_port)
             self.wait(self.platform_url)
             self._provision_client("alice", self.client_port)
@@ -241,6 +271,10 @@ def develop(
     pool_port: int | None = None,
     second_client_port: int | None = None,
     with_second_client: bool = True,
+    *,
+    scenario: str = "unconstrained",
+    tool_slots: int | None = None,
+    pool_capacity: int | None = None,
 ) -> None:
     topology = Topology(
         base,
@@ -249,6 +283,9 @@ def develop(
         pool_port=pool_port,
         second_client_port=second_client_port,
         with_second_client=with_second_client,
+        scenario=scenario,
+        tool_slots=tool_slots,
+        pool_capacity=pool_capacity,
     )
     stopping = False
 
@@ -267,6 +304,9 @@ def develop(
                 "platform": topology.platform_url,
                 "state_dir": str(base),
                 "model_pool": "platform-owned fixed-capacity simulation",
+                "scenario": topology.scenario,
+                "tool_slots": topology.tool_slots,
+                "pool_capacity": topology.pool_capacity,
             },
             ensure_ascii=False,
         ),

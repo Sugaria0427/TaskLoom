@@ -10,7 +10,7 @@ from taskloom.adapters.linux import executor_socket
 from taskloom.adapters.supervisor import stop_supervisor, supervise
 from taskloom.bootstrap.apps import client_app, executor_app, platform_app, pool_app
 from taskloom.bootstrap.config import load_config
-from taskloom.bootstrap.development import develop, self_test, stop_development
+from taskloom.bootstrap.development import WP6_CAPACITIES, develop, self_test, stop_development
 from taskloom.contracts.models import ClientConfig, PlatformConfig, PoolConfig
 
 
@@ -41,8 +41,21 @@ def main() -> None:
     parser.add_argument("--pool-port", "--provider-port", dest="pool_port", type=int)
     parser.add_argument("--second-client-port", type=int)
     parser.add_argument("--single-client", action="store_true")
+    parser.add_argument(
+        "--scenario",
+        choices=sorted(WP6_CAPACITIES),
+        help="WP6 capacity scenario (default: unconstrained)",
+    )
+    parser.add_argument("--tool-slots", type=int, help="Expected client tool slots for scenario")
+    parser.add_argument(
+        "--pool-capacity", type=int, help="Expected model pool capacity for scenario"
+    )
     parser.add_argument("--daemon", action="store_true")
     args = parser.parse_args()
+    if args.role != "dev" and any(
+        value is not None for value in (args.scenario, args.tool_slots, args.pool_capacity)
+    ):
+        parser.error("WP6 scenario and capacity flags are only supported by dev")
     base = args.state_dir.expanduser().resolve()
     base.mkdir(parents=True, exist_ok=True)
     os.umask(0o077)
@@ -55,8 +68,11 @@ def main() -> None:
                 args.pool_port,
                 args.second_client_port,
                 not args.single_client,
+                scenario=args.scenario or "unconstrained",
+                tool_slots=args.tool_slots,
+                pool_capacity=args.pool_capacity,
             )
-        except RuntimeError as error:
+        except (RuntimeError, ValueError) as error:
             raise SystemExit(str(error)) from None
     elif args.role == "stop":
         stop_development(base)

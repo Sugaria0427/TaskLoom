@@ -465,7 +465,9 @@ class ClientService:
         await self.reconcile()
         return self.get(task_id)
 
-    async def update_priority(self, task_id: str, priority: str) -> TaskState:
+    async def update_priority(
+        self, task_id: str, priority: Literal["low", "normal", "high"]
+    ) -> TaskState:
         if priority not in {"low", "normal", "high"}:
             raise DomainError("INVALID_PRIORITY", "Priority must be low, normal, or high")
         async with self.lock:
