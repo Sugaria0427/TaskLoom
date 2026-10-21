@@ -10,11 +10,19 @@
 
 | 层 | 判据 | 状态 |
 | --- | --- | --- |
-| 组件层 | 公平、并发、等待终态、反馈异常收敛在组件内成立，并有回归测试守住 | 本次交付 |
-| 接线层 | `ClientService.model` 的生产路径走新调度器，旧 `Dispatcher` 退出模型侧 | 下一阶段，见第 3—6 节 |
+| 组件层 | 公平、并发、等待终态、反馈异常收敛在组件内成立，并有回归测试守住 | 已交付 |
+| 接线层 | `ClientService.model` 的生产路径走新调度器，旧 `Dispatcher` 退出模型侧 | 已完成，见第 3—6 节 |
 
-未接线时保持现状：`ClientService.__init__` 里 `self.models` 仍装配 `Dispatcher`，新组件不被生产路径引用，
-因此不存在"半切换"状态。
+接线分五步落地，每步单独验证、单独提交：
+
+| 步 | 内容 | 提交 |
+| --- | --- | --- |
+| 一 | 装配切换，模型路径经 `ModelScheduler.submit`，移除 `wait_platform` | `9b0f12b` |
+| 二 | 反馈适配器 `FeedbackSource`，按周期复用快照、失败直抛、只读 | `348758d` |
+| 三 | 用量回补 `ModelScheduler.settle`，多预留退回公平账本 | `670eaf6` |
+| 四 | 状态输出与准入同源，`platform_status` 加 `feedback_fresh` 与 `scheduler` | 见第 8 节 |
+
+`Dispatcher` 未被删除，它继续服务工具槽位；模型侧已完全退出，因此不存在"半切换"状态。
 
 ## 2. 组件层已达成的约束
 
@@ -48,7 +56,8 @@
 | `ClientService.start` 的 `self.models.start()` | 启动 `Dispatcher` 循环 | 启动调度循环 |
 | `ClientService.model` 末尾的 `self.models.submit(...)` | `submit(identity, owner, demand, callback)` | `submit(request, callback)` |
 | `ClientService.model` 的 `execute` 内 `await self.wait_platform(request)` | 准入在 callback 里做 | 移除，准入改由 `decide` 承担 |
-| `ClientService.platform_status` 的 `queued_models` / `model_capacity` / `model_available` | 读 `Dispatcher.queue` 与 `Dispatcher.pool` | 读 `ModelScheduler.pending` / `ModelScheduler.in_flight`，`Resources` 口径输出保持不变 |
+| `ClientService.resources` 的 `queued_models` / `model_capacity` / `model_available` | 读 `Dispatcher.queue` 与 `Dispatcher.pool` | 读 `ModelScheduler.pending` / `ModelScheduler.in_flight`，`Resources` 口径输出保持不变 |
+| `ClientService.platform_status` 的 `feedback` | 读 `self.platform_feedback`，只由对账循环更新 | 读 `FeedbackSource.latest`，与准入同源；另加 `feedback_fresh` 与 `scheduler` 三字段 | |
 | `ClientService.close` 的 `await self.models.close()` | 关 `Dispatcher` | 同名方法，语义一致 |
 
 `execute` 里的 `PRIVATE_BUDGET`、`settled`、`quiescent`、`RECONCILING` 分支保持不动：那是根任务私有预算与结算，
@@ -119,6 +128,21 @@ def settle(self, owner: str, reserved: int, consumed: int) -> None:
 6. `close()` 后无遗留任务：`asyncio.all_tasks()` 中不含调度循环与执行任务。
 7. 回归：第 2 节每行测试仍通过，且 `test_cumulative_cost_share_is_fair_across_heterogeneous_loads` 的
    `abs(units["heavy"] - units["light"]) < 0.05 * max(...)` 断言不得放宽（实测成本比 1.000，旧实现 100 倍）。
+8. 状态面板与准入同源：`platform_status["feedback"]` 取自 `FeedbackSource.latest`，
+   `test_platform_status_reports_the_snapshot_admission_used` 守住这一点。
+
+逐条核对结果：
+
+| 条件 | 证据 |
+| --- | --- |
+| 1 | `ClientService.model` 只经 `self.models.submit`；全仓 grep `wait_platform` 只剩定义、对账与测试 |
+| 2 | 容器内 `verify` 末行 `{"verify": "passed", ...}`，见第 8 节 |
+| 3 | `test_personal_l3_waits_for_platform_feedback_and_pins_account`、`test_uncoordinated_dispatches_immediately` |
+| 4 | `test_settle_returned_credit_unblocks_the_next_request`、`CostDRR` 四个 `refund` 用例 |
+| 5 | `grep -r '"COMPLETED"' src tests` 为空 |
+| 6 | `test_submit_after_close_is_rejected` |
+| 7 | 容器内 unit+integration 全绿 |
+| 8 | `test_platform_status_reports_the_snapshot_admission_used` |
 
 ## 7. 明确不做的事
 

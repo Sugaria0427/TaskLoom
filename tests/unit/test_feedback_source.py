@@ -116,3 +116,22 @@ async def test_invalidate_forces_the_next_read() -> None:
     assert source.cached is None
     assert (await source()).account_id == "second"
     assert len(reads) == 2
+
+
+async def test_latest_survives_expiry_for_status_reporting() -> None:
+    """面板要看见调度器当下依据的是哪一份，过期也得报出来。"""
+    clock = _Clock()
+    read, _ = _reader(clock, [_feedback(account_id="first")])
+    source = FeedbackSource(read, 10.0, now=clock)
+
+    await source()
+    clock.advance(11.0)
+    assert source.cached is None
+    assert source.latest is not None
+    assert source.latest.account_id == "first"
+
+
+async def test_latest_is_none_before_the_first_read() -> None:
+    clock = _Clock()
+    read, _ = _reader(clock, [])
+    assert FeedbackSource(read, 10.0, now=clock).latest is None

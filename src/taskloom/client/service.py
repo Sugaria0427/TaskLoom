@@ -83,7 +83,6 @@ class ClientService:
         self.reconciler: asyncio.Task[None] | None = None
         self.ready = False
         self.closing = False
-        self.platform_feedback: PlatformFeedback | None = None
         self.platform_error: str | None = None
 
     async def start(self) -> None:
@@ -747,7 +746,6 @@ class ClientService:
                     [StoredRecord("profile", "platform-account", feedback.account_id, expected)]
                 )
             self.config.tenant_id = feedback.account_id
-            self.platform_feedback = feedback.model_copy(deep=True)
             self.platform_error = None
 
     async def refresh_platform(self) -> PlatformFeedback:
@@ -789,14 +787,22 @@ class ClientService:
             )
 
     def platform_status(self) -> JsonObject:
+        # 汇报的这份快照必须来自 FeedbackSource——那是调度器做准入时真正
+        # 读的那一份。self.platform_feedback 只在对账循环里更新，两者会差
+        # 一个周期，面板报的不是准入依据就等于在骗人。
+        feedback = self.platform_feedback_source.latest
         return {
             "platform_url": self.config.platform_url,
-            "connected": self.platform_feedback is not None and self.platform_error is None,
+            "connected": feedback is not None and self.platform_error is None,
             "coordinated": self.config.coordinated,
-            "feedback": self.platform_feedback.model_dump(mode="json")
-            if self.platform_feedback
-            else None,
+            "feedback": feedback.model_dump(mode="json") if feedback else None,
             "error": self.platform_error,
+            "feedback_fresh": self.platform_feedback_source.cached is not None,
+            "scheduler": {
+                "queued": self.models.pending,
+                "in_flight": self.models.in_flight,
+                "max_inflight": self.config.max_inflight,
+            },
         }
 
     def resources(self) -> JsonObject:

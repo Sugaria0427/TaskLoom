@@ -56,6 +56,16 @@ class FeedbackSource:
             return None
         return self._cached
 
+    @property
+    def latest(self) -> PlatformFeedback | None:
+        """最近一次读到的快照，过期了也照样返回。
+
+        只给状态汇报用：面板要让人看见调度器当下依据的是哪一份，而
+        :func:`decide` 的新鲜度判定必须走 :attr:`cached`，否则一份过期
+        快照会被当成可用依据。这里不做任何过滤，调用方自己判断要不要信。
+        """
+        return self._cached
+
     async def __call__(self) -> PlatformFeedback:
         """返回一份反馈；缓存还在有效期内就直接复用，否则重新读取。"""
         reusable = self.cached
