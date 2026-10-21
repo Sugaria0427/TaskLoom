@@ -152,7 +152,32 @@ def settle(self, owner: str, reserved: int, consumed: int) -> None:
 - 不改 `Dispatcher`：它继续服务工具槽位，模型侧切走后仍保留。
 - 不把算法参数做成配置项。
 
-## 8. 责任与节奏
+## 8. 验证记录与责任
+
+验证环境：colima 0.10.3 起的 Linux 虚拟机，`docker.m.daocloud.io/library/python:3.12-slim` 容器内执行。
+容器为 Debian GNU/Linux 13、Linux 6.8.0-117-generic aarch64、Python 3.12.15，`uv 0.13.1`，
+依赖按 `uv.lock` 锁定安装，工作树取自 `feat/wp3` 的 `71d91d9`。
+
+`python tools/project.py verify` 的输出要点：
+
+```
+172 files already formatted
+All checks passed!
+Success: no issues found in 41 source files
+Contracts: 3 kept, 0 broken.
+89 passed in 2.52s            # tests/unit + tests/integration
+Successfully built dist/taskloom-0.2.0-py3-none-any.whl
+5 passed in 23.15s            # tests/smoke
+{"verify": "passed", "wheel": "taskloom-0.2.0-py3-none-any.whl"}
+```
+
+单元加集成共 89 项全过，冒烟 5 项全过，wheel 产物审计通过。
+
+说明：`tools/project.py bootstrap` 固定下载 `uv-x86_64-unknown-linux-gnu`，在 aarch64 容器里
+跑不起来（缺 x86_64 动态加载器）。本次验证改用同一发行版的 aarch64 构建放进 `.toolchain/uv/uv`，
+`bootstrap` 检测到二进制已存在便跳过下载，校验逻辑与产物审计均未受影响。
+
+责任：
 
 - 组件修正与本文：杜金泽（WP3）。
 - 接线实现与集成验收：杜金泽；接口与配置增量由组长确认后合并。
