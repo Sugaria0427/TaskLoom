@@ -212,6 +212,36 @@ async def test_permanent_feedback_failure_reaches_the_caller() -> None:
         await scheduler.close()
 
 
+async def test_awaitable_returning_sync_feedback_is_awaited() -> None:
+    """审查意见 2.3 的补充：同步函数返回 awaitable 时也要按返回值 await。
+
+    按 ``iscoroutinefunction`` 判函数类型会漏掉这种合法写法，未 await 的
+    协程被当成反馈对象，紧接着读字段就抛 ``AttributeError``。
+    """
+    reads = 0
+
+    def provider() -> Any:
+        nonlocal reads
+        reads += 1
+
+        async def read() -> PlatformFeedback:
+            return _feedback()
+
+        return read()
+
+    scheduler = _scheduler(coordinated=True, feedback=provider)
+    await scheduler.start()
+    try:
+        record = await asyncio.wait_for(
+            scheduler.submit(_request("r1", "root-a"), _record), timeout=2.0
+        )
+        assert record.request.request_id == "r1"
+        assert reads == 1
+        assert scheduler.pending == 0
+    finally:
+        await scheduler.close()
+
+
 async def test_expired_request_reaches_a_terminal_state() -> None:
     """复现审查意见 2.3：过期是终态，调用者要收到错误且队列要清干净。"""
     scheduler = _scheduler()

@@ -105,7 +105,16 @@ def test_local_backpressure_when_inflight_at_cap(
 
 
 def test_insufficient_budget_refuses(fresh_feedback: Callable[[], PlatformFeedback]) -> None:
-    feedback = fresh_feedback(account_remaining_units=100)
+    """花不起钱是不可恢复的：预算减已消费都不够，直接拒绝。
+
+    这条与 :meth:`ClientService.wait_platform` 的 ``ACCOUNT_BUDGET`` 判定
+    同源，用同一组字段，避免两条路径对同一状态给出相反结论。
+    """
+    feedback = fresh_feedback(
+        account_budget_units=200,
+        account_consumed_units=100,
+        account_remaining_units=100,
+    )
     decision = decide(
         feedback,
         now=lambda: 0.0,
@@ -113,10 +122,82 @@ def test_insufficient_budget_refuses(fresh_feedback: Callable[[], PlatformFeedba
         max_inflight=1,
         coordinated=True,
         has_queued=False,
-        reserve_units=200,
+        reserve_units=500,
     )
     assert decision.action == "refuse"
     assert decision.reason == "insufficient_budget"
+
+
+def test_reserved_funds_wait_instead_of_refusing(
+    fresh_feedback: Callable[[], PlatformFeedback],
+) -> None:
+    """剩余额度被在途预留占满只是暂时的资金占用，必须等待而不是拒绝。
+
+    预算还够（``预算 - 已消费`` 远大于本次预留），只是 ``remaining_units``
+    被别的在途请求预留压住。旧实现拿 ``remaining_units`` 判不可恢复，
+    会把这种有救的情况直接判死。
+    """
+    feedback = fresh_feedback(
+        account_budget_units=100_000,
+        account_consumed_units=0,
+        account_reserved_units=99_900,
+        account_remaining_units=100,
+        retry_after_seconds=0.3,
+    )
+    decision = decide(
+        feedback,
+        now=lambda: 0.0,
+        in_flight=0,
+        max_inflight=1,
+        coordinated=True,
+        has_queued=False,
+        reserve_units=500,
+    )
+    assert decision.action == "wait"
+    assert decision.reason == "budget_reserved"
+    assert decision.retry_after == 0.3
+
+
+def test_window_token_shortfall_waits(fresh_feedback: Callable[[], PlatformFeedback]) -> None:
+    """窗口 token 不够只是速率窗口问题，等到下一个窗口即可，不是拒绝。"""
+    feedback = fresh_feedback(account_window_tokens_remaining=100, retry_after_seconds=0.2)
+    decision = decide(
+        feedback,
+        now=lambda: 0.0,
+        in_flight=0,
+        max_inflight=1,
+        coordinated=True,
+        has_queued=False,
+        reserve_units=500,
+    )
+    assert decision.action == "wait"
+    assert decision.reason == "window_exhausted"
+
+
+def test_real_gateway_composition_waits_on_account_queue(
+    fresh_feedback: Callable[[], PlatformFeedback],
+) -> None:
+    """按真实 ``GatewayService.feedback`` 的组合条件造一条反馈。
+
+    账户已有一条排队时平台把 ``can_submit`` 置为 ``False``，此时必须走
+    可恢复等待，而不是被判成花不起钱。
+    """
+    feedback = fresh_feedback(
+        account_queued=1,
+        can_submit=False,
+        recommended_pending_limit=1,
+        retry_after_seconds=0.2,
+    )
+    decision = decide(
+        feedback,
+        now=lambda: 0.0,
+        in_flight=0,
+        max_inflight=1,
+        coordinated=True,
+        has_queued=True,
+        reserve_units=100,
+    )
+    assert decision == Decision("wait", "platform_blocked", 0.2)
 
 
 def test_happy_path_submits(fresh_feedback: Callable[[], PlatformFeedback]) -> None:

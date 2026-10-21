@@ -58,6 +58,7 @@ Ctrl+C 结束前台运行，或另开终端执行 `python tools/project.py stop`
 | 实际进程、接口、账本与配置所有权。 | [基础工程架构](docs/engineering/TaskLoom_基础工程架构.md) |
 | 工程约束与后续开发阶段。 | [AGENTS.md](AGENTS.md)、[工程搭建计划](docs/engineering/TaskLoom_工程骨架搭建计划.md) |
 | 本次改造和实际验证。 | [统一系统改造与验收](docs/engineering/TaskLoom_统一系统改造与验收.md) |
+| L3 请求调度的组件边界与接线计划。 | [L3 调度组件接入方案](docs/engineering/TaskLoom_L3调度组件接入方案.md) |
 
 个人端使用 ClientConfig，平台使用 PlatformConfig，固定模型池使用 PoolConfig。示例在 configs/dev；环境变量在 .env.example。个人端凭证文件为 clients/<profile>/platform-credentials.json，保存平台 URL 和本账号 Key；平台池密钥由平台持有。
 

@@ -100,7 +100,7 @@ class CostDRR[T]:
     def blocked(self) -> bool:
         """队列里还有条目在等额度凑够。
 
-        ``pop`` 返回 ``None`` 但本方法为 ``True`` 时，说明不是无事可做
+        ``pop`` 返回空列表但本方法为 ``True`` 时，说明不是无事可做
         而是额度不够；调用方应当继续轮转而不是睡死等唤醒。
         """
         return bool(self._items)

@@ -28,6 +28,7 @@
 """
 
 import asyncio
+import inspect
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -288,12 +289,19 @@ class ModelScheduler:
             self._wake.set()
 
     async def _get_feedback(self) -> PlatformFeedback | None:
+        """读一次反馈，按返回值决定要不要 await。
+
+        按返回值判断而不是按函数类型判断：同步函数返回 awaitable 也是
+        合法接口（``functools.partial``、闭包包装都可能是这样），按类型
+        判断会把没 await 的协程当成反馈对象用。
+        """
         provider = self._feedback
         if provider is None:
             return None
-        if asyncio.iscoroutinefunction(provider):
-            return cast(PlatformFeedback, await provider())
-        return cast(PlatformFeedback, provider())
+        value = provider()
+        if inspect.isawaitable(value):
+            return await value
+        return value
 
     def _eligible(self, pending: _Pending) -> bool:
         """只放行没被取消、也没过期的请求。"""
