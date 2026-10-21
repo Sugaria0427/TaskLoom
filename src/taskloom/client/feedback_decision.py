@@ -91,20 +91,27 @@ def decide(
     Returns:
         A :class:`Decision` whose ``action`` is one of
         ``"submit"``/``"wait"``/``"refuse"``.
+
+    Note:
+        预算不足排在 ``can_submit`` 之前。账户预算耗尽时平台把
+        ``can_submit`` 也置为 ``False``，若先看它就会把花不起钱误判成
+        排队、速率窗口这类可恢复等待，白等下去。费用不足不可恢复，
+        必须直接拒绝，与 :meth:`ClientService.wait_platform` 里
+        ``ACCOUNT_BUDGET`` 的既有语义一致。
     """
     if not coordinated:
         return Decision("submit", "feedback_disabled")
     age = max(0.0, now() - _observed_epoch(feedback))
     if age > STALE_FEEDBACK_SECONDS:
         return Decision("wait", "stale_feedback", feedback.retry_after_seconds)
+    if reserve_units > feedback.account_remaining_units:
+        return Decision("refuse", "insufficient_budget")
     if in_flight >= max_inflight:
         return Decision("wait", "local_backpressure", feedback.retry_after_seconds or 0.5)
     if not feedback.can_submit:
         return Decision("wait", "platform_blocked", feedback.retry_after_seconds)
     if has_queued and feedback.recommended_pending_limit <= 0:
         return Decision("wait", "platform_queued_full", feedback.retry_after_seconds)
-    if reserve_units > feedback.account_remaining_units:
-        return Decision("refuse", "insufficient_budget")
     return Decision("submit", "platform_open")
 
 

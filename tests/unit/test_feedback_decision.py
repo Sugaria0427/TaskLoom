@@ -134,7 +134,9 @@ def test_happy_path_submits(fresh_feedback: Callable[[], PlatformFeedback]) -> N
 
 
 def test_platform_queued_full_waits(fresh_feedback: Callable[[], PlatformFeedback]) -> None:
-    feedback = fresh_feedback(account_queued=1, recommended_pending_limit=0, retry_after_seconds=0.4)
+    feedback = fresh_feedback(
+        account_queued=1, recommended_pending_limit=0, retry_after_seconds=0.4
+    )
     decision = decide(
         feedback,
         now=lambda: 0.0,
