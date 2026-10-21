@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Literal
 
 from taskloom.client.dispatcher import Dispatcher, QuarantinedExecution
+from taskloom.client.model_scheduler import ModelScheduler
 from taskloom.client.ports import ExecutorPort, GatewayPort
 from taskloom.contracts.models import (
     AttemptState,
@@ -32,6 +33,13 @@ from taskloom.domain.model import Agent, DomainError, Outcome, Resources, Step, 
 from taskloom.domain.ports import Repository, StoredRecord
 from taskloom.runtime.agent import FILE_STATS_TOOL, run_agent
 
+# L3 调度器的算法参数。刻意不进 ClientConfig：它们是调度策略的一部分，
+# 改它们只应改这一处，装配层不需要知道。
+_MODEL_QUANTUM = 100
+_URGENCY_WINDOW_SECONDS = 60.0
+_AGING_WINDOW_SECONDS = 20.0
+_URGENCY_BURST = 2
+
 
 class ClientService:
     def __init__(
@@ -52,7 +60,15 @@ class ClientService:
         self.attempts: dict[str, AttemptState] = {}
         self.runners: dict[str, asyncio.Task[None]] = {}
         self.lock = asyncio.Lock()
-        self.models = Dispatcher(Resources(slots=config.max_inflight))
+        self.models = ModelScheduler(
+            max_inflight=config.max_inflight,
+            coordinated=config.coordinated,
+            quantum=_MODEL_QUANTUM,
+            urgency_window=_URGENCY_WINDOW_SECONDS,
+            aging_window=_AGING_WINDOW_SECONDS,
+            urgency_burst=_URGENCY_BURST,
+            feedback=self.gateway.feedback,
+        )
         self.tools = Dispatcher(
             Resources(
                 slots=config.tool_slots,
@@ -521,12 +537,10 @@ class ClientService:
         attempt.state = WorkState.WAIT_QUOTA
         await self._save_attempt(attempt)
 
-        async def execute() -> ModelReply:
+        async def execute(_request: ModelRequest) -> GatewayRecord:
             current_task = self.get(task_id)
             if current_task.cancel_requested:
                 raise asyncio.CancelledError
-            if not attempt.reserved_units:
-                await self.wait_platform(request)
             if (
                 current_task.consumed_units
                 + current_task.reserved_units
@@ -546,9 +560,7 @@ class ClientService:
                     await asyncio.sleep(0.05)
                     record = await self.gateway.query(request.request_id)
                 await self._settle_model(attempt, record)
-                if record.reply is None:
-                    raise DomainError("MODEL_" + record.outcome, record.error or record.state)
-                return record.reply
+                return record
             except asyncio.CancelledError:
                 try:
                     record = await self.gateway.cancel(request.request_id)
@@ -575,7 +587,10 @@ class ClientService:
                     await self._save_attempt(attempt)
                 raise
 
-        return await self.models.submit(attempt.attempt_id, task_id, Resources(slots=1), execute)
+        record = await self.models.submit(request, execute)
+        if record.reply is None:
+            raise DomainError("MODEL_" + record.outcome, record.error or record.state)
+        return record.reply
 
     async def tool(self, task_id: str, call: ToolCall) -> JsonObject:
         attempt = await self._attempt(task_id, f"{task_id}-tool-{call.call_id}", "tool")
@@ -734,6 +749,14 @@ class ClientService:
         return feedback
 
     async def wait_platform(self, request: ModelRequest) -> None:
+        """轮询平台反馈直到允许提交，预算不足直接报错。
+
+        模型侧的准入已经交给 :class:`ModelScheduler`，
+        :meth:`model` 不再走这里。保留它是因为它的判据是
+        ``ACCOUNT_BUDGET`` 语义的唯一权威表述：不可恢复的费用不足只看
+        预算减已消费，预留占用和速率窗口都属于可恢复等待。新增准入逻辑
+        时以它为准，不要在这里改出第二套判断。
+        """
         while True:
             feedback = await self.refresh_platform()
             if (
@@ -767,16 +790,22 @@ class ClientService:
         }
 
     def resources(self) -> JsonObject:
+        # 模型侧由 ModelScheduler 自己管在途名额，这里仍按 Resources 的
+        # 对外形状汇报容量与可用量，前端与验收脚本不用改。
+        model_capacity = asdict(Resources(slots=self.config.max_inflight))
         return {
             "capacity": asdict(self.tools.pool.capacity),
             "available": asdict(self.tools.pool.available),
             "queued_tools": len(self.tools.queue),
-            "queued_models": len(self.models.queue),
+            "queued_models": self.models.pending,
             "quarantined": list(self.tools.quarantined),
             "artifact_bytes": self.artifact_size(),
             "artifact_capacity_bytes": self.config.artifact_budget_mib * 1048576,
-            "model_capacity": asdict(self.models.pool.capacity),
-            "model_available": asdict(self.models.pool.available),
+            "model_capacity": model_capacity,
+            "model_available": {
+                **model_capacity,
+                "slots": max(0, self.config.max_inflight - self.models.in_flight),
+            },
             "allocations": [
                 {
                     "attempt_id": key,
@@ -786,8 +815,17 @@ class ClientService:
                     "kind": kind,
                     "resources": asdict(demand),
                 }
-                for kind, pool in (("tool", self.tools.pool), ("model", self.models.pool))
+                for kind, pool in (("tool", self.tools.pool),)
                 for key, demand in pool.allocations.items()
+            ]
+            + [
+                {
+                    "attempt_id": request_id,
+                    "root_task_id": root_task_id,
+                    "kind": "model",
+                    "resources": asdict(Resources(slots=1)),
+                }
+                for request_id, root_task_id in self.models.in_flight_requests
             ],
             "attempts": [a.model_dump(mode="json") for a in self.attempts.values()],
         }

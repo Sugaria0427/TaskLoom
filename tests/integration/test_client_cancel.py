@@ -5,7 +5,7 @@ from taskloom.adapters.sqlite import SQLiteRepository
 from taskloom.client.ports import ExecutorPort, GatewayPort
 from taskloom.client.service import ClientService
 from taskloom.contracts.models import ClientConfig, TaskCreate
-from taskloom.domain.model import Outcome, Resources, WorkState
+from taskloom.domain.model import Outcome, WorkState
 
 
 async def test_cancel_before_model_dispatch_closes_durable_attempt(
@@ -17,7 +17,8 @@ async def test_cancel_before_model_dispatch_closes_durable_attempt(
     executor = AsyncMock(spec=ExecutorPort)
     service = ClientService(repository, gateway, executor, tmp_path, ClientConfig(max_inflight=1))
     await service.start()
-    service.models.pool.reserve("other-request", Resources(slots=1))
+    # 平台侧不接受提交，模型请求会停在调度队列里等，从而复现"还没派发就被取消"。
+    gateway.feedback.return_value = platform_feedback.model_copy(update={"can_submit": False})
     try:
         task = await service.create(TaskCreate(documents={"a.txt": "one two"}))
         for _ in range(3000):
@@ -36,9 +37,8 @@ async def test_cancel_before_model_dispatch_closes_durable_attempt(
         assert attempts[0]["state"] == WorkState.FINISHED
         assert attempts[0]["settled"]
         gateway.submit.assert_not_awaited()
-        assert not len(service.models.queue)
-        assert service.models.pool.release("other-request")
-        assert service.models.pool.available.slots == 1
+        assert not service.models.pending
+        assert service.models.in_flight == 0
     finally:
         await service.close()
         await repository.close()

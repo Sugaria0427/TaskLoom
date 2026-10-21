@@ -142,6 +142,17 @@ class ModelScheduler:
         """当前排队等待的请求数。"""
         return len(self._queue)
 
+    @property
+    def in_flight_requests(self) -> tuple[tuple[str, str], ...]:
+        """当前在途请求的 ``(request_id, root_task_id)`` 快照。
+
+        供客户端汇报资源占用用。不返回内部对象，调用方改不动在途请求。
+        """
+        return tuple(
+            (pending.request.request_id, pending.request.root_task_id)
+            for pending in self._in_flight.values()
+        )
+
     async def start(self) -> None:
         """启动后台调度循环。"""
         self._loop = asyncio.create_task(self._run())
