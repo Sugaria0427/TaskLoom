@@ -8,7 +8,7 @@
 
 ## 1. 当前实现
 
-0.2 已贯通平台注册、个人端连接、双用户任务、共享模型池和反馈等待。个人端已支持有界的多轮模型—工具链，当前受控工具为 `file_stats` 与 `grep`；模型池使用固定容量仿真，文件工具、进程、cgroup、账户和持久账本实际运行。成本 DRR、阶段银行家、受控子 Agent、自适应反馈与 OpenClaw 对照进入后续研究。
+0.2 已贯通平台注册、个人端连接、双用户任务、共享模型池和反馈等待。个人端已支持有界的多轮模型—工具链，当前受控工具为 `file_stats` 与 `grep`；模型池使用固定容量仿真，文件工具、进程、cgroup、账户和持久账本实际运行。成本 DRR、阶段银行家、子 Agent 扇出、自适应反馈与原版 OpenClaw 对照按后续阶段实施。已合并、待合并和研究设计集中记录在[当前实现与开发状态](docs/engineering/TaskLoom_当前实现与开发状态.md)。
 
 | 部分 | 已实现能力 |
 |---|---|
@@ -56,8 +56,8 @@ Ctrl+C 结束前台运行，或另开终端执行 `python3.12 tools/project.py s
 |---|---|
 | 产品目标、统一账号模型与四层研究方案。 | [当前完整说明书](docs/TaskLoom_项目说明书_当前完整方案.md) |
 | 实际进程、接口、账本与配置所有权。 | [基础工程架构](docs/engineering/TaskLoom_基础工程架构.md) |
-| 工程约束与后续开发阶段。 | [AGENTS.md](AGENTS.md)、[工程搭建计划](docs/engineering/TaskLoom_工程骨架搭建计划.md) |
-| 本次改造和实际验证。 | [统一系统改造与验收](docs/engineering/TaskLoom_统一系统改造与验收.md) |
+| 工程约束与后续开发阶段。 | [AGENTS.md](AGENTS.md)、[工程搭建计划](docs/engineering/TaskLoom_工程骨架搭建计划.md)、[PR 交付约定](docs/engineering/TaskLoom_PR提交与验收约定.md) |
+| 已合并能力、待合并增量与最新验证。 | [当前实现与开发状态](docs/engineering/TaskLoom_当前实现与开发状态.md) |
 
 个人端使用 ClientConfig，平台使用 PlatformConfig，固定模型池使用 PoolConfig。示例在 configs/dev；环境变量在 .env.example。个人端凭证文件为 clients/<profile>/platform-credentials.json，保存平台 URL 和本账号 Key；平台池密钥由平台持有。
 
@@ -65,9 +65,9 @@ Ctrl+C 结束前台运行，或另开终端执行 `python3.12 tools/project.py s
 
 模型请求始终经过本平台。`coordinated=false` 用于无反馈基线，保留同一鉴权、额度、模型池和调用路径。
 
-[研究报告与来源索引](research/agent-orchestrate/README.md)和[正式文档](docs/README.md)沿用原目录。产品代码位于 src，产品工具位于 tools，文档编写工作区位于本地 agent-workspace，历史备份保存在 backup。
+[研究报告与来源索引](research/agent-orchestrate/README.md)与[正式文档](docs/README.md)分别维护证据和工程说明，旧版资料从[备份索引](backup/README.md)追溯。产品代码位于 src，产品工具位于 tools，文档编写工作区位于本地 agent-workspace，历史备份保存在 backup。
 
-公开仓库包含源码、测试、配置模板、项目文档、调研报告与来源索引。原始论文、网页快照、编写工作区、运行数据和构建产物保留在本地，不纳入版本控制。调研文档中的本地材料路径用于追溯原始证据，公开来源可按来源索引中的链接访问。
+公开仓库包含源码、测试、配置模板、项目文档、调研报告与来源索引。原始论文、网页快照、编写工作区、运行数据和构建产物保留在本地，不纳入版本控制。来源索引提供公开链接，本地材料路径按原核查记录保留，供持有原始证据的成员追溯。
 
 ## 4. 验证与继续开发
 
