@@ -35,6 +35,11 @@ def _select_run(records: list[Any], manifest: Any) -> tuple[list[Any], dict[str,
         identity = row["task_id"]
         if identity in verdicts:
             raise ValueError(f"duplicate task_id in run manifest: {identity}")
+        if row.get("incomplete") is True or row.get("quality_passed") is None:
+            raise ValueError(
+                f"task_id {identity} is incomplete or quality_passed is unavailable; "
+                "resume the run or recapture after completion"
+            )
         if type(row.get("quality_passed")) is not bool:
             raise ValueError(f"quality_passed must be boolean for task_id {identity}")
         verdicts[identity] = row["quality_passed"]

@@ -162,6 +162,20 @@ def test_run_manifest_rejects_missing_quality_verdict(tmp_path: Path) -> None:
     assert "quality_passed" in result.stderr
 
 
+def test_run_manifest_rejects_incomplete_null_verdict_with_recovery_guidance(
+    tmp_path: Path,
+) -> None:
+    result = _run_manifest_report(
+        tmp_path,
+        [task("selected", "PENDING", None)],
+        _manifest({"task_id": "selected", "quality_passed": None, "incomplete": True}),
+    )
+    assert result.returncode != 0
+    assert "selected" in result.stderr
+    assert "recapture" in result.stderr.lower()
+    assert not (tmp_path / "report.json").exists()
+
+
 def test_run_manifest_and_quality_flags_are_exclusive(tmp_path: Path) -> None:
     result = _run_manifest_report(
         tmp_path,
