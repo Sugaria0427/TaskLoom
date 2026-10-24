@@ -143,7 +143,7 @@ class GatewayService:
 
         def feasible(item: str) -> bool:
             nonlocal ceiling
-            # Keys of finished records may outlive their pruned record in the queue.
+            # Keys leave the queue when their request finishes; this guards stale ones.
             if item not in self.requests:
                 return True
             record = self.requests[item]
@@ -274,6 +274,7 @@ class GatewayService:
                 record.outcome = Outcome.CANCELLED
                 record.quiescent = True
                 record.completed_at = self.now()
+                self.policy.discard(self.key(tenant, request_id))
             await self._save(record)
             self.requests[self.key(tenant, request_id)] = record
             self.wake.set()
@@ -330,9 +331,11 @@ class GatewayService:
         if account is None:
             return False
         personal = self._account_quota(record.tenant_id)
-        # Budgets hold in-flight worst cases; windows are rates and take the estimate.
+        # Budgets and token windows are hard limits, so both admit the worst case: the full
+        # prompt plus max_tokens. The estimate only orders and reports; settlement returns
+        # what a request did not use.
         worst = self.worst(record.request)
-        tokens = self._estimate(record).tokens
+        tokens = record.request.reserve_units
         return (
             self.quota.inflight < self.config.pool_capacity
             and self.quota.window_requests < self.config.requests_per_window
@@ -413,6 +416,7 @@ class GatewayService:
                         rejected.error = "DEADLINE_EXPIRED" if expired else "BUDGET_EXHAUSTED"
                         await self._save(rejected)
                         self.requests[expired_key] = rejected
+                        self.policy.discard(expired_key)
                 self._prune()
                 while self.quota.inflight < self.config.pool_capacity:
                     key = self._candidate()
@@ -459,7 +463,7 @@ class GatewayService:
                     estimate = self._estimate(record)
                     record.reserved_units = estimate.units
                     record.worst_units = worst
-                    record.window_tokens = estimate.tokens
+                    record.window_tokens = record.request.reserve_units
                     for ledger in (quota, account_quota):
                         ledger.reserved_units += record.reserved_units
                         ledger.worst_units += record.worst_units
@@ -567,8 +571,8 @@ class GatewayService:
             record = current.model_copy(deep=True)
             quota = self.quota.model_copy(deep=True)
             account_quota = self._account_quota(record.tenant_id).model_copy(deep=True)
-            # Windows dispatched into charged the estimated tokens; true them up to usage.
-            # A window that has rolled over since dispatch keeps what it was charged.
+            # The dispatch window holds the worst case; settle it down to usage. A window that
+            # has rolled over since dispatch keeps that worst case, which covered the request.
             actual = reply.usage.input_tokens + reply.usage.output_tokens
             for ledger in (quota, account_quota):
                 ledger.reserved_units -= record.reserved_units

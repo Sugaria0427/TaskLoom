@@ -47,6 +47,7 @@ from taskloom.domain.model import DomainError
 from taskloom.domain.ports import StoredRecord
 from taskloom.execution.ports import ToolBackend
 from taskloom.gateway.service import GatewayService
+from taskloom.policies.reservation import Prices
 
 
 def application(name: str, lifespan: Any) -> FastAPI:
@@ -146,6 +147,7 @@ def platform_app(base: Path, config: PlatformConfig) -> FastAPI:
             )
             for account in config.pool_accounts
         },
+        Prices(config.output_price, config.cache_read_price, config.cache_write_price),
     )
     service = GatewayService(store, provider, config)
 

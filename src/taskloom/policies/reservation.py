@@ -21,14 +21,15 @@ class Prices:
 
 
 def worst_units(input_tokens: int, max_tokens: int, prices: Prices) -> int:
-    # A missed prompt may be billed as a cache write, never below the uncached price.
-    return math.ceil(input_tokens * max(1.0, prices.cache_write) + max_tokens * prices.output)
+    # Any prompt token may be billed uncached, as a cache write or as a cache read.
+    prompt = max(1.0, prices.cache_write, prices.cache_read)
+    return math.ceil(input_tokens * prompt + max_tokens * prices.output)
 
 
 @dataclass(frozen=True)
 class Estimate:
     units: int  # expected charge
-    tokens: int  # expected input + output tokens, charged to token windows
+    tokens: int  # expected input + output tokens
 
 
 def _remember[K, V](table: OrderedDict[K, V], key: K, value: V, limit: int) -> None:

@@ -272,7 +272,7 @@ def test_maxmin_balances_roots_inside_a_tenant_and_bypasses_infeasible_heads() -
 def test_single_account_config_is_unchanged_and_accounts_define_capacity() -> None:
     legacy = PlatformConfig(pool_capacity=3)
     assert legacy.pool_accounts == [] and legacy.pool_capacity == 3
-    assert legacy.scheduling_policy == "hybrid"
+    assert legacy.scheduling_policy == "rr"
     pooled = PlatformConfig(
         pool_accounts=[PoolAccount(account_id="a0", capacity=2), {"account_id": "a1"}]
     )
@@ -301,3 +301,21 @@ def test_hybrid_ranks_by_slots_held_then_by_recent_slot_time() -> None:
     policy.on_finish("f0", 1.0, 0)
     policy.on_finish("u0", 100.0, 0)
     assert policy.pick(lambda _: True, 100.0) == "f1"
+
+
+@pytest.mark.parametrize("name", ["rr", "drr", "maxmin", "hybrid"])
+def test_discard_drops_a_queued_key_and_keeps_the_rest_in_order(name: str) -> None:
+    policy = scheduling_policy(name)  # type: ignore[arg-type]
+    for key in ("a1", "a2", "a3"):
+        policy.push("alice", "root", key, 0.0)
+    policy.push("bob", "solo", "b1", 0.0)
+    policy.discard("a2")
+    policy.discard("b1")
+    policy.discard("missing")
+    assert len(policy) == 2
+    picked = [policy.pick(lambda _key: True, 1.0), policy.pick(lambda _key: True, 1.0)]
+    assert picked == ["a1", "a3"]
+    assert policy.pick(lambda _key: True, 1.0) is None and len(policy) == 0
+    # A party emptied by discards takes new work as usual.
+    policy.push("bob", "solo", "b2", 2.0)
+    assert policy.pick(lambda _key: True, 2.0) == "b2"

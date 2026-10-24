@@ -1,4 +1,5 @@
 import json
+import math
 from collections.abc import Mapping
 from typing import Any
 
@@ -6,9 +7,13 @@ import httpx
 
 from taskloom.contracts.models import ModelReply, ModelRequest, ToolCall, Usage
 from taskloom.gateway.ports import ProviderRejected
+from taskloom.policies.reservation import Prices
 
-# Explicit refusals: rate limited or unavailable, answered without running the request.
-REFUSED_STATUS = {429, 503}
+# The one status that refuses at admission: a rate-limited or full pool answers 429 without
+# running the request (the OpenAI-compatible contract, and the simulated pool's POOL_BUSY).
+# A 503 or any other error may come from a proxy after the upstream ran, so it stays
+# ambiguous and goes to reconciliation instead of being sent again.
+REFUSED_STATUS = {429}
 
 
 def _client(base_url: str, key: str) -> httpx.AsyncClient:
@@ -28,10 +33,16 @@ class HTTPProvider:
         key: str = "",
         kind: str = "simulated",
         accounts: Mapping[str, tuple[str, str]] | None = None,
+        prices: Prices | None = None,
     ) -> None:
-        """`accounts` maps upstream account id -> (base_url, key); empty is a single account."""
+        """`accounts` maps upstream account id -> (base_url, key); empty is a single account.
+
+        `prices` must be the platform's: the gateway admits budgets on worst cases at these
+        prices, so the charge reported here has to use them too.
+        """
         self.kind = kind
         self.model = model
+        self.prices = prices or Prices()
         self.client = _client(base_url, key)
         self.accounts = {
             name: _client(url, account_key) for name, (url, account_key) in (accounts or {}).items()
@@ -76,16 +87,26 @@ class HTTPProvider:
             for call in message.get("tool_calls", [])
         ]
         usage = data["usage"]
-        count = usage["prompt_tokens"] + usage["completion_tokens"]
         return ModelReply(
             content=message.get("content") or "",
             tool_calls=calls,
             usage=Usage(
                 input_tokens=usage["prompt_tokens"],
                 output_tokens=usage["completion_tokens"],
-                cost_units=count,
+                cost_units=self.charge(usage),
                 unit="mock_microcredit" if self.kind == "simulated" else "token_unit",
             ),
+        )
+
+    def charge(self, usage: dict[str, Any]) -> int:
+        """Cost in uncached-input-token units: cached prompt tokens at the read price, output
+        at the output price; never above the gateway's worst case for the same tokens."""
+        prompt, output = int(usage["prompt_tokens"]), int(usage["completion_tokens"])
+        details = usage.get("prompt_tokens_details") or {}
+        cached = min(prompt, int(details.get("cached_tokens") or 0))
+        # The epsilon keeps float noise from rounding a whole unit up.
+        return math.ceil(
+            prompt - cached + cached * self.prices.cache_read + output * self.prices.output - 1e-9
         )
 
     async def reconcile(self, request_id: str, account: str | None = None) -> ModelReply | None:

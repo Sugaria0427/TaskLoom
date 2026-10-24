@@ -284,10 +284,10 @@ class PlatformConfig(Contract):
     output_price: float = Field(default=1.0, gt=0, le=1000)
     cache_read_price: float = Field(default=1.0, ge=0, le=1000)
     cache_write_price: float = Field(default=1.0, ge=0, le=1000)
-    # L4 order: max-min of the slots each tenant (and root) holds now, recent slot-seconds
-    # breaking ties (hybrid, default); tenant/root round-robin (rr, pre-WP5); cumulative
-    # slot-second fairness (drr); or max-min alone (maxmin).
-    scheduling_policy: Literal["rr", "drr", "maxmin", "hybrid"] = "hybrid"
+    # L4 order: tenant/root round-robin (rr, default until the full comparison is done);
+    # max-min of the slots each tenant (and root) holds now, recent slot-seconds breaking
+    # ties (hybrid, the candidate); cumulative slot-second fairness (drr); or max-min alone.
+    scheduling_policy: Literal["rr", "drr", "maxmin", "hybrid"] = "rr"
     # Empty: one upstream account from pool_url/pool_key/pool_capacity, as before. Otherwise
     # pool_capacity is the sum of the account capacities (set here when left unspecified).
     pool_accounts: list[PoolAccount] = Field(default_factory=list, max_length=64)
@@ -404,9 +404,7 @@ class PlatformFeedback(Contract):
     observed_at: str = Field(default_factory=utc_now)
 
     def admission_needs(self, request: ModelRequest) -> tuple[int, int]:
-        """Worst-case budget units and expected window tokens L4 admits `request` on."""
+        """Worst-case budget units and window tokens L4 admits `request` on."""
         prices = Prices(self.output_price, self.cache_read_price, self.cache_write_price)
-        expected = self.expected_output_tokens
-        output = request.max_tokens if expected is None else min(request.max_tokens, expected)
         worst = worst_units(request.input_tokens, request.max_tokens, prices)
-        return worst, request.input_tokens + output
+        return worst, request.reserve_units

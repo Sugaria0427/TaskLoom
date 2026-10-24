@@ -12,12 +12,15 @@ Call protocol, all under the gateway lock:
   on_dispatch(key, tenant, root, now, units)  the picked key really took a slot; units is
                                      the gateway's expected charge for it
   on_finish(key, now, cost_units)    the slot was released with a settled reply
+  discard(key)                       a queued key left without dispatch (cancelled, expired,
+                                     out of budget); queues must not keep it while the pool
+                                     is full and pick() does not run
 
 The feedback switch on the client never reaches this module: both modes use the same policy.
 
-The default is `hybrid`; `rr` (the pre-WP5 order), `drr` and `maxmin` are kept for
-comparison. Measurements, including the plan's cost-unit DRR that was dropped, are in
-docs/engineering/TaskLoom_WP5_L4调度策略设计.md.
+The default stays `rr` (the pre-WP5 order) until a full paired comparison decides; `hybrid`
+is the candidate, `drr` and `maxmin` are kept for comparison. Measurements, including the
+plan's cost-unit DRR that was dropped, are in docs/engineering/TaskLoom_WP5_L4调度策略设计.md.
 """
 
 from collections import OrderedDict, deque
@@ -40,6 +43,8 @@ class SchedulingPolicy(Protocol):
     def on_dispatch(self, key: str, tenant: str, root: str, now: float, units: int = 0) -> None: ...
 
     def on_finish(self, key: str, now: float, cost_units: int) -> None: ...
+
+    def discard(self, key: str) -> None: ...
 
     def __len__(self) -> int: ...
 
@@ -82,6 +87,14 @@ class RoundRobinPolicy:
 
     def on_finish(self, key: str, now: float, cost_units: int) -> None:
         pass
+
+    def discard(self, key: str) -> None:
+        for tenant, inner in self._roots.items():
+            if inner.remove(lambda item: item == key):
+                if not len(inner):
+                    del self._roots[tenant]
+                    self._tenants.remove(tenant.__eq__)
+                return
 
     def __len__(self) -> int:
         return sum(len(inner) for inner in self._roots.values())
@@ -195,6 +208,18 @@ class OccupancyDrrPolicy:
         self._estimate = self._ewma(self._estimate, held)
         self._maybe_idle(tenant, root)
 
+    def discard(self, key: str) -> None:
+        for tenant, state in self._tenants.items():
+            for root, items in state.fifo.items():
+                if key in items:
+                    items.remove(key)
+                    state.roots[root].queued -= 1
+                    state.queued -= 1
+                    if not items:
+                        del state.fifo[root]
+                        self._maybe_idle(tenant, root)
+                    return
+
     def __len__(self) -> int:
         return sum(state.queued for state in self._tenants.values())
 
@@ -236,7 +261,7 @@ class OccupancyDrrPolicy:
 
 
 class HybridPolicy(OccupancyDrrPolicy):
-    """Max-min on the slots held now, then least attained slot-seconds among equals. Default.
+    """Max-min on the slots held now, then least attained slot-seconds among equals. Candidate.
 
     The first key decides who is shortchanged at this instant, which a non-preemptive pool can
     only correct at dispatch time (MaxMinPolicy). Among parties holding the same number of
@@ -324,6 +349,17 @@ class MaxMinPolicy:
         self._tenants[tenant].held -= 1
         self._roots[tenant][root].held -= 1
         self._forget(tenant, root)
+
+    def discard(self, key: str) -> None:
+        for (tenant, root), items in self._fifo.items():
+            if key in items:
+                items.remove(key)
+                if not items:
+                    del self._fifo[(tenant, root)]
+                self._tenants[tenant].queued -= 1
+                self._roots[tenant][root].queued -= 1
+                self._forget(tenant, root)
+                return
 
     def __len__(self) -> int:
         return sum(p.queued for p in self._tenants.values())
