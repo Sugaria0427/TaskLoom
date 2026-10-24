@@ -206,7 +206,7 @@ Successfully built dist/taskloom-0.2.0-py3-none-any.whl
 
 单元加集成共 89 项全过，冒烟 5 项全过，wheel 产物审计通过。
 
-第二轮复审的四条修订完成后，工作树取自 `feat/wp3` 的 `89d54a1`，同一容器内复跑：
+第二轮复审的四条修订完成后，工作树取自 `feat/wp3` 的 `d50c4a3`（此后的改动仅限本文件的文字修订），同一容器内复跑：
 
 ```
 64 files already formatted
