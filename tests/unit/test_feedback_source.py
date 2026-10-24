@@ -88,8 +88,25 @@ async def test_observed_at_is_not_rewritten() -> None:
     source = FeedbackSource(read, 10.0, now=clock)
 
     assert (await source()).observed_at == stamp
-    clock.advance(5.0)
+    clock.advance(4.0)
     assert (await source()).observed_at == stamp
+
+
+async def test_reuse_window_is_capped_at_the_stale_threshold() -> None:
+    """配置允许三十秒的复用周期，但超过陈旧阈值的快照调度器本来就会重读。"""
+    clock = _Clock()
+    first = _feedback(account_id="first")
+    read, reads = _reader(clock, [first, _feedback(account_id="second")])
+    source = FeedbackSource(read, 30.0, now=clock)
+
+    assert await source() is first
+    clock.advance(4.9)
+    assert await source() is first
+    assert len(reads) == 1
+
+    clock.advance(0.2)
+    assert (await source()).account_id == "second"
+    assert len(reads) == 2
 
 
 async def test_read_failure_propagates_instead_of_serving_a_stale_snapshot() -> None:

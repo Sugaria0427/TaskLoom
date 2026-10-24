@@ -13,11 +13,16 @@
   处理，也不要假装平台还在正常应答——那会让请求一直等在一个已经不成立的
   准入结论上。
 * **只读**。不写平台状态，不动预算。
+
+复用时长还要收在 :data:`STALE_FEEDBACK_SECONDS` 以内：配置允许把周期放宽到
+三十秒，而一份超过陈旧阈值的快照在 :func:`decide` 眼里就该重读了。若不收窄，
+调度器会反复拿到同一份自己判为陈旧的快照，请求一直卡到缓存过期才恢复。
 """
 
 import time
 from collections.abc import Awaitable, Callable
 
+from taskloom.client.feedback_decision import STALE_FEEDBACK_SECONDS
 from taskloom.contracts.models import PlatformFeedback
 
 FeedbackReader = Callable[[], Awaitable[PlatformFeedback]]
@@ -31,7 +36,8 @@ class FeedbackSource:
 
     Args:
         read: 向平台读取反馈的协程函数。
-        interval_seconds: 快照复用时长，必须为正。
+        interval_seconds: 快照复用时长，必须为正；实际生效值不超过
+            :data:`STALE_FEEDBACK_SECONDS`。
         now: 取当前时刻的函数，测试可替换。
     """
 
@@ -44,7 +50,7 @@ class FeedbackSource:
         if interval_seconds <= 0:
             raise ValueError("Feedback interval must be positive")
         self._read = read
-        self._interval = interval_seconds
+        self._interval = min(interval_seconds, STALE_FEEDBACK_SECONDS)
         self._now = now
         self._cached: PlatformFeedback | None = None
         self._fetched_at = float("-inf")
