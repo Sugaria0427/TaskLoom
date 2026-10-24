@@ -415,3 +415,143 @@ def test_settle_rejects_negative_units() -> None:
     scheduler = _scheduler()
     with pytest.raises(ValueError, match="non-negative"):
         scheduler.settle("root-a", -1, 10)
+
+
+async def test_callback_cost_share_is_fair_across_roots() -> None:
+    """复现审查意见 2.1：按实际回调统计，两根任务的成本份额应当持平。
+
+    单槽位、量子 100，一根任务每条请求成本 1000、另一根成本 20。按轮
+    发放额度时，重的方约每十轮才发一条、轻的方每轮发两条多，长期看两边
+    的服务成本应当相当；旧实现按「每次 pop 调用」发额度，重的方攒够额度
+    之前轻的方已经把账面挤满了。
+    """
+    scheduler = _scheduler(max_inflight=1, quantum=100)
+    await scheduler.start()
+    served: list[ModelRequest] = []
+
+    async def callback(request: ModelRequest) -> GatewayRecord:
+        served.append(request)
+        return _record(request)
+
+    def feed(root: str, cost: int, count: int) -> list[Any]:
+        return [
+            asyncio.create_task(
+                scheduler.submit(_request(f"{root}-{i}", root, cost=cost), callback)
+            )
+            for i in range(count)
+        ]
+
+    try:
+        tasks = feed("heavy", 1000, 60) + feed("light", 20, 400)
+        for _ in range(4000):
+            if len(served) >= 200:
+                break
+            await asyncio.sleep(0.001)
+        assert len(served) >= 200, len(served)
+        units = {"heavy": 0, "light": 0}
+        counts = {"heavy": 0, "light": 0}
+        for request in served[:200]:
+            units[request.root_task_id] += request.reserve_units
+            counts[request.root_task_id] += 1
+        assert counts["light"] > counts["heavy"], counts
+        heavier = max(units.values())
+        lighter = min(units.values())
+        assert lighter > 0
+        assert heavier / lighter < 1.6, (counts, units)
+    finally:
+        for task in tasks:
+            task.cancel()
+        await scheduler.close()
+
+
+async def test_sustained_urgent_arrivals_do_not_starve_the_background() -> None:
+    """复现审查意见 2.1 后半段：单槽位下持续涌入的紧急请求不能把后台挤掉。
+
+    后台请求先等过老化阈值，随后紧急请求连绵不断。提升有上限、轮到次数
+    跨调用保留，所以后台必须能通过正常轮转拿到派发机会。
+    """
+    scheduler = _scheduler(max_inflight=1, quantum=100, aging_window=0.05)
+    await scheduler.start()
+    order: list[str] = []
+
+    async def callback(request: ModelRequest) -> GatewayRecord:
+        order.append(request.request_id)
+        return _record(request)
+
+    tasks: list[Any] = []
+    try:
+        background = asyncio.create_task(
+            scheduler.submit(_request("background", "bg", cost=20, deadline_seconds=600), callback)
+        )
+        tasks.append(background)
+        await asyncio.sleep(0.08)
+        for index in range(120):
+            tasks.append(
+                asyncio.create_task(
+                    scheduler.submit(
+                        _request(f"urgent-{index}", "urgent", cost=20, deadline_seconds=10),
+                        callback,
+                    )
+                )
+            )
+        for _ in range(4000):
+            if "background" in order:
+                break
+            await asyncio.sleep(0.001)
+        assert "background" in order, order[:50]
+        assert order.index("background") < 100
+    finally:
+        for task in tasks:
+            task.cancel()
+        await scheduler.close()
+
+
+async def test_request_level_block_does_not_stop_other_roots() -> None:
+    """复现审查意见 2.4 复现 A：一条请求暂时不可行时别的根任务照常派发。
+
+    账户在途预留 9900、当前可用 100。队首要 200 的请求只能等，另一个
+    根任务只要 50 的请求应当立刻发出去。
+    """
+    feedback = _feedback(
+        account_budget_units=10_000,
+        account_consumed_units=0,
+        account_reserved_units=9_900,
+        account_remaining_units=100,
+    )
+    scheduler = _scheduler(max_inflight=1, coordinated=True, feedback=lambda: feedback)
+    await scheduler.start()
+    served: list[str] = []
+
+    async def callback(request: ModelRequest) -> GatewayRecord:
+        served.append(request.request_id)
+        return _record(request)
+
+    big = asyncio.create_task(scheduler.submit(_request("big", "root-a", cost=200), callback))
+    small = asyncio.create_task(scheduler.submit(_request("small", "root-b", cost=50), callback))
+    try:
+        await asyncio.wait_for(small, timeout=2.0)
+        assert served == ["small"], served
+        assert not big.done()
+    finally:
+        big.cancel()
+        await scheduler.close()
+
+
+async def test_deadline_wakes_the_backoff() -> None:
+    """复现审查意见 2.4 复现 B：退避期间最早期限必须能把循环叫醒。
+
+    平台要求 5 秒后再试，而请求 50 毫秒后到期；200 毫秒前就必须以
+    ``deadline_expired`` 结束，而不是等退避睡完。
+    """
+    feedback = _feedback(can_submit=False, retry_after_seconds=5.0)
+    scheduler = _scheduler(max_inflight=1, coordinated=True, feedback=lambda: feedback)
+    await scheduler.start()
+    try:
+        with pytest.raises(Refused) as caught:
+            await asyncio.wait_for(
+                scheduler.submit(_request("r1", "root-a", deadline_seconds=0.05), _record),
+                timeout=1.0,
+            )
+        assert caught.value.reason == DEADLINE_EXPIRED
+    finally:
+        await scheduler.close()

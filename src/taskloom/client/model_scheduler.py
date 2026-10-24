@@ -1,19 +1,22 @@
 """L3 模型请求调度器：成本公平、期限老化、平台反馈协调。
 
 :class:`ModelScheduler` 统管个人端的模型请求。它拿 :class:`AgingQueue`
-在根任务之间做成本公平，派发前读一次平台反馈，再把
-:class:`Decision` 翻译成提交、等待或拒绝。它是 :class:`Dispatcher`
-在模型侧的对应物；两者不共享状态，因为工具槽位和模型在途上限是分开的。
+在根任务之间做成本公平，派发前读一次平台反馈，再把判定翻译成提交、
+等待或拒绝。它是 :class:`Dispatcher` 在模型侧的对应物；两者不共享状态，
+因为工具槽位和模型在途上限是分开的。
 
-三件事的边界必须清楚：
+四件事的边界必须清楚：
 
-* **候选归属**：从队列取出到真正派发之间，请求属于调度器。任何一步
-  失败都要么原样放回队列并保留它已经等待的时长，要么把异常交给调用者，
-  不允许既吞掉异常又让调用者一直等。
+* **取出即派发**：队列按"当前还剩几个在途名额"取候选，并且只取反馈
+  认可的条目。取出来的就是要派发的，不再放回——放回会重复记账、重复
+  提升，候选列表里的公平顺序也没落实到实际派发顺序上。
 * **并发名额**：主循环只负责挑人并原子占名额，实际执行放在独立任务里，
   这样 ``max_inflight`` 才有并行意义。
 * **期限终态**：过了期限的请求是终态，从队列移除并以稳定错误码结束，
-  不是简单地不再派发。
+  不是简单地不再派发。任何退避都要被最早的那个期限打断。
+* **取消传递**：调用者放弃等待时，取消要传到真正打网关的那个任务上，
+  并等它把平台侧取消交接完；否则平台取消发不出去，在途名额和预留也
+  收不回来。
 
 示例:
     >>> import asyncio
@@ -34,7 +37,10 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import cast
 
-from taskloom.client.feedback_decision import Decision, decide
+from taskloom.client.feedback_decision import (
+    account_decision,
+    request_decision,
+)
 from taskloom.contracts.models import GatewayRecord, ModelRequest, PlatformFeedback
 from taskloom.policies.aging import AgingQueue
 
@@ -70,14 +76,14 @@ class ModelScheduler:
 
     参数:
         max_inflight: 本地在途上限，硬性截断并发派发数量。
-        coordinated: 为 ``True`` 时每次派发前读反馈；为 ``False`` 时
-            直接提交，构成对照基线。
+        coordinated: 为 ``True`` 时按反馈判定派发；为 ``False`` 时直接
+            提交，构成对照基线。
         quantum: 根任务之间成本轮转的额度。
         urgency_window: 距期限小于这个值算紧迫，触发提升。
         aging_window: 排队超过这个值算老化，触发提升。
         urgency_burst: 连续提升次数上限，防止紧急请求挤掉后台。
         feedback: 返回最新 :class:`PlatformFeedback` 的可调用对象，
-            每次派发判定调用一次；缓存由调用方负责。
+            每轮读一次；缓存由调用方负责。
         now: 返回纪元秒的同步函数，默认 :func:`time.time`，测试可注入。
 
     不变量:
@@ -85,7 +91,7 @@ class ModelScheduler:
         * ``cancel`` 把请求移出队列并以 :class:`asyncio.CancelledError`
           结束它的 future。
         * ``close`` 取消排队、在途和执行任务，拒绝后续提交。
-        * 取出后未派发的候选一定回到队列或交给调用者，不留悬挂请求。
+        * 从队列取出的条目一定会被派发，不再放回队列。
     """
 
     def __init__(
@@ -125,12 +131,10 @@ class ModelScheduler:
         )
         self._by_id: dict[str, _Pending] = {}
         self._in_flight: dict[str, _Pending] = {}
-        self._queued: set[str] = set()
-        self._queued_at: dict[str, float] = {}
-        self._feedback_failures: dict[str, int] = {}
+        self._feedback_failures = 0
         self._wake = asyncio.Event()
         self._loop: asyncio.Task[None] | None = None
-        self._executions: set[asyncio.Task[None]] = set()
+        self._executions: dict[str, asyncio.Task[None]] = {}
 
     @property
     def in_flight(self) -> int:
@@ -187,14 +191,11 @@ class ModelScheduler:
         )
         self._track(pending)
         self._queue.push(request.root_task_id, pending)
-        self._queued.add(request.request_id)
-        self._queued_at[request.request_id] = self._now()
         self._wake.set()
         try:
             return await pending.future
         except asyncio.CancelledError:
-            self._drop(request.request_id)
-            self._wake.set()
+            await self._abandon(request.request_id)
             raise
 
     def settle(self, owner: str, reserved: int, consumed: int) -> None:
@@ -239,7 +240,7 @@ class ModelScheduler:
         if loop_task is not None:
             loop_task.cancel()
         self._loop = None
-        executions = list(self._executions)
+        executions = list(self._executions.values())
         for execution in executions:
             execution.cancel()
         for pending in list(self._by_id.values()) + list(self._in_flight.values()):
@@ -247,9 +248,8 @@ class ModelScheduler:
                 pending.future.cancel()
         self._by_id.clear()
         self._in_flight.clear()
-        self._queued.clear()
-        self._queued_at.clear()
-        self._feedback_failures.clear()
+        self._executions.clear()
+        self._feedback_failures = 0
         if loop_task is not None:
             await asyncio.gather(loop_task, return_exceptions=True)
         if executions:
@@ -263,38 +263,74 @@ class ModelScheduler:
                 return
 
     async def _step(self) -> None:
-        """跑一轮：收掉过期请求，挑候选，占名额，派发。"""
+        """跑一轮：收掉过期请求，读反馈，按剩余名额取候选并派发。"""
         self._retire_expired()
-        candidates = self._queue.pop(eligible=self._eligible)
-        if not candidates:
+        capacity = self._max_inflight - self.in_flight
+        if capacity <= 0:
+            await self._await_wakeup()
+            return
+        if len(self._queue) == 0:
             await self._idle()
             return
+        if not self._queue.ready(self._eligible):
+            # 额度还没攒够：先让轮转把额度发出来。这一步既不读平台也不
+            # 派发，只推进轮转环；否则每一轮都会白读一次平台反馈。
+            self._queue.pop(eligible=self._eligible, limit=capacity, accept=lambda _: False)
+            await asyncio.sleep(0)
+            return
+        try:
+            feedback = await self._get_feedback()
+        except Exception as error:
+            await self._on_feedback_failure(error)
+            return
+        self._feedback_failures = 0
+        accept: Callable[[_Pending], bool] | None = None
+        if feedback is not None and self._coordinated:
+            account = account_decision(
+                feedback,
+                now=self._now,
+                in_flight=self.in_flight,
+                max_inflight=self._max_inflight,
+                coordinated=self._coordinated,
+                has_queued=feedback.account_queued > 0,
+            )
+            if account.reason == "stale_feedback":
+                # 快照不可信时不做任何终态判定，只退避等下一次读数。
+                await self._await_wakeup(account.retry_after)
+                return
+            self._refuse_unaffordable(feedback)
+            if account.action == "wait":
+                await self._await_wakeup(account.retry_after)
+                return
+            accept = self._acceptor(feedback)
+        rejected = False
+        candidates: list[_Pending] = []
+        if accept is None:
+            candidates = self._queue.pop(eligible=self._eligible, limit=capacity)
+        else:
+
+            def accept_tracking(pending: _Pending) -> bool:
+                nonlocal rejected
+                if accept(pending):
+                    return True
+                rejected = True
+                return False
+
+            candidates = self._queue.pop(
+                eligible=self._eligible,
+                limit=capacity,
+                accept=accept_tracking,
+            )
         for pending in candidates:
-            # 候选已经离开队列，成员标记要整体撤掉，否则放回时会被
-            # 误判成还在排队而丢失。
-            self._queued.discard(pending.request.request_id)
-        for index, pending in enumerate(candidates):
-            if self.in_flight >= self._max_inflight:
-                self._requeue_all(candidates[index:])
-                await self._await_wakeup()
-                return
-            try:
-                feedback = await self._get_feedback()
-            except Exception as error:
-                self._requeue_all(candidates[index + 1 :])
-                self._on_feedback_failure(pending, error)
-                await asyncio.sleep(_FEEDBACK_RETRY_DELAY)
-                return
-            decision = self._decide(feedback, pending.request.reserve_units)
-            if decision.action == "submit":
-                self._launch(pending)
-            elif decision.action == "wait":
-                self._requeue_all(candidates[index:])
-                await asyncio.sleep(decision.retry_after or _DEFAULT_RETRY_SECONDS)
-                self._wake.set()
-                return
-            else:
-                self._refuse(pending, decision.reason)
+            self._launch(pending)
+        if candidates:
+            return
+        if rejected:
+            # 请求级阻塞：等平台额度或最早期限，不空转。
+            retry_after = feedback.retry_after_seconds if feedback is not None else 0.0
+            await self._await_wakeup(retry_after)
+            return
+        await self._idle()
 
     async def _idle(self) -> None:
         """没候选时睡到有事发生，或者最早的那个期限到点。"""
@@ -302,20 +338,29 @@ class ModelScheduler:
             # 额度还没攒够，让出控制权再来一轮就够了，不睡死。
             await asyncio.sleep(0)
             return
-        self._wake.clear()
-        if self._queued:
+        if len(self._queue) > 0:
             self._wake.set()  # 刚才这一刻有请求进来，不能睡过去
             return
         await self._await_wakeup()
 
-    async def _await_wakeup(self) -> None:
-        """等在途名额释放，或者队列里最早的那个期限到点。
+    async def _await_wakeup(self, backoff: float | None = None) -> None:
+        """等在途名额释放、有事发生，或者最早的那个期限到点。
+
+        ``backoff`` 是调用方给的退避上限；实际等待取它与"距最近期限还有
+        多久"的较小值，所以请求到期不会被一段长退避挡住。
 
         必须真的睡下去：名额只有执行任务收尾时才会释放，那种唤醒
         来自别的协程，循环自己不会转，一味同步空转会把事件循环饿死。
         """
         deadline = self._queue.next_deadline()
-        timeout = None if deadline is None else max(0.0, deadline - self._now())
+        until_deadline = None if deadline is None else max(0.0, deadline - self._now())
+        timeout = backoff
+        if timeout is None:
+            timeout = until_deadline
+        elif until_deadline is not None:
+            timeout = min(timeout, until_deadline)
+        if timeout is not None and timeout <= 0:
+            timeout = 0
         self._wake.clear()
         try:
             await asyncio.wait_for(self._wake.wait(), timeout)
@@ -337,6 +382,34 @@ class ModelScheduler:
             return await value
         return value
 
+    def _acceptor(self, feedback: PlatformFeedback) -> Callable[[_Pending], bool]:
+        """构造请求级准入谓词：只放行自己能付得起的那一条。
+
+        被挡住的那一条留在队列原位，等待时长与次序都不变；同一轮里
+        别的根任务照常派发，不会被一条凑不齐额度的大请求整体拖住。
+        """
+
+        def accept(pending: _Pending) -> bool:
+            decision = request_decision(feedback, reserve_units=pending.request.reserve_units)
+            return decision.action == "submit"
+
+        return accept
+
+    def _refuse_unaffordable(self, feedback: PlatformFeedback) -> None:
+        """把账户余额已经付不起的请求收成终态。
+
+        这一步必须排在账户级退避之前：预算耗尽时平台同样把
+        ``can_submit`` 置成 ``False``，先看账户级结论会让这些请求
+        白等下去。
+        """
+
+        def unaffordable(pending: _Pending) -> bool:
+            decision = request_decision(feedback, reserve_units=pending.request.reserve_units)
+            return decision.action == "refuse"
+
+        for _, pending in self._queue.remove(unaffordable):
+            self._refuse(pending, "insufficient_budget")
+
     def _eligible(self, pending: _Pending) -> bool:
         """只放行没被取消、也没过期的请求。"""
         return not pending.future.done()
@@ -348,56 +421,39 @@ class ModelScheduler:
         def expired(pending: _Pending) -> bool:
             return _deadline_epoch(pending.request, self._now) < cutoff
 
-        for _, pending in self._queue.remove(expired):
+        for owner, pending in self._queue.remove(expired):
+            del owner
             request_id = pending.request.request_id
             self._by_id.pop(request_id, None)
-            self._queued.discard(request_id)
-            self._queued_at.pop(request_id, None)
-            self._feedback_failures.pop(request_id, None)
             if not pending.future.done():
                 pending.future.set_exception(Refused(DEADLINE_EXPIRED))
 
-    def _on_feedback_failure(self, pending: _Pending, error: Exception) -> None:
-        """读反馈失败：先保留原等待时长放回队列，反复失败才交给调用者。
+    async def _on_feedback_failure(self, error: Exception) -> None:
+        """读反馈失败：先重试，反复失败才把原始异常交给所有等待者。
 
         重试有上限。反馈源坏掉时如果一直重试，请求就会永远挂着，
         调用者既拿不到结果也等不到错误，所以超过上限就清理干净并把
         原始异常交出去。
         """
-        request_id = pending.request.request_id
-        attempts = self._feedback_failures.get(request_id, 0) + 1
-        if attempts < _FEEDBACK_RETRY_LIMIT:
-            self._feedback_failures[request_id] = attempts
-            self._requeue(pending)
+        self._feedback_failures += 1
+        if self._feedback_failures < _FEEDBACK_RETRY_LIMIT:
+            await asyncio.sleep(_FEEDBACK_RETRY_DELAY)
             return
-        self._drop(request_id)
-        if not pending.future.done():
-            pending.future.set_exception(error)
-
-    def _decide(self, feedback: PlatformFeedback | None, reserve_units: int) -> Decision:
-        if feedback is None:
-            return Decision("submit", "no_feedback")
-        return decide(
-            feedback,
-            now=self._now,
-            in_flight=self.in_flight,
-            max_inflight=self._max_inflight,
-            coordinated=self._coordinated,
-            has_queued=feedback.account_queued > 0,
-            reserve_units=reserve_units,
-        )
+        self._feedback_failures = 0
+        for pending in list(self._by_id.values()):
+            if not pending.future.done():
+                pending.future.set_exception(error)
+        self._by_id.clear()
+        self._queue.remove(lambda _: True)
 
     def _launch(self, pending: _Pending) -> None:
         """原子占一个在途名额，把执行交给独立任务，主循环继续挑下一个。"""
         request_id = pending.request.request_id
         self._in_flight[request_id] = pending
         self._by_id.pop(request_id, None)
-        self._queued.discard(request_id)
-        self._queued_at.pop(request_id, None)
-        self._feedback_failures.pop(request_id, None)
         execution = asyncio.create_task(self._execute(pending))
-        self._executions.add(execution)
-        execution.add_done_callback(self._executions.discard)
+        self._executions[request_id] = execution
+        execution.add_done_callback(lambda _: self._executions.pop(request_id, None))
 
     async def _execute(self, pending: _Pending) -> None:
         """跑完一个请求的回调并把结果交给调用者。"""
@@ -422,31 +478,27 @@ class ModelScheduler:
             self._in_flight.pop(request_id, None)
             self._wake.set()
 
+    async def _abandon(self, request_id: str) -> None:
+        """调用者放弃等待：把取消传给执行任务，并等它收尾。
+
+        已经派发的请求如果只出队不取消执行任务，网关那边的取消分支
+        永远不会执行：平台收不到取消、在途名额与预留都收不回来。
+        还在排队的请求直接出队就够了。
+        """
+        execution = self._executions.get(request_id)
+        if execution is not None and not execution.done():
+            execution.cancel()
+            await asyncio.gather(execution, return_exceptions=True)
+        else:
+            self._drop(request_id)
+        self._wake.set()
+
     def _refuse(self, pending: _Pending, reason: str) -> None:
         request_id = pending.request.request_id
         self._by_id.pop(request_id, None)
-        self._queued.discard(request_id)
-        self._queued_at.pop(request_id, None)
-        self._feedback_failures.pop(request_id, None)
         if not pending.future.done():
             pending.future.set_exception(Refused(reason))
         self._wake.set()
-
-    def _requeue_all(self, pending_list: list[_Pending]) -> None:
-        for pending in pending_list:
-            self._requeue(pending)
-
-    def _requeue(self, pending: _Pending) -> None:
-        """放回队列，保留它原来的入队时刻，老化时钟不会清零。
-
-        已经在队列里的条目直接跳过，防止反复放回产生重复副本。
-        """
-        request_id = pending.request.request_id
-        if pending.future.done() or request_id in self._queued:
-            return
-        self._queued.add(request_id)
-        enqueued_at = self._queued_at.setdefault(request_id, self._now())
-        self._queue.requeue(pending.request.root_task_id, pending, enqueued_at)
 
     def _track(self, pending: _Pending) -> None:
         self._by_id[pending.request.request_id] = pending
@@ -455,9 +507,6 @@ class ModelScheduler:
         """从队列和身份表里彻底移除一个请求。"""
         self._queue.remove(lambda item: item.request.request_id == request_id)
         self._by_id.pop(request_id, None)
-        self._queued.discard(request_id)
-        self._queued_at.pop(request_id, None)
-        self._feedback_failures.pop(request_id, None)
 
 
 def _deadline_epoch(request: ModelRequest, now: Callable[[], float]) -> float:
