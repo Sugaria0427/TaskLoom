@@ -28,25 +28,36 @@
 
 | 约束 | 落点 | 回归测试 |
 | --- | --- | --- |
-| 份额按累计成本而非条数 | `CostDRR._serve` 逐条扣额度、`CostDRR._requeue_or_retire` 保留余额 | `test_cost_drr.py::test_cumulative_cost_share_is_fair_across_heterogeneous_loads` |
+| 份额按累计成本而非条数 | `CostDRR._serve` 逐条扣额度、退场时保留余额；额度**按轮发放**，一次只取一小批也不会被提前透支 | `test_cost_drr.py::test_cumulative_cost_share_is_fair_across_heterogeneous_loads` |
 | 单价高于量子的请求有活性 | 额度跨轮累积，`ceil(价格/量子)` 轮后派出 | `test_cost_drr.py::test_expensive_item_waits_for_enough_credit` |
-| 持续紧急流不能挤掉后台 | `AgingQueue.pop` 的 `urgency_burst` 连续提升上限，超出后强制走正常轮转 | `test_aging.py::test_sustained_urgent_arrivals_cannot_starve_the_background` |
+| 持续紧急流不能挤掉后台 | `AgingQueue.pop` 的 `urgency_burst` 连续提升上限，名额被提升占满时轮转没跑、计数留着，下一次强制走正常轮转 | `test_aging.py::test_sustained_urgent_arrivals_cannot_starve_the_background` |
 | 提升计入公平账本 | `AgingQueue._take_from` → `CostDRR.take` → `CostDRR.charge` 允许扣成负额度 | `test_aging.py::test_promotion_is_charged_to_the_promoted_owner` |
 | `max_inflight` 真正并行 | `ModelScheduler._launch` 原子占名额后 `create_task`，主循环继续挑候选 | `test_model_scheduler.py::test_capacity_allows_true_parallelism` |
-| 反馈异常不丢候选 | `ModelScheduler._on_feedback_failure` 保留原等待时长回队，超上限交异常 | `::test_feedback_read_failure_keeps_the_candidate_owned`、`::test_permanent_feedback_failure_reaches_the_caller` |
+| 反馈异常不丢候选 | `ModelScheduler._on_feedback_failure` 保留原等待时长：候选根本没被取出，仍留在队列，超上限则把异常交给调用者 | `::test_feedback_read_failure_keeps_the_candidate_owned`、`::test_permanent_feedback_failure_reaches_the_caller` |
 | 过期是终态 | `ModelScheduler._retire_expired` 出队、清身份表、以 `deadline_expired` 结束 Future；`ModelScheduler._await_wakeup` 按 `next_deadline` 定时醒 | `::test_expired_request_reaches_a_terminal_state`、`::test_request_expiring_while_waiting_is_swept` |
 | 反馈 await 按返回值判断 | `ModelScheduler._get_feedback` 用 `inspect.isawaitable`，兼容同步函数返回 awaitable | `::test_awaitable_returning_sync_feedback_is_awaited` |
-| 不可恢复费用与可恢复等待分开 | `feedback_decision.decide` 判据与 `ClientService.wait_platform` 逐条对齐 | `test_feedback_decision.py::test_insufficient_budget_refuses`、`::test_reserved_funds_wait_instead_of_refusing`、`::test_window_token_shortfall_waits` |
+| 不可恢复费用与可恢复等待分开 | `feedback_decision` 拆成账户级 `account_decision` 与请求级 `request_decision`，判据与 `ClientService.wait_platform` 逐条对齐 | `test_feedback_decision.py::test_insufficient_budget_refuses`、`::test_reserved_funds_wait_instead_of_refusing`、`::test_window_token_shortfall_waits` |
+| 取出的就是能派发的 | `ModelScheduler._step` 用 `limit=capacity` 取候选、请求级不可行的由 `accept` 谓词让位，取出的全部派发，不再放回队列 | `::test_callback_cost_share_is_fair_across_roots`、`::test_request_level_block_does_not_stop_other_roots` |
+| 取消传到执行路径 | `ModelScheduler._abandon` 维护 `request_id → 执行 Task`，调用者被取消时取消并等待执行任务收尾 | `test_client_cancel.py::test_cancel_after_model_dispatch_reaches_the_execution` |
+| 退避被最早期限打断 | `ModelScheduler._await_wakeup` 取退避上限与"距最近期限"的较小值 | `::test_deadline_wakes_the_backoff` |
+| 校正用原预扣量、只校正一次 | `ClientService._reserved_units` 从 `AttemptState.request_payload` 复原预扣量；`_settle_model` 在锁内看共享记录，重复观察不重复退 | `test_client_settle.py::test_settlement_uses_the_original_reservation` |
 
-`decide` 与 `wait_platform` 的对齐口径（同一平台状态必须得到同一结论）：
+`decide`（`feedback_decision.decide` 保留为组合入口，内部由下面两个函数拼成）与 `wait_platform` 的对齐口径
+（同一平台状态必须得到同一结论）：
 
-| 平台状态 | 判据 | L3 动作 | `wait_platform` 行为 |
-| --- | --- | --- | --- |
-| 花不起钱 | `预算 - 已消费 < 本次预留` | `refuse/insufficient_budget` | 抛 `ACCOUNT_BUDGET` |
-| 额度被在途预留压住 | `account_remaining_units < 预留` | `wait/budget_reserved` | 继续等待 |
-| 窗口 token 不足 | `account_window_tokens_remaining < 预留` | `wait/window_exhausted` | 继续等待 |
-| 平台侧排队或限流 | `can_submit=False` | `wait/platform_blocked` | 继续等待 |
-| 本地名额满 | `in_flight >= max_inflight` | `wait/local_backpressure` | — |
+| 平台状态 | 判据 | 判定层 | L3 动作 | `wait_platform` 行为 |
+| --- | --- | --- | --- | --- |
+| 花不起钱 | `预算 - 已消费 < 本次预留` | 请求级 | `refuse/insufficient_budget` | 抛 `ACCOUNT_BUDGET` |
+| 额度被在途预留压住 | `account_remaining_units < 预留` | 请求级 | `wait/budget_reserved` | 继续等待 |
+| 窗口 token 不足 | `account_window_tokens_remaining < 预留` | 请求级 | `wait/window_exhausted` | 继续等待 |
+| 平台侧排队或限流 | `can_submit=False` | 账户级 | `wait/platform_blocked` | 继续等待 |
+| 账户排队满 | `account_queued >= max(1, recommended_pending_limit)` | 账户级 | `wait/platform_queued_full` | 继续等待 |
+| 本地名额满 | `in_flight >= max_inflight` | 账户级 | `wait/local_backpressure` | — |
+| 快照陈旧 | `now - observed_at > STALE_FEEDBACK_SECONDS` | 账户级 | `wait/stale_feedback` | — |
+
+账户级结论只让整轮退避；请求级结论只挡这一条请求（`ModelScheduler._acceptor` 返回 False 让位），
+别的根任务照常派发。终态拒绝（`insufficient_budget`）在账户级退避之前判定——平台预算耗尽时同样会把
+`can_submit` 置 False，先退避会让一条永远发不出去的请求一直挂着。
 
 ## 3. 接入面
 
@@ -77,8 +88,10 @@
 
 `GatewayPort.feedback` 是无参协程，`ModelScheduler` 要的是无参可调用对象。适配层职责固定为三条：
 
-1. **缓存与新鲜度**：按 `ClientConfig.feedback_interval_seconds` 缓存快照；`observed_at` 由平台填写，
-   `feedback_decision.STALE_FEEDBACK_SECONDS` 判陈旧。缓存不得把 `observed_at` 重写成读取时刻。
+1. **缓存与新鲜度**：按 `ClientConfig.feedback_interval_seconds` 缓存快照，但实际复用时长收在
+   `feedback_decision.STALE_FEEDBACK_SECONDS` 以内——配置允许三十秒，而超过陈旧阈值的快照调度器本来
+   就会判它陈旧，不收窄就会反复拿到同一份自己判为陈旧的快照。`observed_at` 由平台填写，缓存不得把它
+   重写成读取时刻。
 2. **失败不伪装**：读失败直接抛，由 `_on_feedback_failure` 计入重试并保留候选；适配层不得返回过期快照冒充新快照。
 3. **不协商**：只读，不写平台状态，不改预算。
 
@@ -95,6 +108,13 @@ def settle(self, owner: str, reserved: int, consumed: int) -> None:
 调用点：`ClientService._settle_model` 拿到 `GatewayRecord.consumed_units` 后，按 `attempt_id` 找回 owner 调用一次。
 `consumed == 0` 且 `outcome == Outcome.UNKNOWN` 时**不**回补——结果未知的请求保留预留、等核对结论，
 符合"已派发但结果未知进入核对、禁止未经核对自动重放"的约束。
+
+`reserved` 必须取**原预扣量**：平台完成结算后会把 `GatewayRecord.reserved_units` 清零，直接拿它当预扣量
+等于按"预扣 0、实付 10"校正，反而多扣 10。原预扣量由 `ClientService._reserved_units` 从持久化的
+`AttemptState.request_payload` 复原（重启后同样可用）。
+
+"只校正一次"以 Attempt 为单位：`ClientService._settle_model` 在锁内读共享的 `self.attempts` 记录，
+执行路径与对账路径同时看到同一个完成结果时只退一份。
 
 `settle` 是 `ModelScheduler` 上的方法，不动 `GatewayPort`、不动 `PlatformFeedback`、不动 `contracts/models.py`。
 
@@ -144,6 +164,19 @@ def settle(self, owner: str, reserved: int, consumed: int) -> None:
 | 7 | 容器内 unit+integration 全绿 |
 | 8 | `test_platform_status_reports_the_snapshot_admission_used` |
 
+### 6.1 第二轮复审的四条修订
+
+| 问题 | 根因 | 修法 | 回归测试 |
+| --- | --- | --- | --- |
+| 候选被当成已派发，成本份额失衡、后台持续等待 | `CostDRR.pop` 按调用次数发额度，一次取整轮候选；名额不足时放回却不恢复公平状态 | 额度改**按轮发放**（`CostDRR._visited` / `CostDRR._turn_done`）；`pop` 支持 `limit` 与 `accept`，取到名额上限就停、请求级不可行的让位；`ModelScheduler._step` 用 `limit=capacity` 取候选，取出的全部派发，不再放回 | `test_cost_drr.py::test_cumulative_cost_share_is_fair_across_heterogeneous_loads`、`test_model_scheduler.py::test_callback_cost_share_is_fair_across_roots`、`::test_sustained_urgent_arrivals_do_not_starve_the_background` |
+| 取消没传到执行路径 | `submit` 取消时只 `_drop` 排队信息，独立执行 Task 继续跑，`ClientService.model` 里 `gateway.cancel()` 的分支永不执行 | `ModelScheduler._executions` 维护 `request_id → 执行 Task`，`_abandon` 取消并等待它收尾；结果未知的一律保留预留进核对 | `test_client_cancel.py::test_cancel_after_model_dispatch_reaches_the_execution` |
+| 校正用错原预扣量 | 平台结算后把 `GatewayRecord.reserved_units` 清零，客户端拿 0 当预扣量，`settle(root, 0, 10)` 反而多扣 10 | `ClientService._reserved_units` 从 `AttemptState.request_payload` 复原预扣量；`_settle_model` 在锁内读共享记录，按 Attempt 只校正一次 | `test_client_settle.py::test_settlement_uses_the_original_reservation` |
+| 一条请求等待挡住全部 | 决策 `wait` 时放回全部候选并 `asyncio.sleep(retry_after)`，请求级阻塞被放大成整轮阻塞，到期处理也被推迟 | 账户级（`account_decision`）与请求级（`request_decision`）分开：账户级才整轮退避，请求级只让位；退避等待取"退避上限"与"距最近期限"的较小值 | `test_model_scheduler.py::test_request_level_block_does_not_stop_other_roots`、`::test_deadline_wakes_the_backoff`、`test_feedback_decision.py` 全组 |
+
+附带修掉反馈周期配置矛盾：`ClientConfig.feedback_interval_seconds` 允许最长 30 秒，而陈旧阈值是 5 秒，
+`FeedbackSource` 现在把实际复用时长收在 `STALE_FEEDBACK_SECONDS` 以内，不再持续复用一份自己判为陈旧的快照
+（`test_feedback_source.py::test_reuse_window_is_capped_at_the_stale_threshold`）。
+
 ## 7. 明确不做的事
 
 - 不做模型推理管理、GPU 分配、跨用户平台调度（属 L4）。
@@ -158,7 +191,7 @@ def settle(self, owner: str, reserved: int, consumed: int) -> None:
 容器为 Debian GNU/Linux 13、Linux 6.8.0-117-generic aarch64、Python 3.12.15，`uv 0.13.1`，
 依赖按 `uv.lock` 锁定安装，工作树取自 `feat/wp3` 的 `71d91d9`。
 
-`python tools/project.py verify` 的输出要点：
+`python tools/project.py verify` 的输出要点（第一轮接线完成后）：
 
 ```
 172 files already formatted
@@ -172,6 +205,10 @@ Successfully built dist/taskloom-0.2.0-py3-none-any.whl
 ```
 
 单元加集成共 89 项全过，冒烟 5 项全过，wheel 产物审计通过。
+
+第二轮复审的四条修订完成后，单元加集成共 96 项（`tests/unit` 70 全过、`tests/integration` 26 中 24 过），
+其中 2 项 `test_executor.py` 在 macOS 上因缺少 `/proc/sys/kernel/random/boot_id` 失败——与本次改动无关，
+Linux 容器内可通过，`verify` 结论待容器内复跑后更新本段。
 
 说明：`tools/project.py bootstrap` 固定下载 `uv-x86_64-unknown-linux-gnu`，在 aarch64 容器里
 跑不起来（缺 x86_64 动态加载器）。本次验证改用同一发行版的 aarch64 构建放进 `.toolchain/uv/uv`，
