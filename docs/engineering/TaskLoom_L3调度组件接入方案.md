@@ -206,9 +206,22 @@ Successfully built dist/taskloom-0.2.0-py3-none-any.whl
 
 单元加集成共 89 项全过，冒烟 5 项全过，wheel 产物审计通过。
 
-第二轮复审的四条修订完成后，单元加集成共 96 项（`tests/unit` 70 全过、`tests/integration` 26 中 24 过），
-其中 2 项 `test_executor.py` 在 macOS 上因缺少 `/proc/sys/kernel/random/boot_id` 失败——与本次改动无关，
-Linux 容器内可通过，`verify` 结论待容器内复跑后更新本段。
+第二轮复审的四条修订完成后，工作树取自 `feat/wp3` 的 `89d54a1`，同一容器内复跑：
+
+```
+64 files already formatted
+All checks passed!
+Success: no issues found in 41 source files
+Contracts: 3 kept, 0 broken.
+96 passed in 3.01s            # tests/unit + tests/integration
+Successfully built dist/taskloom-0.2.0-py3-none-any.whl
+5 passed in 27.42s            # tests/smoke
+{"verify": "passed", "wheel": "taskloom-0.2.0-py3-none-any.whl"}
+```
+
+单元加集成 96 项全过（第一轮 89 项，新增 7 项回归），冒烟 5 项全过，wheel 产物审计通过。
+macOS 上直接跑 `tests/integration` 会有 2 项 `test_executor.py` 失败，原因是缺少
+`/proc/sys/kernel/random/boot_id`；容器内可通过，与本次改动无关。
 
 说明：`tools/project.py bootstrap` 固定下载 `uv-x86_64-unknown-linux-gnu`，在 aarch64 容器里
 跑不起来（缺 x86_64 动态加载器）。本次验证改用同一发行版的 aarch64 构建放进 `.toolchain/uv/uv`，
