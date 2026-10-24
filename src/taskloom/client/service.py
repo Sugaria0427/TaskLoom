@@ -507,18 +507,43 @@ class ClientService:
             self.runners[task_id] = asyncio.create_task(self._run(task_id))
             return task
 
+    @staticmethod
+    def _reserved_units(attempt: AttemptState) -> int:
+        """派发时按原请求记下的预扣量。
+
+        平台完成结算后会把 ``GatewayRecord.reserved_units`` 清零，所以不能
+        拿它当原预扣量；原请求持久化在 ``AttemptState.request_payload`` 里，
+        重启后也能复原。
+        """
+        if attempt.request_payload is not None:
+            try:
+                return ModelRequest.model_validate(attempt.request_payload).reserve_units
+            except ValueError:
+                pass
+        return attempt.reserved_units
+
     async def _settle_model(self, attempt: AttemptState, record: GatewayRecord) -> None:
+        reserved = self._reserved_units(attempt)
         attempt.reserved_units = record.reserved_units
         attempt.consumed_units = record.consumed_units
         attempt.quiescent = record.quiescent
         attempt.outcome = record.outcome
         attempt.state = WorkState.FINISHED if record.quiescent else WorkState.RECONCILING
         attempt.result = record.reply.model_dump(mode="json") if record.reply else None
-        attempt.settled = record.state == "FINISHED"
         attempt.error = record.error
         # 结果未知的请求保留预留、等核对结论，不在这里回补公平账本。
-        if record.state == "FINISHED":
-            self.models.settle(attempt.root_task_id, record.reserved_units, record.consumed_units)
+        # 同一个 Attempt 只校正一次：这里要看共享的持久记录而不是手里的
+        # 副本，执行路径与核对路径同时看到同一个完成结果时只退一份。
+        if record.state == "FINISHED" and not attempt.settled:
+            async with self.lock:
+                current = self.attempts.get(attempt.attempt_id)
+                if current is not None and current.settled:
+                    attempt.settled = True
+                else:
+                    attempt.settled = True
+                    if current is not None:
+                        current.settled = True
+                    self.models.settle(attempt.root_task_id, reserved, record.consumed_units)
         await self._save_attempt(attempt)
 
     async def model(self, task_id: str, messages: list[JsonObject], round_index: int) -> ModelReply:
@@ -580,10 +605,13 @@ class ClientService:
                 if not admitted and error.code != "DUPLICATE_ID_CONFLICT":
                     attempt.quiescent = True
                     attempt.reserved_units = 0
-                    attempt.settled = True
                     attempt.outcome = Outcome.FAILED
                     attempt.state = WorkState.FINISHED
                     attempt.error = error.code
+                    # 请求没到过平台，实际消费为零，把派发时记的份额原样退回。
+                    if not attempt.settled:
+                        attempt.settled = True
+                        self.models.settle(attempt.root_task_id, request.reserve_units, 0)
                     await self._save_attempt(attempt)
                 raise
             except Exception:
