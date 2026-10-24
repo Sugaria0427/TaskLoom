@@ -1,8 +1,14 @@
 """按累计成本做赤字轮转的队列。
 
 :class:`CostDRR` 按某一方已经**被收取的成本**而不是按请求条数来排序。
-算法是经典赤字轮转：每次轮到某一方时给它的额度加上 ``quantum``，
+算法是经典赤字轮转：每轮轮到某一方时给它的额度加上 ``quantum``，
 队首条目的价格不超过当前额度才出队，额度可以跨轮累积。
+
+一轮（traversal）指轮转环上每一方都做完自己的回合：一方发到付不起为止，
+它的回合才算结束，轮转环才继续往下走。额度**按轮发放**而不是按调用发放，
+所以调度器一次只派发少量请求时，额度不会被提前透支，各方的成本份额
+依然均衡——这正是复审里"重请求派发 20 次、轻请求 180 次"那种失衡的
+根因修复点。
 
 成本公平与条数轮转的差别在于，一个一万 token 的请求不再和一个
 五十 token 的请求等价。模块只用标准库，内部不含时钟，
@@ -30,7 +36,7 @@ T = TypeVar("T")
 class CostDRR[T]:
     """按累计成本轮转的优先级队列。
 
-    每一方有一份"额度"，轮到它时增加 ``quantum``；队首条目价格不超过
+    每一方有一份"额度"，每轮轮到它时增加 ``quantum``；队首条目价格不超过
     额度才出队并扣减额度。额度跨轮累积且不设上限，因此长期空闲的一方
     回来时不会凭空积攒出一份额度。
 
@@ -39,7 +45,9 @@ class CostDRR[T]:
         cost: 返回条目价格的函数，同时用于扣额度和判断队首是否可发。
 
     不变量:
-        * 每次 ``pop`` 至多访问每一轮环上的每一方一次。
+        * 一轮里每一方只领一次额度，额度按轮发放而不是按调用发放。
+        * 一方的回合在它发到付不起、或队首被 :meth:`pop` 的 ``accept``
+          拒绝时结束，轮转环因此始终往下走，不会被一个积压的大户卡死。
         * 额度不足的一方本轮不发，额度保留到下一轮继续累积。
         * 普通出队不产生欠账，额度始终非负；只有老化层主动提升
           才可能把额度扣成负数，那是刻意的欠账。
@@ -56,6 +64,8 @@ class CostDRR[T]:
         self._items: dict[str, deque[T]] = {}
         self._deficit: dict[str, int] = {}
         self._carried: dict[str, int] = {}
+        self._visited: set[str] = set()
+        self._turn_done: set[str] = set()
 
     @property
     def quantum(self) -> int:
@@ -73,32 +83,92 @@ class CostDRR[T]:
             self._deficit[owner] = self._carried.pop(owner, 0)
         self._items[owner].append(item)
 
-    def pop(self, eligible: Callable[[T], bool] = lambda _: True) -> list[T]:
-        """走完一轮轮转环，取出本轮所有付得起的条目。
+    def pop(
+        self,
+        eligible: Callable[[T], bool] = lambda _: True,
+        limit: int | None = None,
+        accept: Callable[[T], bool] | None = None,
+    ) -> list[T]:
+        """走一轮轮转，取出本轮付得起且准发的条目。
 
-        每一方被访问一次：额度增加 ``quantum``，然后从队首开始连续发出
-        满足 ``eligible`` 且价格不超额度的条目，直到额度用尽或者队首
-        付不起。一轮里各方拿到的**成本总量**相同，这才是成本公平；
-        如果一轮只发一条，条目少的一方会把额度白白浪费掉，长期份额
-        就会偏向请求单价低的一方。
+        每一方在一轮里只领一次额度，随后从队首开始连续发出满足
+        ``eligible``、被 ``accept`` 认可、且价格不超额度的条目，直到额度
+        用尽或者队首付不起。一轮里各方拿到的**成本总量**相同，这才是
+        成本公平；如果一轮只发一条，条目少的一方会把额度白白浪费掉，
+        长期份额就会偏向请求单价低的一方。
 
         Args:
             eligible: 谓词；返回 ``False`` 的条目保持排队不发送。
+            limit: 本次最多发出多少条。``None`` 表示不限。名额用完时
+                停在当前一方，下次调用从它继续，轮转进度不丢。
+            accept: 谓词；返回 ``False`` 表示这个候选现在不能派发
+                （比如它自己要的钱超过账户当前可用额度）。这一方本轮
+                让位，条目留在原位，既不扣额度也不改变它的排队次序。
 
         Returns:
             本轮发出的条目，按轮转顺序排列。一条都没发出时是空列表，
             此时队列未必为空，可能只是额度还不够，见 :meth:`blocked`。
         """
         served: list[T] = []
-        for _ in range(len(self._owners)):
-            owner = self._owners.popleft()
-            items = self._items.get(owner)
-            if items is None:
-                continue
-            self._deficit[owner] += self._quantum
-            served.extend(self._serve(owner, items, eligible))
-            self._requeue_or_retire(owner, items)
+        budget = limit
+        while self._owners:
+            if budget is not None and len(served) >= budget:
+                break
+            owner = self._owners[0]
+            if owner not in self._visited:
+                self._visited.add(owner)
+                self._deficit[owner] += self._quantum
+            items = self._items[owner]
+            emitted = self._serve(owner, items, eligible, accept, budget)
+            served.extend(emitted)
+            if budget is not None:
+                budget -= len(emitted)
+            if items:
+                if budget is not None and budget <= 0:
+                    # 名额用尽，这一方的回合还没做完，停在原地下次接着来。
+                    break
+                # 额度不够或者队首被拒：这一方本轮让位，额度留着下轮再用。
+                self._owners.rotate(-1)
+                self._turn_done.add(owner)
+            else:
+                self._retire(owner)
+            if all(done in self._turn_done for done in self._owners):
+                self._visited.clear()
+                self._turn_done.clear()
+                break
         return served
+
+    def _retire(self, owner: str) -> None:
+        """把一方彻底移出轮转环，连同它本轮的状态一起清掉。"""
+        self._items.pop(owner, None)
+        self._deficit.pop(owner, None)
+        if owner in self._owners:
+            self._owners.remove(owner)
+        self._visited.discard(owner)
+        self._turn_done.discard(owner)
+
+    def ready(self, eligible: Callable[[T], bool] = lambda _: True) -> bool:
+        """至少有一方现在付得起它的队首条目。
+
+        与 :meth:`pop` 用同一套判据，但只读不改：调度器可以据此判断现在
+        值不值得去问平台。不值得的时候先让轮转把额度发出来，别把平台
+        反馈读成每轮一次。
+
+        Args:
+            eligible: 谓词；返回 ``False`` 的条目不算数。
+
+        Returns:
+            有一方付得起返回 ``True``。
+        """
+        for owner in self._owners:
+            for candidate in self._items[owner]:
+                if not eligible(candidate):
+                    continue
+                if self._cost(candidate) <= self._deficit.get(owner, 0):
+                    return True
+                # 队首付不起时 pop 不会越过它，后面的条目也不用看了。
+                break
+        return False
 
     def blocked(self) -> bool:
         """队列里还有条目在等额度凑够。
@@ -175,10 +245,7 @@ class CostDRR[T]:
         item = items.popleft()
         self.charge(owner, self._cost(item))
         if not items:
-            del self._items[owner]
-            del self._deficit[owner]
-            if owner in self._owners:
-                self._owners.remove(owner)
+            self._retire(owner)
         return item
 
     def remove(self, predicate: Callable[[T], bool]) -> list[tuple[str, T]]:
@@ -199,24 +266,35 @@ class CostDRR[T]:
             if keep:
                 self._items[owner] = keep
             else:
-                del self._items[owner]
-                del self._deficit[owner]
-                self._owners.remove(owner)
+                self._retire(owner)
         return removed
 
-    def _serve(self, owner: str, items: deque[T], eligible: Callable[[T], bool]) -> list[T]:
-        """发出队首所有付得起的条目，把本轮额度用尽。
+    def _serve(
+        self,
+        owner: str,
+        items: deque[T],
+        eligible: Callable[[T], bool],
+        accept: Callable[[T], bool] | None,
+        budget: int | None,
+    ) -> list[T]:
+        """发出队首所有付得起且准发的条目，把本轮额度用尽。
 
         队首不满足 ``eligible`` 就往后看，但价格超额度时立刻停手，
         不越过它去发后面便宜的条目——那会让贵的请求永远排不上。
+        ``accept`` 拒绝队首时整方让位，同样不越过它去发后面的条目，
+        免得同一根任务的请求次序被打乱。
         """
         served: list[T] = []
         index = 0
         while index < len(items):
+            if budget is not None and len(served) >= budget:
+                break
             candidate = items[index]
             if not eligible(candidate):
                 index += 1
                 continue
+            if accept is not None and not accept(candidate):
+                break
             price = self._cost(candidate)
             if price > self._deficit[owner]:
                 break
@@ -224,14 +302,6 @@ class CostDRR[T]:
             self._deficit[owner] -= price
             served.append(candidate)
         return served
-
-    def _requeue_or_retire(self, owner: str, items: deque[T]) -> None:
-        """一轮结束后，把还有货的一方放回环尾，清空的退场。"""
-        if items:
-            self._owners.append(owner)
-        else:
-            del self._items[owner]
-            del self._deficit[owner]
 
     def __len__(self) -> int:
         """所有一方排队条目的总数。"""
