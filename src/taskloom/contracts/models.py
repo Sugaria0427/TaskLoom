@@ -152,6 +152,7 @@ class TaskState(Contract):
     outcome: Outcome = Outcome.PENDING
     checkpoint: Checkpoint = Field(default_factory=Checkpoint)
     step_attempts: dict[str, str] = Field(default_factory=dict)
+    tool_step_aliases: dict[str, str] = Field(default_factory=dict)
     cancel_generation: int = 0
     cancel_requested: bool = False
     quiescent: bool = True

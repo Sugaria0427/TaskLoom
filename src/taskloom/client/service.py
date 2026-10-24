@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Literal
 
+from taskloom.client.checkpoint_upgrade import upgrade_checkpoint
 from taskloom.client.dispatcher import Dispatcher, QuarantinedExecution
 from taskloom.client.ports import ExecutorPort, GatewayPort
 from taskloom.contracts.models import (
@@ -100,6 +101,18 @@ class ClientService:
         for data in await self.store.records("attempt", self.config.tenant_id):
             attempt = AttemptState.model_validate(data)
             self.attempts[attempt.attempt_id] = attempt
+        for original in list(self.tasks.values()):
+            if original.outcome == Outcome.SUCCEEDED:
+                continue
+            try:
+                await self._upgrade_checkpoint(original)
+            except DomainError as error:
+                held = original.model_copy(deep=True)
+                held.state = WorkState.RECONCILING
+                if not held.cancel_requested:
+                    held.outcome = Outcome.UNKNOWN
+                held.error = error.code + ": " + str(error)
+                await self._save_task(held, await self._checkpoint_backup(original))
         await self.models.start()
         await self.tools.start()
         try:
@@ -119,6 +132,39 @@ class ClientService:
                 self.runners[task.task_id] = asyncio.create_task(self._run(task.task_id))
         self.reconciler = asyncio.create_task(self._reconcile_loop())
         self.ready = True
+
+    async def _checkpoint_backup(self, task: TaskState) -> list[StoredRecord]:
+        if await self.store.get("checkpoint_backup", task.task_id) is not None:
+            return []
+        return [
+            StoredRecord(
+                "checkpoint_backup",
+                task.task_id,
+                task.tenant_id,
+                {
+                    "task": task.model_dump(mode="json"),
+                    "attempts": [
+                        item.model_dump(mode="json")
+                        for item in self.attempts.values()
+                        if item.root_task_id == task.task_id
+                    ],
+                },
+            )
+        ]
+
+    async def _upgrade_checkpoint(self, task: TaskState) -> TaskState:
+        upgraded, changed = upgrade_checkpoint(task, self.attempts)
+        if upgraded == task and not changed:
+            return task
+        records = await self._checkpoint_backup(task)
+        records.extend(
+            StoredRecord("attempt", item.attempt_id, item.tenant_id, item.model_dump(mode="json"))
+            for item in changed
+        )
+        await self._save_task(upgraded, records)
+        for item in changed:
+            self.attempts[item.attempt_id] = item
+        return upgraded
 
     def _tool_demand(self) -> Resources:
         return Resources(slots=1, memory_bytes=134217728, artifact_bytes=3145728)
@@ -371,7 +417,9 @@ class ClientService:
                 model_round if model_round is not None else task.checkpoint.model_round - 1
             )
             predecessors = (
-                tuple(task.checkpoint.completed_tools)
+                tuple(
+                    task.tool_step_aliases.get(key, key) for key in task.checkpoint.completed_tools
+                )
                 if kind == "model"
                 else (f"{task_id}-model-{tool_model_round}",)
             )
@@ -492,6 +540,7 @@ class ClientService:
                 return task
             if task_id in self.runners:
                 return task
+            task = await self._upgrade_checkpoint(task)
             if digest(task.specification.documents) != task.input_version:
                 raise DomainError("INPUT_VERSION_MISMATCH", "Task input changed")
             self.verify_inputs(task)
@@ -600,11 +649,13 @@ class ClientService:
     async def tool(self, task_id: str, call: ToolCall, model_round: int) -> JsonObject:
         spec = self.registry.require(call.name)
         spec.check(call)
-        step_id = tool_step_id(task_id, model_round, call.call_id)
+        canonical = tool_step_id(task_id, model_round, call.call_id)
+        step_id = self.get(task_id).tool_step_aliases.get(canonical, canonical)
         request_payload = {"tool_name": call.name, "arguments": call.arguments}
         attempt = await self._attempt(task_id, step_id, "tool", request_payload, model_round)
         if attempt.outcome == Outcome.SUCCEEDED and attempt.result is not None:
             return attempt.result
+        recovering = attempt.outcome == Outcome.UNKNOWN or not attempt.quiescent
         task = self.get(task_id)
         attempt.state = WorkState.WAIT_RESOURCE
         await self._save_attempt(attempt)
@@ -632,7 +683,14 @@ class ClientService:
             attempt.quiescent = False
             await self._save_attempt(attempt)
             try:
-                state = await self.executor.run(request)
+                if recovering:
+                    state = await self.executor.query(attempt.attempt_id)
+                    if state is None:
+                        raise DomainError("TOOL_UNKNOWN", "Original tool execution is unconfirmed")
+                    if state.request != request:
+                        raise QuarantinedExecution("Recovered tool request differs")
+                else:
+                    state = await self.executor.run(request)
                 attempt.execution_ref = {
                     "pid": state.pid,
                     "cgroup_path": state.cgroup_path,
