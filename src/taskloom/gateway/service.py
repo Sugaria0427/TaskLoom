@@ -94,6 +94,7 @@ class GatewayService:
             self.account_quotas[item["account_id"]] = QuotaState.model_validate(item["quota"])
         usage = {row["root_key"] for row in await self.store.records("root_usage")}
         legacy: dict[str, tuple[str, int]] = {}
+        recovery: list[StoredRecord] = []
         for row in await self.store.records("request"):
             record = GatewayRecord.model_validate(row)
             key = self.key(record.tenant_id, record.request.request_id)
@@ -109,8 +110,16 @@ class GatewayService:
                 record.state = "UNKNOWN"
                 record.outcome = Outcome.UNKNOWN
                 record.error = "Dispatch interrupted; reconciliation required"
-                await self._save(record)
             if record.state == "UNKNOWN":
+                # Old ledgers reserved their full token cost, before worst_units existed.
+                # Keep that obligation until the original request can be reconciled.
+                if record.worst_units <= 0:
+                    record.worst_units = max(record.reserved_units, self.worst(record.request))
+                if record.window_tokens <= 0:
+                    record.window_tokens = record.request.reserve_units
+                recovery.append(
+                    StoredRecord("request", key, record.tenant_id, record.model_dump(mode="json"))
+                )
                 # Unresolved work still holds its slot; the policy counts it until settled.
                 self.policy.on_dispatch(
                     key, record.tenant_id, record.request.root_task_id, self.clock(),
@@ -118,9 +127,29 @@ class GatewayService:
                 )  # fmt: skip
         # State written before per-root usage was persisted derives it once from full history.
         for root_key, (tenant, units) in legacy.items():
-            await self.store.apply([self._root_usage(root_key, tenant, units)])
+            recovery.append(self._root_usage(root_key, tenant, units))
         for tenant in {r.tenant_id for r in self.requests.values()}:
             self._account_quota(tenant)
+        # Requests, account holds and shared holds are restored in one transaction. Rebuild
+        # from unresolved identities rather than adding again on each process restart.
+        unresolved = [r for r in self.requests.values() if r.state == "UNKNOWN"]
+        for ledger_tenant, ledger in [(None, self.quota), *self.account_quotas.items()]:
+            held = [r for r in unresolved if ledger_tenant is None or r.tenant_id == ledger_tenant]
+            ledger.reserved_units = sum(r.reserved_units for r in held)
+            ledger.worst_units = sum(r.worst_units for r in held)
+            ledger.inflight = len(held)
+            if ledger_tenant is None:
+                recovery.append(StoredRecord("quota", "shared", "_platform", ledger.model_dump()))
+            else:
+                recovery.append(
+                    StoredRecord(
+                        "account_quota",
+                        ledger_tenant,
+                        ledger_tenant,
+                        {"account_id": ledger_tenant, "quota": ledger.model_dump()},
+                    )
+                )
+        await self.store.apply(recovery)
         self._prune()
         await self.reconcile()
         self.ready = True
