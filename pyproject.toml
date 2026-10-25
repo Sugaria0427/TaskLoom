@@ -31,7 +31,7 @@ dev = [
 packages = ["src/taskloom"]
 
 [tool.hatch.build.targets.sdist]
-include = ["/src", "/tests", "/tools", "/configs", "/pyproject.toml", "/uv.lock", "/README.md", "/AGENTS.md", "/.python-version"]
+include = ["/src", "/tests", "/tools", "/configs", "/pyproject.toml", "/uv.lock", "/README.md", "/README_v*.md", "/AGENTS.md", "/.python-version"]
 
 [tool.ruff]
 target-version = "py312"

@@ -200,3 +200,20 @@ def test_run_manifest_and_quality_flags_are_exclusive(tmp_path: Path) -> None:
     )
     assert conflict.returncode != 0
     assert "not allowed with argument" in conflict.stderr
+
+
+def test_rejected_submission_stays_in_run_success_denominator(tmp_path: Path) -> None:
+    result = _run_manifest_report(
+        tmp_path,
+        [task("accepted", "SUCCEEDED", 5)],
+        _manifest(
+            {"task_id": "accepted", "quality_passed": True, "submission_state": "ACCEPTED"},
+            {"submission_state": "REJECTED", "outcome": "REJECTED", "quality_passed": False},
+        ),
+    )
+    assert result.returncode == 0, result.stderr
+    report = json.loads((tmp_path / "report.json").read_text(encoding="utf-8"))
+    assert report["accepted_tasks"] == 1
+    assert report["submitted_tasks"] == 2
+    assert report["rejected_submissions"] == 1
+    assert report["on_time_quality_rate"] == 0.5

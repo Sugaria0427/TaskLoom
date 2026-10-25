@@ -21,6 +21,7 @@ def platform_feedback():
         account_max_inflight=1,
         account_queued=0,
         account_window_tokens_remaining=50000,
+        account_admission_headroom_units=250000,
         can_submit=True,
         retry_after_seconds=0.1,
     )

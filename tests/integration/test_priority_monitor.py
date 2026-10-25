@@ -143,7 +143,7 @@ async def test_priority_update_is_durable_and_only_allowed_while_pending(
         repository, gateway, AsyncMock(), tmp_path, ClientConfig(max_inflight=1)
     )
     await service.start()
-    service.models.pool.reserve("hold", Resources(slots=1))
+    gateway.feedback.return_value = platform_feedback.model_copy(update={"can_submit": False})
     try:
         task = await service.create(TaskCreate(priority="low"))
         updated = await service.update_priority(task.task_id, "high")

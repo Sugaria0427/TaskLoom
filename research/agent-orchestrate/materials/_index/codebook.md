@@ -34,7 +34,7 @@
 
 ### 2.1 稳定编号与引用别名
 
-P、A、L、CX、CC、D等既有来源编号全部保留。OpenClaw使用OC-D（文档）、OC-S（源码）、OC-I（问题单）、OC-P（PR）及OC-M（版本资料），与S引用别名区分。复用说明书已有的OS资料使用OS21–OS24；说明书的S编号通过`citation_map.json`映射，S是文档引用别名，T是主题编号，二者分别使用。
+P、A、L、CX、CC、D等既有来源编号全部保留。OpenClaw使用OC-D（文档）、OC-S（源码）、OC-I（问题单）、OC-P（PR）及OC-M（版本资料），与S引用别名区分。OS资料使用OS21–OS24。归档分层说明书的S01–S23通过`citation_map.json`映射，OS算法补充沿用其中S21–S23；现行完整说明书使用来源编号与公开链接。S是特定文档的引用别名，T是主题编号。
 
 来源记录采用以下四组统一字段，类型一致的记录可以直接筛选。
 
@@ -132,7 +132,7 @@ P、A、L、CX、CC、D等既有来源编号全部保留。OpenClaw使用OC-D（
 
 主题判断的结构化入口是[analysis_catalog.json](analysis_catalog.json)，原文入口是[source_catalog.json](source_catalog.json)；报告对二者做面向读者的归纳。[theme_matrix.csv](theme_matrix.csv)提供可筛选表，[source_index.md](source_index.md)提供阅读导航。
 
-旧source registers、分析笔记、检索日志和脚本保存在[历史快照](../_archive/before_reorganization_20261014.zip)，迁移关系见[migration_manifest.json](migration_manifest.json)。[validation.json](validation.json)记录文件保留、来源ID、主题引用和当前链接检查结果。
+旧source registers、分析笔记、检索日志和脚本保存在历史快照（本地留存：`research/agent-orchestrate/materials/_archive/before_reorganization_20261014.zip`），迁移关系见[migration_manifest.json](migration_manifest.json)。[validation.json](validation.json)记录文件保留、来源ID、主题引用和当前链接检查结果。
 
 ### 4.3 检查范围
 

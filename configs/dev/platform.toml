@@ -7,3 +7,7 @@ account_budget_units = 250000
 requests_per_window = 120
 tokens_per_window = 100000
 total_budget_units = 1000000
+# Pool prices per token, relative to one uncached input token = 1 cost unit.
+output_price = 1.0
+cache_read_price = 1.0
+cache_write_price = 1.0

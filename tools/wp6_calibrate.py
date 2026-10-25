@@ -3,8 +3,9 @@
 Example: python tools/wp6_calibrate.py --snapshot capture.json \
     --manifest run.json --output calibration.json
 
-Attempt running→finished intervals exclude the preceding local queue wait. A model
-interval can still contain platform L4 wait; the output records this limitation.
+Measured roots preserve every ordered service stage and its settled model cost.
+Model service comes from L4 dispatch/completion timestamps; L4 wait is kept as an
+observation and never reused as service time.
 Only successful, quality-checked root tasks with settled positive consumption
 contribute costs. Missing or ambiguous samples fail without filling values.
 """
@@ -59,6 +60,8 @@ def calibrate(
     for row in manifest_tasks:
         if not isinstance(row, dict):
             raise ValueError("run manifest task row is malformed")
+        if row.get("submission_state") == "REJECTED":
+            continue
         task_id = row.get("task_id")
         if not isinstance(task_id, str) or task_id in seen_ids:
             raise ValueError("run manifest task IDs are missing or duplicated")
@@ -72,6 +75,23 @@ def calibrate(
     by_id = {row.get("task_id"): row for row in snapshot_tasks}
     if len(by_id) != len(snapshot_tasks):
         raise ValueError("snapshot task IDs are duplicated")
+    attempts = snapshot.get("resources", {}).get("attempts", [])
+    by_attempt = {row["attempt_id"]: row for row in attempts}
+    if len(by_attempt) != len(attempts):
+        raise ValueError("snapshot attempt IDs are duplicated")
+    grouped: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    for row in events:
+        if not isinstance(row, dict):
+            raise ValueError("event row is malformed")
+        if row.get("root_task_id") not in selected_ids:
+            continue
+        kind, _, state = str(row.get("type", "")).partition(".")
+        attempt_id = row.get("attempt_id")
+        if kind in {"model", "tool"} and isinstance(attempt_id, str):
+            grouped[(row["root_task_id"], attempt_id)].append(row)
+
+    workflows: list[dict[str, Any]] = []
+    durations: dict[str, list[float]] = {"tool": [], "model": []}
     costs: list[int | float] = []
     for task_id in sorted(selected_ids):
         task = by_id.get(task_id)
@@ -86,64 +106,85 @@ def calibrate(
             or cost <= 0
         ):
             raise ValueError(f"selected task {task_id} has unsettled or invalid cost")
+        stages: list[dict[str, Any]] = []
+        for (root, attempt_id), rows in grouped.items():
+            if root != task_id:
+                continue
+            kind = rows[0]["type"].partition(".")[0]
+            starts = [row for row in rows if row["type"] == f"{kind}.running"]
+            finishes = [row for row in rows if row["type"] == f"{kind}.finished"]
+            if len(finishes) != 1 or not starts:
+                raise ValueError(f"incomplete or ambiguous interval for {attempt_id}")
+            if finishes[0].get("outcome") != "SUCCEEDED":
+                raise ValueError(f"unsupported failed execution trace for {attempt_id}")
+            start = min(_time(row.get("occurred_at")) for row in starts)
+            finish = _time(finishes[0].get("occurred_at"))
+            if any(_time(row.get("occurred_at")) >= finish for row in starts):
+                raise ValueError(f"malformed interval for {attempt_id}")
+            seconds = (finish - start).total_seconds()
+            units: int | float = 0
+            queue_seconds = 0.0
+            if kind == "model":
+                saved = by_attempt.get(attempt_id, {})
+                if saved.get("root_task_id") != task_id:
+                    raise ValueError(f"model timing unavailable for {attempt_id}")
+                timing = saved.get("execution_ref") or {}
+                created = _time(timing.get("platform_created_at"))
+                dispatched = _time(timing.get("platform_dispatched_at"))
+                completed = _time(timing.get("platform_completed_at"))
+                seconds = (completed - dispatched).total_seconds()
+                queue_seconds = (dispatched - created).total_seconds()
+                units = saved.get("consumed_units")
+                if (
+                    seconds <= 0
+                    or queue_seconds < 0
+                    or isinstance(units, bool)
+                    or not isinstance(units, (int, float))
+                    or units < 0
+                    or not saved.get("settled")
+                ):
+                    raise ValueError(f"unsettled or malformed model timing for {attempt_id}")
+            if seconds <= 0:
+                raise ValueError(f"malformed interval for {attempt_id}")
+            stages.append(
+                {
+                    "attempt_id": attempt_id,
+                    "kind": kind,
+                    "seconds": seconds,
+                    "cost_units": units,
+                    "observed_platform_wait_seconds": queue_seconds,
+                    "observed_start": start.isoformat(),
+                    "observed_end": finish.isoformat(),
+                }
+            )
+        stages.sort(key=lambda stage: _time(stage["observed_start"]))
+        if not stages or not any(stage["kind"] == "model" for stage in stages):
+            raise ValueError(f"missing workflow stages for {task_id}")
+        if any(
+            _time(left["observed_end"]) > _time(right["observed_start"])
+            for left, right in zip(stages, stages[1:], strict=False)
+        ):
+            raise ValueError("overlapping stages require a dependency-graph simulator")
+        if sum(stage["cost_units"] for stage in stages) != cost:
+            raise ValueError(f"stage costs do not reconcile with root {task_id}")
+        for stage in stages:
+            durations[stage["kind"]].append(stage["seconds"])
         costs.append(cost)
-
-    grouped: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
-    for row in events:
-        if not isinstance(row, dict):
-            raise ValueError("event row is malformed")
-        if row.get("root_task_id") not in selected_ids:
-            continue
-        event_type = row.get("type")
-        attempt_id = row.get("attempt_id")
-        if not isinstance(event_type, str) or not isinstance(attempt_id, str):
-            continue  # Root task events are not attempt intervals.
-        kind, separator, state = event_type.partition(".")
-        if not separator or kind not in {"tool", "model"}:
-            continue
-        grouped[(kind, attempt_id)].append(row)
-
-    durations: dict[str, list[float]] = {"tool": [], "model": []}
-    excluded_attempts = {"incomplete_or_unknown": 0, "malformed_interval": 0}
-    for (kind, attempt_id), rows in grouped.items():
-        starts = [row for row in rows if row["type"] == f"{kind}.running"]
-        finishes = [row for row in rows if row["type"] == f"{kind}.finished"]
-        if not finishes:
-            excluded_attempts["incomplete_or_unknown"] += 1
-            continue  # Incomplete or unknown attempts are not measured executions.
-        if len(finishes) != 1:
-            raise ValueError(f"ambiguous finish events for {attempt_id}")
-        if finishes[0].get("outcome") != "SUCCEEDED":
-            excluded_attempts["incomplete_or_unknown"] += 1
-            continue
-        if not starts:
-            excluded_attempts["malformed_interval"] += 1
-            continue
-        try:
-            start_times = [_time(row.get("occurred_at")) for row in starts]
-            finish_time = _time(finishes[0].get("occurred_at"))
-        except ValueError:
-            excluded_attempts["malformed_interval"] += 1
-            continue
-        if any(at > finish_time for at in start_times):
-            excluded_attempts["malformed_interval"] += 1
-            continue
-        duration = (finish_time - min(start_times)).total_seconds()
-        if duration <= 0:
-            excluded_attempts["malformed_interval"] += 1
-            continue
-        durations[kind].append(duration)
-    if not durations["tool"] or not durations["model"] or not costs:
-        raise ValueError("missing tool, model, or settled cost samples")
+        workflows.append({"source_task_id": task_id, "stages": stages, "cost_units": cost})
+    if not durations["tool"] or not durations["model"]:
+        raise ValueError("missing tool or model service samples")
     return {
+        "schema_version": 2,
         "provenance": "measured",
         "source": source,
         "manifest_source": manifest_source,
         "measurement_scope": {
-            "tool_seconds": "client attempt running to finished; local queue excluded",
-            "api_seconds": "client model attempt running to finished; platform wait may be included",
-            "cost_units": "terminal root task consumed_units after reservation settlement",
+            "tool_seconds": "client tool running-to-finished interval, excluding L1 wait",
+            "api_seconds": "L4 dispatched-to-completed service; L4 queue excluded",
+            "workflow": "ordered sequential service stages; observed queue waits and gaps are not replayed",
+            "cost_units": "per-model settled charges reconcile with terminal root consumption",
         },
+        "workflows": workflows,
         "tool_seconds": durations["tool"],
         "api_seconds": durations["model"],
         "cost_units": costs,
@@ -152,7 +193,7 @@ def calibrate(
             "api": len(durations["model"]),
             "cost": len(costs),
         },
-        "excluded_attempts": excluded_attempts,
+        "excluded_attempts": {"incomplete_or_unknown": 0, "malformed_interval": 0},
     }
 
 

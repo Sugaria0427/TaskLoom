@@ -48,6 +48,7 @@ from taskloom.domain.model import DomainError
 from taskloom.domain.ports import StoredRecord
 from taskloom.execution.ports import ToolBackend
 from taskloom.gateway.service import GatewayService
+from taskloom.policies.reservation import Prices
 
 
 def application(name: str, lifespan: Any) -> FastAPI:
@@ -135,7 +136,20 @@ def platform_app(base: Path, config: PlatformConfig) -> FastAPI:
         finally:
             legacy_owner.close()
     store = SQLiteRepository(base / "platform/state.db")
-    provider = HTTPProvider(config.pool_url, config.model, config.pool_key, config.pool_kind)
+    provider = HTTPProvider(
+        config.pool_url,
+        config.model,
+        config.pool_key,
+        config.pool_kind,
+        {
+            account.account_id: (
+                account.url or config.pool_url,
+                config.pool_key if account.key is None else account.key,
+            )
+            for account in config.pool_accounts
+        },
+        Prices(config.output_price, config.cache_read_price, config.cache_write_price),
+    )
     service = GatewayService(store, provider, config)
 
     @asynccontextmanager
@@ -196,7 +210,7 @@ def platform_app(base: Path, config: PlatformConfig) -> FastAPI:
 
     @app.get("/v1/requests/{request_id}")
     async def query(request_id: str, user: Annotated[str, Depends(tenant)]) -> GatewayRecord:
-        return service.get(user, request_id)
+        return await service.query(user, request_id)
 
     @app.post("/v1/requests/{request_id}/cancel")
     async def cancel(request_id: str, user: Annotated[str, Depends(tenant)]) -> GatewayRecord:
@@ -301,6 +315,9 @@ def client_app(base: Path, config: ClientConfig) -> FastAPI:
             config.platform_url = body.platform_url
             adopted = True
             await previous.aclose()
+            # 状态面板读的快照来自 FeedbackSource，必须在换上真实网关之后
+            # 经它读一次，否则面板报的还是换连接前的旧值。
+            await service.refresh_platform()
             return service.platform_status()
         finally:
             if not adopted:

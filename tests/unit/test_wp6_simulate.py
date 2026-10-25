@@ -75,6 +75,15 @@ def test_measured_calibration_requires_source_and_retains_label(tmp_path: Path) 
     with pytest.raises(ValueError, match="source"):
         run_experiment(path, seed=1, days=1, arrivals_per_day=1)
     raw["source"] = "run-2026-10-20.json"
+    raw["workflows"] = [
+        {
+            "cost_units": 10,
+            "stages": [
+                {"kind": "model", "seconds": 2, "cost_units": 10},
+                {"kind": "tool", "seconds": 4, "cost_units": 0},
+            ],
+        }
+    ]
     path.write_text(json.dumps(raw))
     result = run_experiment(path, seed=1, days=1, arrivals_per_day=1)
     assert result["metadata"]["calibration_source"] == raw["source"]

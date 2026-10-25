@@ -33,6 +33,21 @@ def valid_inputs() -> tuple[dict, dict]:
                 "consumed_units": 40,
             }
         ],
+        "resources": {
+            "attempts": [
+                {
+                    "attempt_id": "m1",
+                    "root_task_id": "task-1",
+                    "settled": True,
+                    "consumed_units": 40,
+                    "execution_ref": {
+                        "platform_created_at": "2026-10-19T23:59:59Z",
+                        "platform_dispatched_at": "2026-10-20T00:00:00Z",
+                        "platform_completed_at": "2026-10-20T00:00:03Z",
+                    },
+                }
+            ]
+        },
         "events": [
             event("model", "running", "m1", "2026-10-20T00:00:00Z"),
             event("model", "finished", "m1", "2026-10-20T00:00:03Z"),
@@ -62,7 +77,6 @@ def test_derives_measured_samples_and_deduplicates_running_state() -> None:
 def test_excludes_waits_unknown_attempt_and_unrelated_task() -> None:
     snapshot, manifest = valid_inputs()
     snapshot["events"].insert(0, event("tool", "wait_resource", "t1", "2026-10-19T23:00:00Z"))
-    snapshot["events"].append(event("tool", "running", "unknown", "2026-10-20T00:00:00Z"))
     unrelated = event("model", "running", "other", "2026-10-20T00:00:00Z")
     unrelated["root_task_id"] = "other-task"
     snapshot["events"].append(unrelated)
@@ -114,6 +128,62 @@ def test_malformed_interval_is_excluded_if_other_samples_remain() -> None:
     snapshot, manifest = valid_inputs()
     bad = event("tool", "running", "bad", "2026-10-20T00:00:10Z")
     snapshot["events"].extend([bad, event("tool", "finished", "bad", "2026-10-20T00:00:09Z")])
-    result = calibrate(snapshot, manifest, source="snapshot.json", manifest_source="run.json")
-    assert result["tool_seconds"] == [6.0]
-    assert result["excluded_attempts"]["malformed_interval"] == 1
+    with pytest.raises(ValueError, match="malformed"):
+        calibrate(snapshot, manifest, source="snapshot.json", manifest_source="run.json")
+
+
+def test_preserves_all_model_rounds_and_excludes_observed_l4_wait(tmp_path: Path) -> None:
+    snapshot, manifest = valid_inputs()
+    snapshot["events"] = [
+        event("model", "running", "m1", "2026-10-20T00:00:00Z"),
+        event("model", "finished", "m1", "2026-10-20T00:00:15Z"),
+        event("tool", "running", "t1", "2026-10-20T00:00:15Z"),
+        event("tool", "finished", "t1", "2026-10-20T00:00:16Z"),
+        event("model", "running", "m2", "2026-10-20T00:00:16Z"),
+        event("model", "finished", "m2", "2026-10-20T00:00:26Z"),
+    ]
+    snapshot["resources"]["attempts"] = [
+        {
+            "attempt_id": "m1",
+            "root_task_id": "task-1",
+            "settled": True,
+            "consumed_units": 20,
+            "execution_ref": {
+                "platform_created_at": "2026-10-20T00:00:00Z",
+                "platform_dispatched_at": "2026-10-20T00:00:05Z",
+                "platform_completed_at": "2026-10-20T00:00:15Z",
+            },
+        },
+        {
+            "attempt_id": "m2",
+            "root_task_id": "task-1",
+            "settled": True,
+            "consumed_units": 20,
+            "execution_ref": {
+                "platform_created_at": "2026-10-20T00:00:16Z",
+                "platform_dispatched_at": "2026-10-20T00:00:16Z",
+                "platform_completed_at": "2026-10-20T00:00:26Z",
+            },
+        },
+    ]
+    calibration = calibrate(snapshot, manifest, source="snapshot.json", manifest_source="run.json")
+    stages = calibration["workflows"][0]["stages"]
+    assert [s["kind"] for s in stages] == ["model", "tool", "model"]
+    assert [s["seconds"] for s in stages] == [10, 1, 10]
+    assert stages[0]["observed_platform_wait_seconds"] == 5
+    path = tmp_path / "calibration.json"
+    path.write_text(json.dumps(calibration))
+    result = run_experiment(path, seed=1, days=1, arrivals_per_day=1)
+    events = [row for row in result["events"] if row["scenario"] == "unconstrained"]
+    arrival = next(row["at_seconds"] for row in events if row["type"] == "arrived")
+    completed = next(row["at_seconds"] for row in events if row["type"] == "task_completed")
+    assert completed - arrival == pytest.approx(21)
+    assert result["summary"][0]["model_stages"] == 2
+    assert result["summary"][0]["total_cost_units"] == 40
+
+
+def test_measured_calibration_requires_actual_model_service_timestamps() -> None:
+    snapshot, manifest = valid_inputs()
+    snapshot.pop("resources")
+    with pytest.raises(ValueError, match="model timing unavailable"):
+        calibrate(snapshot, manifest, source="snapshot.json", manifest_source="run.json")

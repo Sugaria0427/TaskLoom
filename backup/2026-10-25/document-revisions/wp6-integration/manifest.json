@@ -1,0 +1,48 @@
+{
+  "date": "2026-10-25",
+  "reason": "WP4/WP6 integration",
+  "files": [
+    {
+      "original": "README_v1.1.md",
+      "backup": "backup/2026-10-25/document-revisions/wp6-integration/README_v1.1.md",
+      "sha256": "ed69be95f74ad266728518363edfc189b6a3b617bbb853163b9c05c9c1504960",
+      "replacement": "README_v1.2.md"
+    },
+    {
+      "original": "README.md",
+      "backup": "backup/2026-10-25/document-revisions/wp6-integration/README.md",
+      "sha256": "340e5dd7d302cf57998a3f4e045dec11ca2a15873da2efae5707a861b9a6c05c",
+      "replacement": "README.md"
+    },
+    {
+      "original": "docs/engineering/TaskLoom_当前实现与开发状态_v1.1.md",
+      "backup": "backup/2026-10-25/document-revisions/wp6-integration/docs/engineering/TaskLoom_当前实现与开发状态_v1.1.md",
+      "sha256": "f2e63b57c580ed8457214c6689f7dab44d0dbfd03922c34c3e2a2833f883b73a",
+      "replacement": "docs/engineering/TaskLoom_当前实现与开发状态_v1.2.md"
+    },
+    {
+      "original": "docs/engineering/TaskLoom_当前实现与开发状态.md",
+      "backup": "backup/2026-10-25/document-revisions/wp6-integration/docs/engineering/TaskLoom_当前实现与开发状态.md",
+      "sha256": "912c8d235a6ac530f172d72e7e64c8b3f4d1a08bb078ce5bfd2d0e2cec30cab5",
+      "replacement": "docs/engineering/TaskLoom_当前实现与开发状态.md"
+    },
+    {
+      "original": "docs/engineering/TaskLoom_基础工程架构_v1.1.md",
+      "backup": "backup/2026-10-25/document-revisions/wp6-integration/docs/engineering/TaskLoom_基础工程架构_v1.1.md",
+      "sha256": "b0d43ea33507d2998e9416bdc2e220f543798060444090d89d4bd29c3c1e75ad",
+      "replacement": "docs/engineering/TaskLoom_基础工程架构_v1.2.md"
+    },
+    {
+      "original": "docs/engineering/TaskLoom_基础工程架构.md",
+      "backup": "backup/2026-10-25/document-revisions/wp6-integration/docs/engineering/TaskLoom_基础工程架构.md",
+      "sha256": "cb26bbf73c620d54cd559b1beaa4105efb765679257dfe2f9eefd5b9dc59d13b",
+      "replacement": "docs/engineering/TaskLoom_基础工程架构.md"
+    },
+    {
+      "original": "docs/engineering/WP6_实验指标与复现.md",
+      "backup": "backup/2026-10-25/document-revisions/wp6-integration/docs/engineering/WP6_实验指标与复现.md",
+      "sha256": "b6bd9a7e546c00dc35e144d37e00b8b3cf313e45bd4ebc3c8a53e33ce24f1177",
+      "replacement": "docs/engineering/WP6_实验指标与复现_v1.1.md"
+    }
+  ]
+}

@@ -230,3 +230,61 @@ def test_refuses_hidden_api_concurrency_limit(bottleneck: str) -> None:
     ) as client:
         with pytest.raises(ValueError, match="hidden API capacity"):
             run_workload(client, config(), "unconstrained", seed=5, timeout_seconds=1)
+
+
+@pytest.mark.parametrize("failure", ["reject", "transport", "server"])
+def test_submission_failure_retains_plan_and_collects_other_accepted_tasks(failure: str) -> None:
+    posted = 0
+    saved: list[dict] = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        nonlocal posted
+        if request.url.path == "/api/v1/resources":
+            return httpx.Response(
+                200, json={"capacity": {"slots": 2}, "model_capacity": {"slots": 2}}
+            )
+        if request.url.path == "/api/v1/platform":
+            return httpx.Response(
+                200,
+                json={
+                    "connected": True,
+                    "feedback": {
+                        "pool_capacity": 2,
+                        "account_max_inflight": 2,
+                    },
+                },
+            )
+        if request.method == "POST":
+            posted += 1
+            # The durable snapshot already includes this send intent and the full plan.
+            assert len(saved[-1]["tasks"]) == 4
+            assert saved[-1]["tasks"][posted - 1]["submission_state"] == "SUBMITTING"
+            if posted == 2:
+                if failure == "transport":
+                    raise httpx.ReadTimeout("ambiguous send", request=request)
+                return httpx.Response(429 if failure == "reject" else 503, json={"error": "full"})
+            return httpx.Response(202, json={"task_id": f"task-{posted}"})
+        return httpx.Response(
+            200, json={"outcome": "SUCCEEDED", "result": {"files": 1, "words": 5}}
+        )
+
+    with httpx.Client(
+        base_url="http://localhost", transport=httpx.MockTransport(respond)
+    ) as client:
+        manifest = run_workload(
+            client,
+            config(),
+            "unconstrained",
+            seed=1,
+            repeats=1,
+            interarrival_seconds=0,
+            checkpoint=lambda value: saved.append(json.loads(json.dumps(value))),
+        )
+    assert posted == 4  # No automatic replay of the ambiguous second submission.
+    assert len(manifest["tasks"]) == 4
+    failed = manifest["tasks"][1]
+    assert failed["submission_state"] == ("REJECTED" if failure == "reject" else "UNKNOWN")
+    assert all(row.get("outcome") == "SUCCEEDED" for row in manifest["tasks"] if row.get("task_id"))
+    assert manifest["incomplete"] is (failure != "reject")
+    assert saved[-1] == manifest
+    assert len({row["observation_id"] for row in manifest["tasks"]}) == 4

@@ -24,8 +24,12 @@ def _select_run(records: list[Any], manifest: Any) -> tuple[list[Any], dict[str,
         or not manifest["tasks"]
     ):
         raise ValueError("run manifest must contain observed-local-api tasks")
+    if manifest.get("incomplete"):
+        raise ValueError("run manifest is incomplete; reconcile submissions and recapture outcomes")
     verdicts: dict[str, bool] = {}
     for row in manifest["tasks"]:
+        if isinstance(row, dict) and row.get("submission_state") == "REJECTED":
+            continue
         if (
             not isinstance(row, dict)
             or not isinstance(row.get("task_id"), str)
@@ -91,6 +95,18 @@ def main() -> None:
         report["provenance"]["run_manifest"] = str(args.run_manifest)
         report["provenance"]["scenario"] = manifest.get("scenario")
         report["provenance"]["seed"] = manifest.get("seed")
+        rejected = sum(row.get("submission_state") == "REJECTED" for row in manifest["tasks"])
+        accepted = report["submitted_tasks"]
+        report["accepted_tasks"] = accepted
+        report["rejected_submissions"] = rejected
+        report["submitted_tasks"] = accepted + rejected
+        report["on_time_quality_rate"] = (
+            report["on_time_quality_successes"] / report["submitted_tasks"]
+            if report["submitted_tasks"] and "on_time_quality_rate" not in report["unavailable"]
+            else 0.0
+            if rejected and not accepted
+            else None
+        )
     serialized = json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
     if args.json_output:
         args.json_output.write_text(serialized, encoding="utf-8")

@@ -16,8 +16,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import random
 import time
+import uuid
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -54,6 +57,7 @@ def run_workload(
     timeout_seconds: float = 180,
     repeats: int = 4,
     interarrival_seconds: float = 0.05,
+    checkpoint: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     """Submit all task classes, then collect terminal outcomes and validate results."""
     if timeout_seconds <= 0:
@@ -89,68 +93,39 @@ def run_workload(
     ):
         raise ValueError(f"hidden API capacity limit: {observed}")
 
+    run_id = uuid.uuid4().hex
     rows: list[dict[str, Any]] = []
-    started = time.monotonic()
-    for item in plan:
-        remaining = item["planned_submission_offset_seconds"] - (time.monotonic() - started)
-        if remaining > 0:
-            time.sleep(remaining)
-        name = item["class"]
+    for index, item in enumerate(plan):
         if item["deadline_seconds"] <= 0 or item["work_iterations"] <= 0:
             raise ValueError("deadline_seconds and work_iterations must be positive")
+        name = item["class"]
         document = f"TaskLoom {name} seed {seed}"
-        body = {
-            "title": f"WP6 {name}",
-            "instruction": "请核对文件数量和词数。",
-            "documents": {"notes.txt": document},
-            "deadline_seconds": item["deadline_seconds"],
-            "work_iterations": item["work_iterations"],
-        }
-        actual_offset = time.monotonic() - started
-        response = client.post("/api/v1/tasks", headers=HEADERS, json=body)
-        response.raise_for_status()
         rows.append(
             {
+                "observation_id": f"{run_id}-{index}",
                 "class": name,
-                "task_id": response.json()["task_id"],
-                "request": body,
+                "submission_state": "PLANNED",
+                "quality_passed": None,
+                "request": {
+                    "title": f"WP6 {name} {run_id}-{index}",
+                    "instruction": "请核对文件数量和词数。",
+                    "documents": {"notes.txt": document},
+                    "deadline_seconds": item["deadline_seconds"],
+                    "work_iterations": item["work_iterations"],
+                },
                 "expected_result": {"files": 1, "words": len(document.split())},
                 "planned_submission_offset_seconds": item["planned_submission_offset_seconds"],
-                "actual_submission_offset_seconds": actual_offset,
             }
         )
-
-    deadline = time.monotonic() + timeout_seconds
-    for row in rows:
-        while True:
-            response = client.get(f"/api/v1/tasks/{row['task_id']}")
-            response.raise_for_status()
-            task = response.json()
-            if task["outcome"] in TERMINAL:
-                result = task.get("result") or {}
-                row["outcome"] = task["outcome"]
-                row["quality_passed"] = task["outcome"] == "SUCCEEDED" and all(
-                    result.get(key) == value for key, value in row["expected_result"].items()
-                )
-                row["actual_result"] = result
-                row["created_at"] = task.get("created_at")
-                row["completed_at"] = task.get("completed_at")
-                row["deadline_at"] = task.get("deadline_at")
-                break
-            if time.monotonic() >= deadline:
-                row["outcome"] = task["outcome"]
-                row["quality_passed"] = None
-                row["timed_out_polling"] = True
-                break
-            time.sleep(0.1)
-    return {
+    manifest = {
         "source": "observed-local-api",
+        "run_id": run_id,
         "scenario": scenario,
         "seed": seed,
         "repeats": repeats,
         "interarrival_seconds": interarrival_seconds,
         "conditions": observed,
-        "incomplete": any(row.get("timed_out_polling", False) for row in rows),
+        "incomplete": True,
         "platform": {
             "pool_kind": feedback.get("pool_kind"),
             "model": feedback.get("model"),
@@ -159,6 +134,100 @@ def run_workload(
         "policy_claim": "none; capacity labels only",
         "tasks": rows,
     }
+
+    def save() -> None:
+        manifest["incomplete"] = any(
+            row["submission_state"] not in {"ACCEPTED", "REJECTED"}
+            or (row["submission_state"] == "ACCEPTED" and row.get("quality_passed") is None)
+            for row in rows
+        )
+        if checkpoint is not None:
+            checkpoint(manifest)
+
+    started = time.monotonic()
+    save()
+    try:
+        for row in rows:
+            remaining = row["planned_submission_offset_seconds"] - (time.monotonic() - started)
+            if remaining > 0:
+                time.sleep(remaining)
+            row["actual_submission_offset_seconds"] = time.monotonic() - started
+            # Durable intent precedes POST: an interrupted/ambiguous send is never replayed.
+            row["submission_state"] = "SUBMITTING"
+            save()
+            try:
+                response = client.post("/api/v1/tasks", headers=HEADERS, json=row["request"])
+                row["http_status"] = response.status_code
+                if 400 <= response.status_code < 500 and response.status_code != 408:
+                    row.update(
+                        submission_state="REJECTED",
+                        outcome="REJECTED",
+                        quality_passed=False,
+                        error=f"HTTP_{response.status_code}",
+                    )
+                else:
+                    response.raise_for_status()
+                    task_id = response.json().get("task_id")
+                    if not isinstance(task_id, str) or not task_id:
+                        raise ValueError("Submission response is missing task_id")
+                    row.update(task_id=task_id, submission_state="ACCEPTED")
+            except (httpx.HTTPError, ValueError, TypeError) as error:
+                row.update(submission_state="UNKNOWN", error=type(error).__name__)
+            save()
+
+        deadline = time.monotonic() + timeout_seconds
+        for row in rows:
+            if row["submission_state"] != "ACCEPTED":
+                continue
+            while True:
+                try:
+                    response = client.get(f"/api/v1/tasks/{row['task_id']}")
+                    response.raise_for_status()
+                    task = response.json()
+                    if not isinstance(task, dict):
+                        raise ValueError("Task response is malformed")
+                except (httpx.HTTPError, ValueError) as error:
+                    row["poll_error"] = type(error).__name__
+                    break
+                if task["outcome"] in TERMINAL:
+                    result = task.get("result") or {}
+                    row.update(
+                        outcome=task["outcome"],
+                        quality_passed=None
+                        if task["outcome"] == "UNKNOWN"
+                        else (
+                            task["outcome"] == "SUCCEEDED"
+                            and all(
+                                result.get(key) == value
+                                for key, value in row["expected_result"].items()
+                            )
+                        ),
+                        actual_result=result,
+                        created_at=task.get("created_at"),
+                        completed_at=task.get("completed_at"),
+                        deadline_at=task.get("deadline_at"),
+                    )
+                    break
+                if time.monotonic() >= deadline:
+                    row.update(outcome=task["outcome"], quality_passed=None, timed_out_polling=True)
+                    break
+                time.sleep(min(0.1, max(0, deadline - time.monotonic())))
+            save()
+    finally:
+        save()
+    return manifest
+
+
+def write_manifest(path: Path, manifest: dict[str, Any]) -> None:
+    """Atomically replace the experiment checkpoint after every state transition."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    with temporary.open("w", encoding="utf-8") as stream:
+        json.dump(manifest, stream, ensure_ascii=False, indent=2)
+        stream.write("\n")
+        stream.flush()
+        os.fsync(stream.fileno())
+    temporary.replace(path)
 
 
 def main() -> None:
@@ -186,11 +255,9 @@ def main() -> None:
             timeout_seconds=args.timeout_seconds,
             repeats=args.repeats,
             interarrival_seconds=args.interarrival_seconds,
+            checkpoint=lambda manifest: write_manifest(args.output, manifest),
         )
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(
-        json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-    )
+    write_manifest(args.output, result)
 
 
 if __name__ == "__main__":

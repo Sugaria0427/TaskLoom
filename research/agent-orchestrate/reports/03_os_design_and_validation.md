@@ -2,7 +2,9 @@
 
 > 把四层痛点转化为可实现的资源控制、任务推进、请求调度和协同实验。
 
-**整理日期** 2026-10-14　**设计状态** 拟实现；个人端基底为OpenClaw　**用途** 开发拆分、算法选择与课程验收。
+**整理日期** 2026-10-14　**设计状态** 完整研究设计；个人端自研轻量运行时，OpenClaw为对照对象　**用途** 开发拆分、算法选择与课程验收。
+
+**正文对齐** 2026-10-20。本轮更新工程路线与引用导航，证据核查日期沿用上述记录；产品功能以[当前实现状态](../../../docs/engineering/TaskLoom_当前实现与开发状态.md)为准，本文中的算法设计按后续实验验证。
 
 TaskLoom的目标是在相同模型、设备资源、额度和任务质量要求下，提高及时且合格完成的完整任务比例。客户端承载L1–L3，平台承载L4。本文先给出L1–L4的具体控制，再在各层关联处规定验证方法；痛点与证据状态统一引用[编码主题报告](01_layered_theme_report.md)。
 
@@ -14,13 +16,13 @@ L1先决定哪些工具可以启动，再管理实际占用和结束后的回收
 
 ### 1.1 容量准入与等待保护
 
-使用资源约束列表调度，在就绪工具中先按根任务轮转，再按紧迫程度和等待时间选择。需求明确的步骤一次性检查工具名额、内存预算和产物空间；任一约束不足时不留下部分预留。[C01](../materials/L1_local_resources/C01/C01.txt)、[C09](../materials/L1_local_resources/C09/C09.txt)和[L07](../materials/L1_local_resources/L07/L07.txt)支持容量判定与依赖判定分别进行。
+使用资源约束列表调度，在就绪工具中先按根任务轮转，再按紧迫程度和等待时间选择。需求明确的步骤一次性检查工具名额、内存预算和产物空间；任一约束不足时不留下部分预留。[C01](https://docs.ray.io/en/latest/ray-core/scheduling/resources.html)、[C09](https://docs.ray.io/en/latest/ray-core/patterns/limit-running-tasks.html)和[L07](https://arxiv.org/html/2608.24509v1)支持容量判定与依赖判定分别进行。
 
 可行的小工具能够先行，大工具记录等待时间与被跳过次数。大工具长期等待时，暂缓接纳占用同类资源的新阶段，等待现有阶段释放；已准入阶段完成所需的安全申请仍允许推进。超过管理域总容量的工具在准入时明确拒绝。
 
 ### 1.2 受控阶段的银行家安全检查
 
-阶段最大需求来自可强制执行的工具模板，并覆盖其全部受管申请。L2在阶段边界登记这些信息，L1维护`Available`、`Max`、`Allocation`和`Need`，试算一次分配后是否仍存在安全完成顺序。[OS21](../materials/L1_local_resources/OS21/S21_bankers_algorithm.txt)与[OS22](../materials/L1_local_resources/OS22/S22_deadlocks_course.txt)支撑这些条件。
+阶段最大需求来自可强制执行的工具模板，并覆盖其全部受管申请。L2在阶段边界登记这些信息，L1维护`Available`、`Max`、`Allocation`和`Need`，试算一次分配后是否仍存在安全完成顺序。[OS21](https://www.cs.utexas.edu/~EWD/transcriptions/EWD06xx/EWD623.html)与[OS22](https://www.cs.uic.edu/~jbell/CourseNotes/OperatingSystems/7_Deadlocks.html)支撑这些条件。
 
 新阶段到达、最大需求提高和容量改变都先做安全检查。上限更新被拒后，能按原上限结束的阶段继续；无法结束的阶段在确认安全停止并释放后重新申请。父阶段持有受管资源时，避免等待一个必须依赖这些资源、却未纳入需求的子阶段。
 
@@ -28,13 +30,13 @@ L1先决定哪些工具可以启动，再管理实际占用和结束后的回收
 
 ### 1.3 共享访问与优先级反转
 
-文件或工作区访问使用互斥锁、读写锁与统一申请顺序；修改后测试等业务顺序由L2依赖表示。对明确持锁者且能够控制其执行的受控场景，可临时提高持锁者相关就绪步骤的优先级，帮助其释放锁。[OS23](../materials/L1_local_resources/OS23/S23_priority_inheritance.txt)提供优先级继承机制依据，[OS24](../materials/L1_local_resources/OS24/S24_ww_mutex.txt)作为动态加锁的补充参考。
+文件或工作区访问使用互斥锁、读写锁与统一申请顺序；修改后测试等业务顺序由L2依赖表示。对明确持锁者且能够控制其执行的受控场景，可临时提高持锁者相关就绪步骤的优先级，帮助其释放锁。[OS23](https://docs.kernel.org/locking/rt-mutex-design.html)提供优先级继承机制依据，[OS24](https://docs.kernel.org/locking/ww-mutex-design.html)作为动态加锁的补充参考。
 
 这一机制保持资源上限与预算不变。验收应设置真正的低优先级持锁者、紧急等待者和竞争任务，测阻塞时间与其他任务影响。
 
 ### 1.4 进程树、产物与守护回收
 
-执行器启动工具时登记根任务和进程树，使用进程组及cgroup v2保护真实后代。完成、取消或超时触发有期限的清理，独立守护进程核对执行器是否存活、后代是否停止及占用是否归还。[C03](../materials/L1_local_resources/C03/C03.txt)和[C12](../materials/L1_local_resources/C12/C12.txt)提供资源及进程生命周期契约。
+执行器启动工具时登记根任务和进程树，使用进程组及cgroup v2保护真实后代。完成、取消或超时触发有期限的清理，独立守护进程核对执行器是否存活、后代是否停止及占用是否归还。[C03](https://docs.kernel.org/admin-guide/cgroup-v2.html)和[C12](https://docs.python.org/3/library/asyncio-subprocess.html)提供资源及进程生命周期契约。
 
 产物单独记录空间预算、引用者和有效期；大输出以文件引用传递，只有不再使用的内容进入回收。验收同时测残留进程、残留空间和回收时延，区分工具超限失败与系统整体稳定性。
 
@@ -49,7 +51,7 @@ L2决定完整任务如何推进，保留当前已经明确的依赖。模型提
 
 使用动态依赖图管理模型和工具步骤，通过生产者—消费者事件解锁后续工作。独立分支在资源允许时并行，必要汇总使用同步屏障。Agent作为逻辑分支管理，工具按需启动实际进程。
 
-父子Agent共享根任务的公平份额和预算。等待子任务时，只释放确认不再使用的执行许可；仍驻留的内存、实例和锁继续记账。[C14](../materials/L2_harness_tasks/C14/C14.txt)提供嵌套任务资源处理先例，[DS_subagent_docs](../materials/L2_harness_tasks/DS_subagent_docs/source_subagent_docs.txt)支撑运行时父子接口分析。
+父子Agent共享根任务的公平份额和预算。等待子任务时，只释放确认不再使用的执行许可；仍驻留的内存、实例和锁继续记账。[C14](https://docs.ray.io/en/latest/ray-core/tasks/nested-tasks.html)提供嵌套任务资源处理先例，[DS_subagent_docs](https://raw.githubusercontent.com/deepseek-ai/deepseek-harness/master/docs/subsystems/subagent.md)支撑运行时父子接口分析。
 
 ### 2.2 状态、控制消息与失败回滚
 
@@ -61,11 +63,11 @@ L2决定完整任务如何推进，保留当前已经明确的依赖。模型提
 
 取消沿受控父子关系传播，分别核对结果发布、实际执行停止、资源回收和费用结算。重试建立新Attempt，旧Attempt返回时不得覆盖新结果或重复归还容量；它已经产生的真实用量仍结算一次。
 
-外部调用超时后可能已经产生效果，使用幂等接口或对账核验。UNKNOWN保留请求身份和消费预留，直到取得可确认结果。[C04](../materials/L3_client_requests/C04/C04_browser.txt)和[R07](../materials/L1_local_resources/R07/R07.txt)提供超时、取消及外部效果的接口依据。
+外部调用超时后可能已经产生效果，使用幂等接口或对账核验。UNKNOWN保留请求身份和消费预留，直到取得可确认结果。[C04](https://aws.amazon.com/cn/builders-library/timeouts-retries-and-backoff-with-jitter/)和[R07](https://raw.githubusercontent.com/deepseek-ai/deepseek-harness/master/docs/subsystems/tools.md)提供超时、取消及外部效果的接口依据。
 
 ### 2.4 检查点与任务验收
 
-优先复用OpenClaw已有的会话、writer claim、输入保存与续接事实，TaskLoom另外维护根任务成果索引和步骤有效性；LangGraph检查点作为方法对照。恢复先检查输入版本、成果是否存在及依赖是否仍成立，再继续必要步骤。[A10](../materials/L2_harness_tasks/A10/A10.txt)与[P24](../materials/L2_harness_tasks/P24/P24_text.txt)作为成熟恢复基线。
+TaskLoom自研运行时维护根任务成果索引、输入版本、步骤有效性与持久状态；OpenClaw的writer claim、输入保存和续接机制，以及LangGraph检查点，作为恢复方法对照。可选兼容接入时再映射其原生事实。恢复先检查输入版本、成果是否存在及依赖是否仍成立，再继续必要步骤。[A10](https://docs.langchain.com/oss/python/langgraph/durable-execution)与[P24](https://docs.langchain.com/oss/python/langgraph/checkpointers)作为成熟恢复基线。
 
 完整任务以代码测试、答案字段、资料覆盖等预先确定的条件验收。故障实验覆盖消息拒绝、丢失唤醒、旧结果迟到和执行器崩溃，逐项核对完成、交付、释放和结算。
 
@@ -84,7 +86,7 @@ L3使用根任务身份组织全部受控模型请求，安排发送次序，并
 
 ### 3.2 四种额度分别记账
 
-下表给出请求放行规则，具体补充和计数时机以固定服务商合同为准。[A01](../materials/L3_client_requests/A01/A01.txt)、[A02](../materials/L3_client_requests/A02/A02.txt)、[A14](../materials/L4_platform_requests/A14/A14.txt)支撑约束拆分。
+下表给出请求放行规则，具体补充和计数时机以固定服务商合同为准。[A01](https://platform.openai.com/docs/guides/rate-limits)、[A02](https://docs.anthropic.com/en/api/rate-limits)、[A14](https://docs.litellm.ai/docs/proxy/io_token_rate_limits)支撑约束拆分。
 
 | 约束 | 控制方法 | 归还或恢复规则 |
 | :--- | :--- | :--- |
@@ -103,7 +105,7 @@ L3使用根任务身份组织全部受控模型请求，安排发送次序，并
 
 ### 3.4 本地真实负载与资源画像
 
-先使用单任务测量工具需求、内部并行、各阶段等待和执行时长，再测少量并发干扰。[P14](../materials/L2_harness_tasks/P14/P15_text.txt)提供调用时序和长尾分布，[P16](../materials/L2_harness_tasks/P16/P16_text.txt)用于检查模型耗时占主导的场景，[L07](../materials/L1_local_resources/L07/L07.txt)帮助区分依赖与容量。
+先使用单任务测量工具需求、内部并行、各阶段等待和执行时长，再测少量并发干扰。[P14](https://arxiv.org/abs/2606.30560)提供调用时序和长尾分布，[P16](https://arxiv.org/abs/2608.00101)用于检查模型耗时占主导的场景，[L07](https://arxiv.org/html/2608.24509v1)帮助区分依赖与容量。
 
 30天离散事件仿真采用实测画像与公开分布校准，保持任务依赖、额度恢复和服务规则。真实工具实验验证资源竞争，受控回放隔离请求调度，两类结果分别标明。
 
@@ -116,7 +118,7 @@ L4部署为受控API网关，接收多个隔离客户端的请求，在相同总
 
 ### 4.1 分层公平与明确准入
 
-先在用户之间分配份额，再在用户内部按根任务进行成本DRR。紧急类别使用受约束的份额，空闲机会允许借用；等待队列与在途数设置独立上限。基础设计参考[A24](../materials/L4_platform_requests/A24/A24.txt)、[A26](../materials/L4_platform_requests/A26/A26.txt)与[C10](../materials/L4_platform_requests/C10/C10.txt)。
+先在用户之间分配份额，再在用户内部按根任务进行成本DRR。紧急类别使用受约束的份额，空闲机会允许借用；等待队列与在途数设置独立上限。基础设计参考[A24](https://docs.temporal.io/develop/task-queue-priority-fairness)、[A26](https://docs.litellm.ai/docs/scheduler)与[C10](https://kubernetes.io/docs/concepts/cluster-administration/flow-control/)。
 
 请求协议携带认证用户、根任务、Agent、Step、Attempt、服务目标和工作量声明。平台接纳、排队、实际派发分别记录，未派发取消按本阶段事实处理。
 
@@ -147,4 +149,4 @@ L4部署为受控API网关，接收多个隔离客户端的请求，在相同总
 最终交付包括客户端后台与界面、受控工具执行器、平台API网关和可复查实验记录。演示显示真实任务进度、分段等待、运行资源和异常恢复，再用经过校准的30天仿真展示累计结果。完整任务收益与动态反馈增量共同决定项目结论。
 
 
-OpenClaw版本、工具gate的等待时限、原生lane持有与Provider流式接入要求，统一见[接入专题](02_solutions_and_integration.md#5-openclaw基底专题机制剩余问题与taskloom接入)。实验基线保留所选版本的已有优先级、老化、父子续接和真实回收。[OC-D06](../materials/L2_harness_tasks/OC-D06/queue.md)、[OC-D07](../materials/L2_harness_tasks/OC-D07/subagent-yield-handoff.md)、[OC-D18](../materials/L2_harness_tasks/OC-D18/reference.md)
+OpenClaw版本、工具gate的等待时限、原生lane持有与Provider流式接入要求，统一见[接入专题](02_solutions_and_integration.md#5-openclaw对照专题机制剩余问题与可选接入)。实验基线保留所选版本的已有优先级、老化、父子续接和真实回收。[OC-D06](https://github.com/openclaw/openclaw/blob/6a64431a10b638958cdeccc782f2b36074274776/docs/concepts/queue.md)、[OC-D07](https://github.com/openclaw/openclaw/blob/6a64431a10b638958cdeccc782f2b36074274776/docs/concepts/subagent-yield-handoff.md)、[OC-D18](https://github.com/openclaw/openclaw/blob/6a64431a10b638958cdeccc782f2b36074274776/docs/plugins/hooks/reference.md)
