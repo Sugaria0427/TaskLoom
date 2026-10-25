@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Literal
 
 from taskloom.client.dispatcher import Dispatcher, QuarantinedExecution
+from taskloom.client.feedback_decision import request_decision
 from taskloom.client.feedback_source import FeedbackSource
 from taskloom.client.model_scheduler import ModelScheduler
 from taskloom.client.ports import ExecutorPort, GatewayPort
@@ -533,6 +534,8 @@ class ClientService:
         拿它当原预扣量；原请求持久化在 ``AttemptState.request_payload`` 里，
         重启后也能复原。
         """
+        if attempt.fair_charge_units is not None:
+            return attempt.fair_charge_units
         if attempt.request_payload is not None:
             try:
                 return ModelRequest.model_validate(attempt.request_payload).reserve_units
@@ -593,6 +596,13 @@ class ClientService:
             )
             attempt.request_payload = request.model_dump(mode="json")
         request = ModelRequest.model_validate(attempt.request_payload)
+        if attempt.fair_charge_units is None:
+            feedback = self.platform_feedback_source.latest
+            attempt.fair_charge_units = (
+                feedback.admission_needs(request)[0]
+                if feedback is not None
+                else request.reserve_units
+            )
         attempt.state = WorkState.WAIT_QUOTA
         await self._save_attempt(attempt)
 
@@ -600,16 +610,17 @@ class ClientService:
             current_task = self.get(task_id)
             if current_task.cancel_requested:
                 raise asyncio.CancelledError
+            worst = self._reserved_units(attempt)
             if (
                 current_task.consumed_units
                 + current_task.reserved_units
-                + max(0, request.reserve_units - attempt.reserved_units)
+                + max(0, worst - attempt.reserved_units)
                 > task.specification.budget_units
             ):
                 raise DomainError("PRIVATE_BUDGET", "Root task budget exhausted")
             attempt.state = WorkState.RUNNING
             attempt.quiescent = False
-            attempt.reserved_units = request.reserve_units
+            attempt.reserved_units = worst
             await self._save_attempt(attempt)
             admitted = False
             try:
@@ -638,7 +649,7 @@ class ClientService:
                     # 请求没到过平台，实际消费为零，把派发时记的份额原样退回。
                     if not attempt.settled:
                         attempt.settled = True
-                        self.models.settle(attempt.root_task_id, request.reserve_units, 0)
+                        self.models.settle(attempt.root_task_id, self._reserved_units(attempt), 0)
                     await self._save_attempt(attempt)
                 raise
             except Exception:
@@ -648,7 +659,7 @@ class ClientService:
                     await self._save_attempt(attempt)
                 raise
 
-        record = await self.models.submit(request, execute)
+        record = await self.models.submit(request, execute, cost_units=attempt.fair_charge_units)
         if record.reply is None:
             raise DomainError("MODEL_" + record.outcome, record.error or record.state)
         return record.reply
@@ -814,26 +825,13 @@ class ClientService:
         return feedback
 
     async def wait_platform(self, request: ModelRequest) -> None:
-        """轮询平台反馈直到允许提交，预算不足直接报错。
-
-        模型侧的准入已经交给 :class:`ModelScheduler`，
-        :meth:`model` 不再走这里。保留它是因为它的判据是
-        ``ACCOUNT_BUDGET`` 语义的唯一权威表述：不可恢复的费用不足只看
-        预算减已消费，预留占用和速率窗口都属于可恢复等待。新增准入逻辑
-        时以它为准，不要在这里改出第二套判断。
-        """
+        """Compatibility wait entry using the same priced admission decision as L3."""
         while True:
             feedback = await self.refresh_platform()
-            if (
-                feedback.account_budget_units - feedback.account_consumed_units
-                < request.reserve_units
-            ):
+            decision = request_decision(feedback, request=request)
+            if decision.action == "refuse":
                 raise DomainError("ACCOUNT_BUDGET", "Platform account budget exhausted")
-            if not self.config.coordinated or (
-                feedback.can_submit
-                and feedback.account_remaining_units >= request.reserve_units
-                and feedback.account_window_tokens_remaining >= request.reserve_units
-            ):
+            if not self.config.coordinated or (feedback.can_submit and decision.action == "submit"):
                 return
             if datetime.now(UTC) >= datetime.fromisoformat(request.deadline_at):
                 raise DomainError(
@@ -844,9 +842,7 @@ class ClientService:
             )
 
     def platform_status(self) -> JsonObject:
-        # 汇报的这份快照必须来自 FeedbackSource——那是调度器做准入时真正
-        # 读的那一份。self.platform_feedback 只在对账循环里更新，两者会差
-        # 一个周期，面板报的不是准入依据就等于在骗人。
+        # The workbench and scheduler use the same feedback source and observation time.
         feedback = self.platform_feedback_source.latest
         return {
             "platform_url": self.config.platform_url,

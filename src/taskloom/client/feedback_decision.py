@@ -42,7 +42,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal
 
-from taskloom.contracts.models import PlatformFeedback
+from taskloom.contracts.models import ModelRequest, PlatformFeedback
 
 STALE_FEEDBACK_SECONDS = 5.0
 
@@ -100,7 +100,12 @@ def account_decision(
     return Decision("submit", "account_open")
 
 
-def request_decision(feedback: PlatformFeedback, *, reserve_units: int) -> Decision:
+def request_decision(
+    feedback: PlatformFeedback,
+    *,
+    request: ModelRequest | None = None,
+    reserve_units: int | None = None,
+) -> Decision:
     """判定一条候选请求自己够不够额度。
 
     Args:
@@ -111,12 +116,23 @@ def request_decision(feedback: PlatformFeedback, *, reserve_units: int) -> Decis
         ``"refuse"`` 表示账户余额已经付不起这一条（不可恢复）；
         ``"wait"`` 表示只是暂时被别的在途请求占着；``"submit"`` 表示能发。
     """
+    if request is not None:
+        budget_units, window_tokens = feedback.admission_needs(request)
+    elif reserve_units is not None:
+        # Compatibility for the original unit-price decision API. Production callers
+        # pass the whole request so that price and token limits remain separate.
+        budget_units = window_tokens = reserve_units
+    else:
+        raise ValueError("request or reserve_units is required")
     spent_headroom = feedback.account_budget_units - feedback.account_consumed_units
-    if spent_headroom < reserve_units:
+    if spent_headroom < budget_units:
         return Decision("refuse", "insufficient_budget")
-    if feedback.account_remaining_units < reserve_units:
+    headroom = feedback.account_admission_headroom_units
+    if "account_admission_headroom_units" not in feedback.model_fields_set:
+        headroom = min(feedback.account_remaining_units, feedback.platform_remaining_units)
+    if headroom < budget_units:
         return Decision("wait", "budget_reserved", feedback.retry_after_seconds)
-    if feedback.account_window_tokens_remaining < reserve_units:
+    if feedback.account_window_tokens_remaining < window_tokens:
         return Decision("wait", "window_exhausted", feedback.retry_after_seconds)
     return Decision("submit", "request_open")
 

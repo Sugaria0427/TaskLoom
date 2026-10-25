@@ -69,6 +69,7 @@ class _Pending:
     request: ModelRequest
     callback: Callable[[ModelRequest], Awaitable[GatewayRecord]]
     future: asyncio.Future[GatewayRecord]
+    charge_units: int
 
 
 class ModelScheduler:
@@ -122,7 +123,7 @@ class ModelScheduler:
         self._now = now
         self._queue: AgingQueue[_Pending] = AgingQueue(
             quantum=quantum,
-            cost=lambda pending: max(1, pending.request.reserve_units),
+            cost=lambda pending: pending.charge_units,
             deadline=lambda pending: _deadline_epoch(pending.request, self._now),
             now=self._now,
             urgency_window=urgency_window,
@@ -165,6 +166,8 @@ class ModelScheduler:
         self,
         request: ModelRequest,
         callback: Callable[[ModelRequest], Awaitable[GatewayRecord]],
+        *,
+        cost_units: int | None = None,
     ) -> GatewayRecord:
         """提交 ``request`` 并等它的网关记录。
 
@@ -172,6 +175,7 @@ class ModelScheduler:
             request: 要派发的 :class:`ModelRequest`。
             callback: 真正打网关的可调用对象，调度器对每个未被拒绝的
                 请求恰好调用一次。
+            cost_units: 平台价格折算后的公平预扣量；默认采用单价为一的费用。
 
         返回:
             ``callback`` 产出的 :class:`GatewayRecord`。
@@ -183,11 +187,15 @@ class ModelScheduler:
         """
         if self._loop is None:
             raise RuntimeError("ModelScheduler.start must be called first")
+        charge = request.reserve_units if cost_units is None else cost_units
+        if charge < 1:
+            raise ValueError("cost_units must be positive")
         loop = asyncio.get_running_loop()
         pending = _Pending(
             request=request,
             callback=callback,
             future=loop.create_future(),
+            charge_units=charge,
         )
         self._track(pending)
         self._queue.push(request.root_task_id, pending)
@@ -201,7 +209,7 @@ class ModelScheduler:
     def settle(self, owner: str, reserved: int, consumed: int) -> None:
         """按实际消费校正 ``owner`` 的公平账本。
 
-        派发时按 :attr:`ModelRequest.reserve_units` 预扣，那只是估算。
+        派发时按调用者提供的平台费用上界预扣，结算后按实际费用校正。
         结算后多扣的退回、少扣的补记，否则预留偏高的请求会被长期惩罚，
         预留偏低的那一方则能占便宜。
 
@@ -396,7 +404,7 @@ class ModelScheduler:
         """
 
         def accept(pending: _Pending) -> bool:
-            decision = request_decision(feedback, reserve_units=pending.request.reserve_units)
+            decision = request_decision(feedback, request=pending.request)
             return decision.action == "submit"
 
         return accept
@@ -410,7 +418,7 @@ class ModelScheduler:
         """
 
         def unaffordable(pending: _Pending) -> bool:
-            decision = request_decision(feedback, reserve_units=pending.request.reserve_units)
+            decision = request_decision(feedback, request=pending.request)
             return decision.action == "refuse"
 
         for _, pending in self._queue.remove(unaffordable):
