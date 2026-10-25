@@ -39,6 +39,10 @@ def test_actual_memory_limit_and_group_cleanup() -> None:
         assert process.wait(timeout=10) == -signal.SIGKILL
         events = dict(line.split() for line in (group / "memory.events").read_text().splitlines())
         assert int(events["oom_kill"]) >= 1
+        metrics = domain.metrics(str(group))
+        assert metrics["oom_kill"] >= 1
+        assert metrics["peak_memory"] > 0
+        assert "cpu_usec" in metrics
         assert domain.cleanup(str(group))
         assert not group.exists()
     finally:

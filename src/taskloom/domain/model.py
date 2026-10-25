@@ -106,3 +106,32 @@ class ResourcePool:
 
     def release(self, identity: str) -> bool:
         return self.allocations.pop(identity, None) is not None
+
+    def shortage(self, demand: Resources) -> Resources:
+        """Per-dimension deficit against current availability; zero where satisfied."""
+        return Resources(
+            slots=max(0, demand.slots - self.available.slots),
+            memory_bytes=max(0, demand.memory_bytes - self.available.memory_bytes),
+            artifact_bytes=max(0, demand.artifact_bytes - self.available.artifact_bytes),
+        )
+
+    def admission(self, demand: Resources) -> tuple[bool, str | None]:
+        """Whether ``demand`` can be admitted now, and the blocking reason when it cannot.
+
+        WP3 ranks candidates by feasibility; this method is the single source of
+        that fact, returning the reason a demand is blocked rather than a bare
+        boolean.
+        """
+        if not demand.fits(self.capacity):
+            return False, "exceeds total capacity"
+        shortage = self.shortage(demand)
+        if shortage == Resources():
+            return True, None
+        blockers: list[str] = []
+        if shortage.slots:
+            blockers.append(f"{shortage.slots} slots")
+        if shortage.memory_bytes:
+            blockers.append(f"{shortage.memory_bytes} memory bytes")
+        if shortage.artifact_bytes:
+            blockers.append(f"{shortage.artifact_bytes} artifact bytes")
+        return False, "short of " + ", ".join(blockers)

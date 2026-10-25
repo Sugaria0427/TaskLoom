@@ -40,6 +40,8 @@ class ProcessExecutor:
         )
 
     async def start(self) -> None:
+        for path in (self.directory / "executions").glob("*.tmp"):
+            path.unlink(missing_ok=True)
         for path in (self.directory / "cancelled").glob("*.json"):
             self.cancelled[path.stem] = json.loads(path.read_text())["generation"]
         for path in (self.directory / "executions").glob("*.json"):
@@ -113,12 +115,16 @@ class ProcessExecutor:
                 raise DomainError("INPUT_VERSION_MISMATCH", "Staged file contents changed")
             output_dir = workspace / "attempts" / request.attempt_id
             output_dir.mkdir(parents=True, exist_ok=True)
-            group = self.cgroups.create(request.attempt_id, request.memory_bytes)
+            group = self.cgroups.create(
+                request.attempt_id, request.memory_bytes, request.cpu_quota, request.cpu_period
+            )
             state.cgroup_path = str(group) if group else None
             spec = {
                 "workspace": str(workspace),
                 "output": str(output_dir / "result.json"),
                 "input_version": request.input_version,
+                "tool": request.tool_name,
+                "arguments": request.arguments,
                 "work_iterations": request.work_iterations,
                 "emit_bytes": request.emit_bytes,
                 "cgroup_path": state.cgroup_path,
@@ -210,6 +216,12 @@ class ProcessExecutor:
                 await asyncio.to_thread(self._stop, state)
             for reader in readers:
                 await asyncio.to_thread(reader.join, 2)
+            metrics: dict[str, int] = {}
+            if state.cgroup_path:
+                metrics = await asyncio.to_thread(self.cgroups.metrics, state.cgroup_path)
+            state.peak_memory_bytes = metrics.get("peak_memory")
+            state.cpu_seconds = metrics["cpu_usec"] / 1_000_000 if "cpu_usec" in metrics else None
+            state.oom = metrics.get("oom_kill", 0) > 0
             quiescent = state.pid is not None and not live_group(
                 state.pid, state.start_ticks, state.boot_id
             )
@@ -221,6 +233,9 @@ class ProcessExecutor:
                 state.error = "Owned descendants remain"
             elif self.cancelled.get(state.request.attempt_id, -1) >= state.request.generation:
                 state.outcome = Outcome.CANCELLED
+            elif state.oom:
+                state.outcome = Outcome.FAILED
+                state.error = "TOOL_OOM"
             elif code != 0 or state.error:
                 state.outcome = Outcome.FAILED
                 state.error = state.error or f"Tool exited with {code}"
@@ -239,6 +254,9 @@ class ProcessExecutor:
             state.outcome = Outcome.FAILED if state.quiescent else Outcome.UNKNOWN
             state.error = type(error).__name__ + ": " + str(error)
         finally:
+            state.artifact_bytes = await asyncio.to_thread(
+                lambda: sum(path.stat().st_size for path in output.rglob("*") if path.is_file())
+            )
             self._save(state)
             self.processes.pop(state.request.attempt_id, None)
             self.watchers.pop(state.request.attempt_id, None)

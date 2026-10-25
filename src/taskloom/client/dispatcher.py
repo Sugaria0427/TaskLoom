@@ -60,13 +60,29 @@ class Dispatcher:
         while True:
             item = self.queue.pop(
                 lambda candidate: (
-                    candidate.future.cancelled() or candidate.demand.fits(self.pool.available)
+                    candidate.future.cancelled()
+                    or (
+                        candidate.identity in self.pool.allocations
+                        and candidate.identity not in self.active
+                    )
+                    or (
+                        candidate.identity not in self.active
+                        and candidate.demand.fits(self.pool.available)
+                    )
                 )
             )
             if item is not None:
                 if item.future.cancelled():
                     continue
-                self.pool.reserve(item.identity, item.demand)
+                try:
+                    if not self.pool.reserve(item.identity, item.demand):
+                        self.queue.push(item.owner, item)
+                        continue
+                except Exception as error:
+                    if not item.future.done():
+                        item.future.set_exception(error)
+                    continue
+                self.quarantined.discard(item.identity)
                 self.active[item.identity] = asyncio.create_task(self._run(item))
                 continue
             self.wake.clear()

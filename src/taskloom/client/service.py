@@ -25,6 +25,7 @@ from taskloom.contracts.models import (
     TaskCreate,
     TaskState,
     ToolCall,
+    ToolClaim,
     ToolRun,
     ToolState,
     digest,
@@ -33,6 +34,7 @@ from taskloom.contracts.models import (
 )
 from taskloom.domain.model import Agent, DomainError, Outcome, Resources, Step, WorkState
 from taskloom.domain.ports import Repository, StoredRecord
+from taskloom.execution.catalog import tool_profile
 from taskloom.runtime.agent import FILE_STATS_TOOL, run_agent
 
 # L3 调度器的算法参数。刻意不进 ClientConfig：它们是调度策略的一部分，
@@ -126,7 +128,16 @@ class ClientService:
         await self.reconcile()
         for attempt in self.attempts.values():
             if attempt.kind == "tool" and not attempt.quiescent:
-                if not self.tools.pool.reserve(attempt.attempt_id, self._tool_demand()):
+                if attempt.request_payload is None:
+                    try:
+                        receipt = await self.executor.query(attempt.attempt_id)
+                    except Exception:
+                        receipt = None
+                    if receipt is not None:
+                        attempt.request_payload = receipt.request.model_dump(mode="json")
+                demand, _ = self._prepare_tool(attempt)
+                await self._save_attempt(attempt)
+                if not self.tools.pool.reserve(attempt.attempt_id, demand):
                     raise RuntimeError("Unresolved tool occupancy exceeds the configured capacity")
                 self.tools.quarantined.add(attempt.attempt_id)
         for task in list(self.tasks.values()):
@@ -136,9 +147,6 @@ class ClientService:
                 self.runners[task.task_id] = asyncio.create_task(self._run(task.task_id))
         self.reconciler = asyncio.create_task(self._reconcile_loop())
         self.ready = True
-
-    def _tool_demand(self) -> Resources:
-        return Resources(slots=1, memory_bytes=134217728, artifact_bytes=3145728)
 
     def get(self, task_id: str) -> TaskState:
         if task_id not in self.tasks:
@@ -664,11 +672,64 @@ class ClientService:
             raise DomainError("MODEL_" + record.outcome, record.error or record.state)
         return record.reply
 
+    def _prepare_tool(
+        self, attempt: AttemptState, call: ToolCall | None = None
+    ) -> tuple[Resources, ToolRun]:
+        """Pin execution and admission to this Attempt, including after a restart.
+
+        Pre-catalog checkpoints only launched file_stats. A saved executor receipt
+        takes precedence over that legacy fallback during startup migration.
+        """
+        task = self.get(attempt.root_task_id)
+        if attempt.request_payload is None:
+            if call is None:
+                call = next(
+                    (
+                        c
+                        for c in task.checkpoint.pending_tools
+                        if attempt.step_id == f"{task.task_id}-tool-{c.call_id}"
+                    ),
+                    ToolCall(call_id="legacy", name="file_stats"),
+                )
+            profile = tool_profile(call.name)
+            request = ToolRun(
+                attempt_id=attempt.attempt_id,
+                root_task_id=task.task_id,
+                tenant_id=task.tenant_id,
+                generation=attempt.generation,
+                tool_name=profile.name,
+                input_version=task.input_version,
+                work_iterations=task.specification.work_iterations,
+                emit_bytes=task.specification.emit_bytes,
+                memory_bytes=profile.demand.memory_bytes,
+                cpu_quota=profile.cpu_quota,
+                cpu_period=profile.cpu_period,
+                arguments=call.arguments,
+            )
+            attempt.request_payload = request.model_dump(mode="json")
+        request = ToolRun.model_validate(attempt.request_payload)
+        if attempt.tool_claim is None:
+            profile = tool_profile(request.tool_name)
+            attempt.tool_claim = ToolClaim(
+                slots=profile.demand.slots,
+                memory_bytes=request.memory_bytes,
+                artifact_bytes=profile.demand.artifact_bytes,
+            )
+        claim = attempt.tool_claim
+        if claim.memory_bytes != request.memory_bytes:
+            raise DomainError("TOOL_CLAIM_CONFLICT", "Saved claim differs from executor request")
+        return Resources(claim.slots, claim.memory_bytes, claim.artifact_bytes), request
+
     async def tool(self, task_id: str, call: ToolCall) -> JsonObject:
+        try:
+            tool_profile(call.name)
+        except ValueError:
+            raise DomainError("INVALID_TOOL", "Unsupported tool requested") from None
         attempt = await self._attempt(task_id, f"{task_id}-tool-{call.call_id}", "tool")
         if attempt.outcome == Outcome.SUCCEEDED and attempt.result is not None:
             return attempt.result
-        task = self.get(task_id)
+        demand, request = self._prepare_tool(attempt, call)
+        previously_dispatched = not attempt.quiescent
         attempt.state = WorkState.WAIT_RESOURCE
         await self._save_attempt(attempt)
 
@@ -676,24 +737,20 @@ class ClientService:
             if self.get(task_id).cancel_requested:
                 raise asyncio.CancelledError
             if (
-                self.artifact_size() + self._tool_demand().artifact_bytes
+                self.artifact_size() + demand.artifact_bytes
                 > self.config.artifact_budget_mib * 1048576
             ):
                 raise DomainError("ARTIFACT_BUDGET", "Retained artifacts fill the local budget")
-            request = ToolRun(
-                attempt_id=attempt.attempt_id,
-                root_task_id=task_id,
-                tenant_id=task.tenant_id,
-                generation=attempt.generation,
-                input_version=task.input_version,
-                work_iterations=task.specification.work_iterations,
-                emit_bytes=task.specification.emit_bytes,
-            )
             attempt.state = WorkState.RUNNING
             attempt.quiescent = False
             await self._save_attempt(attempt)
             try:
-                state = await self.executor.run(request)
+                if previously_dispatched:
+                    state = await self.executor.query(attempt.attempt_id)
+                    if state is None:
+                        raise QuarantinedExecution("Prior tool dispatch is not yet reconciled")
+                else:
+                    state = await self.executor.run(request)
                 attempt.execution_ref = {
                     "pid": state.pid,
                     "cgroup_path": state.cgroup_path,
@@ -754,7 +811,7 @@ class ClientService:
                 await self._save_attempt(attempt)
                 raise QuarantinedExecution("Executor transport failed") from error
 
-        return await self.tools.submit(attempt.attempt_id, task_id, self._tool_demand(), execute)
+        return await self.tools.submit(attempt.attempt_id, task_id, demand, execute)
 
     async def _settle_tool(self, attempt: AttemptState, state: ToolState) -> None:
         attempt.quiescent = state.quiescent
