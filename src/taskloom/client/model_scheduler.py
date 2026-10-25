@@ -214,6 +214,12 @@ class ModelScheduler:
             raise ValueError("Settled units must be non-negative")
         self._queue.refund(owner, reserved - consumed)
 
+    def forget_root(self, owner: str) -> bool:
+        """Reclaim fairness state only after this root has no queued or in-flight work."""
+        if any(p.request.root_task_id == owner for p in self._in_flight.values()):
+            return False
+        return self._queue.forget(owner)
+
     async def cancel(self, request_id: str) -> bool:
         """取消一个尚未派发的请求。
 

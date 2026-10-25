@@ -197,6 +197,10 @@ class AgingQueue[T]:
         """把多扣的额度还给该根任务。"""
         self._drr.refund(owner, amount)
 
+    def forget(self, owner: str) -> bool:
+        """Release a root's carried balance after its workflow has finished."""
+        return self._drr.forget(owner)
+
     def __len__(self) -> int:
         """队列里的条目总数。"""
         return len(self._drr)

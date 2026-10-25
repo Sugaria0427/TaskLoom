@@ -158,3 +158,25 @@ def test_refund_on_an_unknown_owner_is_carried_into_its_next_push() -> None:
     assert queue.deficit("ghost") == 0
     queue.push("ghost", "x" * 13)
     assert queue.pop() == ["x" * 13]
+
+
+def test_promotion_debt_is_retained_across_an_empty_queue() -> None:
+    queue: CostDRR[int] = CostDRR(quantum=100, cost=lambda price: price)
+    queue.push("root", 1000)
+    assert queue.take("root") == 1000
+    queue.refund("root", 990)
+    queue.push("root", 1000)
+    assert queue.deficit("root") == -10
+    assert not queue.forget("root")
+    queue.remove(lambda _: True)
+    assert queue.forget("root")
+    queue.push("root", 1)
+    assert queue.deficit("root") == 0
+
+
+def test_batched_dispatch_uses_all_available_slots_across_roots() -> None:
+    queue: CostDRR[str] = CostDRR(quantum=100, cost=lambda _: 1)
+    for owner in ("a", "b"):
+        for number in range(2):
+            queue.push(owner, f"{owner}{number}")
+    assert queue.pop(limit=4) == ["a0", "a1", "b0", "b1"]

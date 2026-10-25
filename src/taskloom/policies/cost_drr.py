@@ -51,8 +51,8 @@ class CostDRR[T]:
         * 额度不足的一方本轮不发，额度保留到下一轮继续累积。
         * 普通出队不产生欠账，额度始终非负；只有老化层主动提升
           才可能把额度扣成负数，那是刻意的欠账。
-        * 退场的一方额度归零，但 :meth:`refund` 给它的结转修正单独记账，
-          下次 :meth:`push` 时并入初始额度，不让它白拿好处也不让它吃亏。
+        * 队列暂空时保留提升债务，结算差额与债务共同结转到后续步骤。
+          未使用的正向量子在退场时清除，根任务结束时显式回收结转。
     """
 
     def __init__(self, quantum: int, cost: Callable[[T], int]) -> None:
@@ -112,7 +112,7 @@ class CostDRR[T]:
         served: list[T] = []
         budget = limit
         while self._owners:
-            if budget is not None and len(served) >= budget:
+            if budget is not None and budget <= 0:
                 break
             owner = self._owners[0]
             if owner not in self._visited:
@@ -139,13 +139,22 @@ class CostDRR[T]:
         return served
 
     def _retire(self, owner: str) -> None:
-        """把一方彻底移出轮转环，连同它本轮的状态一起清掉。"""
+        """Leave the queue while retaining promotion debt for later workflow steps."""
         self._items.pop(owner, None)
-        self._deficit.pop(owner, None)
+        debt = min(0, self._deficit.pop(owner, 0))
+        if debt:
+            self._carried[owner] = self._carried.get(owner, 0) + debt
         if owner in self._owners:
             self._owners.remove(owner)
         self._visited.discard(owner)
         self._turn_done.discard(owner)
+
+    def forget(self, owner: str) -> bool:
+        """Release a completed root's carried balance; queued work retains its share."""
+        if owner in self._items:
+            return False
+        self._carried.pop(owner, None)
+        return True
 
     def ready(self, eligible: Callable[[T], bool] = lambda _: True) -> bool:
         """至少有一方现在付得起它的队首条目。
@@ -188,7 +197,7 @@ class CostDRR[T]:
         负数等价于 :meth:`charge`，正数把多预扣的部分还给这一方。
 
         队列里没有的一方走结转账本：该方多半刚把最后一条发出去，
-        额度已随退场清零，直接丢掉结转会让它下次回来时白拿或白欠。
+        提升债务仍需偿还，结算差额与剩余债务共同决定下一阶段的额度。
         结转值在它重新 :meth:`push` 时并入初始额度。
 
         Args:

@@ -164,50 +164,58 @@ class ClientService:
         )
         self.tasks[task.task_id] = task.model_copy(deep=True)
 
-    async def _save_attempt(self, attempt: AttemptState) -> None:
-        async with self.lock:
-            task = self.get(attempt.root_task_id)
-            all_attempts = dict(self.attempts)
-            all_attempts[attempt.attempt_id] = attempt
-            related = [a for a in all_attempts.values() if a.root_task_id == task.task_id]
-            task.consumed_units = sum(a.consumed_units for a in related)
-            task.reserved_units = sum(a.reserved_units for a in related)
-            previous = self.attempts.get(attempt.attempt_id)
-            if (
-                attempt.reserved_units > (previous.reserved_units if previous else 0)
-                and task.consumed_units + task.reserved_units > task.specification.budget_units
-            ):
-                raise DomainError("PRIVATE_BUDGET", "Root task budget exhausted")
-            task.quiescent = all(a.quiescent for a in related)
-            if task.cancel_requested and task.quiescent:
-                task.state = WorkState.FINISHED
-            await self.store.apply(
-                [
-                    StoredRecord(
-                        "attempt",
-                        attempt.attempt_id,
-                        attempt.tenant_id,
-                        attempt.model_dump(mode="json"),
-                    ),
-                    StoredRecord(
-                        "task", task.task_id, task.tenant_id, task.model_dump(mode="json")
-                    ),
-                ],
-                {
-                    "schema_version": 1,
-                    "event_id": identity(),
-                    "tenant_id": task.tenant_id,
-                    "root_task_id": task.task_id,
-                    "step_id": attempt.step_id,
-                    "attempt_id": attempt.attempt_id,
-                    "generation": attempt.generation,
-                    "type": attempt.kind + "." + attempt.state.lower(),
-                    "outcome": attempt.outcome,
-                    "occurred_at": utc_now(),
-                },
-            )
-            self.attempts[attempt.attempt_id] = attempt.model_copy(deep=True)
-            self.tasks[task.task_id] = task.model_copy(deep=True)
+    async def _save_attempt(self, attempt: AttemptState, *, locked: bool = False) -> None:
+        if locked:
+            await self._persist_attempt(attempt)
+        else:
+            async with self.lock:
+                await self._persist_attempt(attempt)
+
+    async def _persist_attempt(self, attempt: AttemptState) -> None:
+        """Persist under self.lock; a settled identity cannot regress to an older reply."""
+        previous = self.attempts.get(attempt.attempt_id)
+        if previous is not None and previous.settled:
+            return
+        task = self.get(attempt.root_task_id)
+        all_attempts = dict(self.attempts)
+        all_attempts[attempt.attempt_id] = attempt
+        related = [a for a in all_attempts.values() if a.root_task_id == task.task_id]
+        task.consumed_units = sum(a.consumed_units for a in related)
+        task.reserved_units = sum(a.reserved_units for a in related)
+        previous = self.attempts.get(attempt.attempt_id)
+        if (
+            attempt.reserved_units > (previous.reserved_units if previous else 0)
+            and task.consumed_units + task.reserved_units > task.specification.budget_units
+        ):
+            raise DomainError("PRIVATE_BUDGET", "Root task budget exhausted")
+        task.quiescent = all(a.quiescent for a in related)
+        if task.cancel_requested and task.quiescent:
+            task.state = WorkState.FINISHED
+        await self.store.apply(
+            [
+                StoredRecord(
+                    "attempt",
+                    attempt.attempt_id,
+                    attempt.tenant_id,
+                    attempt.model_dump(mode="json"),
+                ),
+                StoredRecord("task", task.task_id, task.tenant_id, task.model_dump(mode="json")),
+            ],
+            {
+                "schema_version": 1,
+                "event_id": identity(),
+                "tenant_id": task.tenant_id,
+                "root_task_id": task.task_id,
+                "step_id": attempt.step_id,
+                "attempt_id": attempt.attempt_id,
+                "generation": attempt.generation,
+                "type": attempt.kind + "." + attempt.state.lower(),
+                "outcome": attempt.outcome,
+                "occurred_at": utc_now(),
+            },
+        )
+        self.attempts[attempt.attempt_id] = attempt.model_copy(deep=True)
+        self.tasks[task.task_id] = task.model_copy(deep=True)
 
     def artifact_size(self) -> int:
         directory = self.directory / "tasks"
@@ -453,6 +461,16 @@ class ClientService:
                 await self._save_task(current)
         finally:
             self.runners.pop(task_id, None)
+            self._retire_model_roots()
+
+    def _retire_model_roots(self) -> None:
+        for task in self.tasks.values():
+            if task.quiescent and task.outcome in (
+                Outcome.SUCCEEDED,
+                Outcome.FAILED,
+                Outcome.CANCELLED,
+            ):
+                self.models.forget_root(task.task_id)
 
     async def cancel(self, task_id: str) -> TaskState:
         async with self.lock:
@@ -522,29 +540,39 @@ class ClientService:
                 pass
         return attempt.reserved_units
 
-    async def _settle_model(self, attempt: AttemptState, record: GatewayRecord) -> None:
-        reserved = self._reserved_units(attempt)
-        attempt.reserved_units = record.reserved_units
-        attempt.consumed_units = record.consumed_units
-        attempt.quiescent = record.quiescent
-        attempt.outcome = record.outcome
-        attempt.state = WorkState.FINISHED if record.quiescent else WorkState.RECONCILING
-        attempt.result = record.reply.model_dump(mode="json") if record.reply else None
-        attempt.error = record.error
-        # 结果未知的请求保留预留、等核对结论，不在这里回补公平账本。
-        # 同一个 Attempt 只校正一次：这里要看共享的持久记录而不是手里的
-        # 副本，执行路径与核对路径同时看到同一个完成结果时只退一份。
-        if record.state == "FINISHED" and not attempt.settled:
-            async with self.lock:
-                current = self.attempts.get(attempt.attempt_id)
-                if current is not None and current.settled:
-                    attempt.settled = True
-                else:
-                    attempt.settled = True
-                    if current is not None:
-                        current.settled = True
-                    self.models.settle(attempt.root_task_id, reserved, record.consumed_units)
-        await self._save_attempt(attempt)
+    async def _settle_model(self, attempt: AttemptState, record: GatewayRecord) -> GatewayRecord:
+        async with self.lock:
+            current = self.attempts.get(attempt.attempt_id)
+            if current is not None and current.settled:
+                # Both polling paths must consume the saved final result, even when an
+                # older UNKNOWN response arrives after reconciliation has finished.
+                return record.model_copy(
+                    update={
+                        "state": "FINISHED",
+                        "outcome": current.outcome,
+                        "reserved_units": current.reserved_units,
+                        "consumed_units": current.consumed_units,
+                        "quiescent": current.quiescent,
+                        "error": current.error,
+                        "reply": ModelReply.model_validate(current.result)
+                        if current.result
+                        else None,
+                    }
+                )
+            reserved = self._reserved_units(attempt)
+            attempt.reserved_units = record.reserved_units
+            attempt.consumed_units = record.consumed_units
+            attempt.quiescent = record.quiescent
+            attempt.outcome = record.outcome
+            attempt.state = WorkState.FINISHED if record.quiescent else WorkState.RECONCILING
+            attempt.result = record.reply.model_dump(mode="json") if record.reply else None
+            attempt.error = record.error
+            attempt.settled = record.state == "FINISHED"
+            await self._save_attempt(attempt, locked=True)
+            # Commit the final marker before applying its in-memory fairness correction.
+            if attempt.settled:
+                self.models.settle(attempt.root_task_id, reserved, record.consumed_units)
+            return record
 
     async def model(self, task_id: str, messages: list[JsonObject], round_index: int) -> ModelReply:
         attempt = await self._attempt(task_id, f"{task_id}-model-{round_index}", "model")
@@ -590,8 +618,7 @@ class ClientService:
                 while record.state not in ("FINISHED", "UNKNOWN"):
                     await asyncio.sleep(0.05)
                     record = await self.gateway.query(request.request_id)
-                await self._settle_model(attempt, record)
-                return record
+                return await self._settle_model(attempt, record)
             except asyncio.CancelledError:
                 try:
                     record = await self.gateway.cancel(request.request_id)
@@ -745,6 +772,8 @@ class ClientService:
                         self.tools.wake.set()
             except Exception:
                 continue
+
+        self._retire_model_roots()
 
     async def _reconcile_loop(self) -> None:
         while True:
