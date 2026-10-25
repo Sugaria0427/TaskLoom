@@ -70,6 +70,7 @@ class _Pending:
     callback: Callable[[ModelRequest], Awaitable[GatewayRecord]]
     future: asyncio.Future[GatewayRecord]
     charge_units: int
+    priority: str = "normal"
 
 
 class ModelScheduler:
@@ -129,6 +130,7 @@ class ModelScheduler:
             urgency_window=urgency_window,
             aging_window=aging_window,
             urgency_burst=urgency_burst,
+            priority=lambda pending: {"low": 0, "normal": 1, "high": 2}[pending.priority],
         )
         self._by_id: dict[str, _Pending] = {}
         self._in_flight: dict[str, _Pending] = {}
@@ -168,6 +170,7 @@ class ModelScheduler:
         callback: Callable[[ModelRequest], Awaitable[GatewayRecord]],
         *,
         cost_units: int | None = None,
+        priority: str = "normal",
     ) -> GatewayRecord:
         """提交 ``request`` 并等它的网关记录。
 
@@ -187,6 +190,8 @@ class ModelScheduler:
         """
         if self._loop is None:
             raise RuntimeError("ModelScheduler.start must be called first")
+        if priority not in {"low", "normal", "high"}:
+            raise ValueError("Unknown priority")
         charge = request.reserve_units if cost_units is None else cost_units
         if charge < 1:
             raise ValueError("cost_units must be positive")
@@ -196,6 +201,7 @@ class ModelScheduler:
             callback=callback,
             future=loop.create_future(),
             charge_units=charge,
+            priority=priority,
         )
         self._track(pending)
         self._queue.push(request.root_task_id, pending)
@@ -205,6 +211,17 @@ class ModelScheduler:
         except asyncio.CancelledError:
             await self._abandon(request.request_id)
             raise
+
+    def set_priority(self, request_id: str, priority: str) -> bool:
+        """Update waiting work without resetting queue age or its cost ledger."""
+        if priority not in {"low", "normal", "high"}:
+            raise ValueError("Unknown priority")
+        pending = self._by_id.get(request_id)
+        if pending is None:
+            return False
+        pending.priority = priority
+        self._wake.set()
+        return True
 
     def settle(self, owner: str, reserved: int, consumed: int) -> None:
         """按实际消费校正 ``owner`` 的公平账本。

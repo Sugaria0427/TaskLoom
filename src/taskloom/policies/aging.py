@@ -80,6 +80,7 @@ class AgingQueue[T]:
         urgency_window: float,
         aging_window: float,
         urgency_burst: int = 2,
+        priority: Callable[[T], int] = lambda _: 0,
     ) -> None:
         if quantum <= 0:
             raise ValueError("quantum must be positive")
@@ -89,6 +90,7 @@ class AgingQueue[T]:
             raise ValueError("urgency_burst must be at least 1")
         self._drr: CostDRR[_Slot[T]] = CostDRR(quantum=quantum, cost=lambda slot: cost(slot.item))
         self._cost = cost
+        self._priority = priority
         self._deadline = deadline
         self._now = now
         self._urgency_window = urgency_window
@@ -133,6 +135,8 @@ class AgingQueue[T]:
             if owner is None:
                 owner = self._most_aged_owner(eligible, accept)
             if owner is None:
+                owner = self._most_priority_owner(eligible, accept)
+            if owner is None:
                 break
             served.append(self._take_from(owner))
             self._promoted_in_row += 1
@@ -173,6 +177,8 @@ class AgingQueue[T]:
         if self._most_urgent_owner(eligible, None) is not None:
             return True
         if self._most_aged_owner(eligible, None) is not None:
+            return True
+        if self._most_priority_owner(eligible, None) is not None:
             return True
         return self._drr.ready(lambda candidate: eligible(candidate.item))
 
@@ -240,6 +246,20 @@ class AgingQueue[T]:
             raise LookupError(f"{owner} has no queued item")
         del self._enqueued_at[slot.push_id]
         return slot.item
+
+    def _most_priority_owner(
+        self, eligible: Callable[[T], bool], accept: Callable[[T], bool] | None
+    ) -> str | None:
+        ranks = [
+            self._priority(slot.item)
+            for owner in self._drr.owners()
+            if (slot := self._drr.peek(owner)) is not None
+            and eligible(slot.item)
+            and (accept is None or accept(slot.item))
+        ]
+        if not ranks or max(ranks) == min(ranks):
+            return None
+        return self._best_owner(eligible, lambda slot: self._priority(slot.item), accept)
 
     def _most_urgent_owner(
         self, eligible: Callable[[T], bool], accept: Callable[[T], bool] | None

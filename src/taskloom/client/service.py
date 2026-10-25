@@ -511,6 +511,23 @@ class ClientService:
         await self.reconcile()
         return self.get(task_id)
 
+    async def update_priority(
+        self, task_id: str, priority: Literal["low", "normal", "high"]
+    ) -> TaskState:
+        if priority not in {"low", "normal", "high"}:
+            raise DomainError("INVALID_PRIORITY", "Priority must be low, normal, or high")
+        async with self.lock:
+            task = self.get(task_id)
+            if task.outcome != Outcome.PENDING or task.cancel_requested:
+                raise DomainError("TASK_NOT_PENDING", "Only pending tasks can change priority")
+            task.specification.priority = priority
+            await self._save_task(task)
+            for attempt in self.attempts.values():
+                if attempt.root_task_id == task_id and attempt.outcome == Outcome.PENDING:
+                    self.models.set_priority(attempt.attempt_id, priority)
+                    self.tools.set_priority(attempt.attempt_id, priority)
+            return self.get(task_id)
+
     async def resume(self, task_id: str) -> TaskState:
         async with self.lock:
             task = self.get(task_id)
@@ -577,6 +594,11 @@ class ClientService:
             attempt.outcome = record.outcome
             attempt.state = WorkState.FINISHED if record.quiescent else WorkState.RECONCILING
             attempt.result = record.reply.model_dump(mode="json") if record.reply else None
+            attempt.execution_ref = {
+                "platform_created_at": record.created_at,
+                "platform_dispatched_at": record.dispatched_at,
+                "platform_completed_at": record.completed_at,
+            }
             attempt.error = record.error
             attempt.settled = record.state == "FINISHED"
             await self._save_attempt(attempt, locked=True)
@@ -667,7 +689,12 @@ class ClientService:
                     await self._save_attempt(attempt)
                 raise
 
-        record = await self.models.submit(request, execute, cost_units=attempt.fair_charge_units)
+        record = await self.models.submit(
+            request,
+            execute,
+            cost_units=attempt.fair_charge_units,
+            priority=self.get(task_id).specification.priority,
+        )
         if record.reply is None:
             raise DomainError("MODEL_" + record.outcome, record.error or record.state)
         return record.reply
@@ -811,7 +838,13 @@ class ClientService:
                 await self._save_attempt(attempt)
                 raise QuarantinedExecution("Executor transport failed") from error
 
-        return await self.tools.submit(attempt.attempt_id, task_id, demand, execute)
+        return await self.tools.submit(
+            attempt.attempt_id,
+            task_id,
+            demand,
+            execute,
+            priority=self.get(task_id).specification.priority,
+        )
 
     async def _settle_tool(self, attempt: AttemptState, state: ToolState) -> None:
         attempt.quiescent = state.quiescent

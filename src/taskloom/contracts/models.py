@@ -126,6 +126,7 @@ class TaskCreate(Contract):
     work_iterations: int = Field(default=1, ge=1, le=5000000)
     emit_bytes: int = Field(default=0, ge=0, le=8388608)
     budget_units: int = Field(default=100000, ge=100, le=10000000)
+    priority: Literal["low", "normal", "high"] = "normal"
     deadline_seconds: float = Field(default=120, ge=1, le=3600)
 
     @field_validator("documents")
@@ -137,6 +138,10 @@ class TaskCreate(Contract):
             if not re.fullmatch(r"[^/\\\x00-\x1f]{1,80}", name) or name in {".", ".."}:
                 raise ValueError("Use simple document filenames")
         return value
+
+
+class PriorityUpdate(Contract):
+    priority: Literal["low", "normal", "high"]
 
 
 class Checkpoint(Contract):

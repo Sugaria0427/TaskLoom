@@ -555,3 +555,92 @@ async def test_deadline_wakes_the_backoff() -> None:
         assert caught.value.reason == DEADLINE_EXPIRED
     finally:
         await scheduler.close()
+
+
+async def test_manual_priority_uses_model_scheduler_and_preserves_waiting_identity() -> None:
+    scheduler = _scheduler(max_inflight=1)
+    await scheduler.start()
+    started, release = asyncio.Event(), asyncio.Event()
+    seen: list[str] = []
+
+    async def hold(request: ModelRequest) -> GatewayRecord:
+        started.set()
+        await release.wait()
+        return _record(request)
+
+    async def execute(request: ModelRequest) -> GatewayRecord:
+        seen.append(request.request_id)
+        return _record(request)
+
+    try:
+        first = asyncio.create_task(scheduler.submit(_request("hold", "hold"), hold))
+        await started.wait()
+        normal = asyncio.create_task(
+            scheduler.submit(
+                _request("normal", "normal"),
+                execute,
+                cost_units=100,
+            )
+        )
+        changed = asyncio.create_task(
+            scheduler.submit(
+                _request("changed", "changed"),
+                execute,
+                cost_units=100,
+                priority="low",
+            )
+        )
+        await asyncio.sleep(0)
+        assert scheduler.set_priority("changed", "high")
+        assert not scheduler.set_priority("hold", "low")
+        release.set()
+        await asyncio.wait_for(asyncio.gather(first, normal, changed), 2)
+        assert seen == ["changed", "normal"]
+        assert scheduler.pending == 0 and scheduler.in_flight == 0
+    finally:
+        await scheduler.close()
+
+
+async def test_manual_high_priority_cannot_starve_normal_cost_rotation() -> None:
+    scheduler = _scheduler(max_inflight=1)
+    await scheduler.start()
+    started, release = asyncio.Event(), asyncio.Event()
+    order: list[str] = []
+
+    async def hold(request: ModelRequest) -> GatewayRecord:
+        started.set()
+        await release.wait()
+        return _record(request)
+
+    async def execute(request: ModelRequest) -> GatewayRecord:
+        order.append(request.root_task_id)
+        return _record(request)
+
+    try:
+        first = asyncio.create_task(scheduler.submit(_request("hold", "hold"), hold))
+        await started.wait()
+        high = [
+            asyncio.create_task(
+                scheduler.submit(
+                    _request(f"high-{i}", "high"),
+                    execute,
+                    cost_units=100,
+                    priority="high",
+                )
+            )
+            for i in range(20)
+        ]
+        low = asyncio.create_task(
+            scheduler.submit(
+                _request("low", "low"),
+                execute,
+                cost_units=100,
+                priority="low",
+            )
+        )
+        await asyncio.sleep(0)
+        release.set()
+        await asyncio.wait_for(asyncio.gather(first, *high, low), 2)
+        assert order.index("low") < 20
+    finally:
+        await scheduler.close()
