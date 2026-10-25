@@ -6,6 +6,9 @@ from pathlib import Path
 from typing import Literal
 
 from taskloom.client.dispatcher import Dispatcher, QuarantinedExecution
+from taskloom.client.feedback_decision import request_decision
+from taskloom.client.feedback_source import FeedbackSource
+from taskloom.client.model_scheduler import ModelScheduler
 from taskloom.client.ports import ExecutorPort, GatewayPort
 from taskloom.contracts.models import (
     AttemptState,
@@ -32,6 +35,13 @@ from taskloom.domain.model import Agent, DomainError, Outcome, Resources, Step, 
 from taskloom.domain.ports import Repository, StoredRecord
 from taskloom.runtime.agent import FILE_STATS_TOOL, run_agent
 
+# L3 调度器的算法参数。刻意不进 ClientConfig：它们是调度策略的一部分，
+# 改它们只应改这一处，装配层不需要知道。
+_MODEL_QUANTUM = 100
+_URGENCY_WINDOW_SECONDS = 60.0
+_AGING_WINDOW_SECONDS = 20.0
+_URGENCY_BURST = 2
+
 
 class ClientService:
     def __init__(
@@ -52,7 +62,18 @@ class ClientService:
         self.attempts: dict[str, AttemptState] = {}
         self.runners: dict[str, asyncio.Task[None]] = {}
         self.lock = asyncio.Lock()
-        self.models = Dispatcher(Resources(slots=config.max_inflight))
+        self.platform_feedback_source = FeedbackSource(
+            self.gateway.feedback, config.feedback_interval_seconds
+        )
+        self.models = ModelScheduler(
+            max_inflight=config.max_inflight,
+            coordinated=config.coordinated,
+            quantum=_MODEL_QUANTUM,
+            urgency_window=_URGENCY_WINDOW_SECONDS,
+            aging_window=_AGING_WINDOW_SECONDS,
+            urgency_burst=_URGENCY_BURST,
+            feedback=self.platform_feedback_source,
+        )
         self.tools = Dispatcher(
             Resources(
                 slots=config.tool_slots,
@@ -63,7 +84,6 @@ class ClientService:
         self.reconciler: asyncio.Task[None] | None = None
         self.ready = False
         self.closing = False
-        self.platform_feedback: PlatformFeedback | None = None
         self.platform_error: str | None = None
 
     async def start(self) -> None:
@@ -145,50 +165,58 @@ class ClientService:
         )
         self.tasks[task.task_id] = task.model_copy(deep=True)
 
-    async def _save_attempt(self, attempt: AttemptState) -> None:
-        async with self.lock:
-            task = self.get(attempt.root_task_id)
-            all_attempts = dict(self.attempts)
-            all_attempts[attempt.attempt_id] = attempt
-            related = [a for a in all_attempts.values() if a.root_task_id == task.task_id]
-            task.consumed_units = sum(a.consumed_units for a in related)
-            task.reserved_units = sum(a.reserved_units for a in related)
-            previous = self.attempts.get(attempt.attempt_id)
-            if (
-                attempt.reserved_units > (previous.reserved_units if previous else 0)
-                and task.consumed_units + task.reserved_units > task.specification.budget_units
-            ):
-                raise DomainError("PRIVATE_BUDGET", "Root task budget exhausted")
-            task.quiescent = all(a.quiescent for a in related)
-            if task.cancel_requested and task.quiescent:
-                task.state = WorkState.FINISHED
-            await self.store.apply(
-                [
-                    StoredRecord(
-                        "attempt",
-                        attempt.attempt_id,
-                        attempt.tenant_id,
-                        attempt.model_dump(mode="json"),
-                    ),
-                    StoredRecord(
-                        "task", task.task_id, task.tenant_id, task.model_dump(mode="json")
-                    ),
-                ],
-                {
-                    "schema_version": 1,
-                    "event_id": identity(),
-                    "tenant_id": task.tenant_id,
-                    "root_task_id": task.task_id,
-                    "step_id": attempt.step_id,
-                    "attempt_id": attempt.attempt_id,
-                    "generation": attempt.generation,
-                    "type": attempt.kind + "." + attempt.state.lower(),
-                    "outcome": attempt.outcome,
-                    "occurred_at": utc_now(),
-                },
-            )
-            self.attempts[attempt.attempt_id] = attempt.model_copy(deep=True)
-            self.tasks[task.task_id] = task.model_copy(deep=True)
+    async def _save_attempt(self, attempt: AttemptState, *, locked: bool = False) -> None:
+        if locked:
+            await self._persist_attempt(attempt)
+        else:
+            async with self.lock:
+                await self._persist_attempt(attempt)
+
+    async def _persist_attempt(self, attempt: AttemptState) -> None:
+        """Persist under self.lock; a settled identity cannot regress to an older reply."""
+        previous = self.attempts.get(attempt.attempt_id)
+        if previous is not None and previous.settled:
+            return
+        task = self.get(attempt.root_task_id)
+        all_attempts = dict(self.attempts)
+        all_attempts[attempt.attempt_id] = attempt
+        related = [a for a in all_attempts.values() if a.root_task_id == task.task_id]
+        task.consumed_units = sum(a.consumed_units for a in related)
+        task.reserved_units = sum(a.reserved_units for a in related)
+        previous = self.attempts.get(attempt.attempt_id)
+        if (
+            attempt.reserved_units > (previous.reserved_units if previous else 0)
+            and task.consumed_units + task.reserved_units > task.specification.budget_units
+        ):
+            raise DomainError("PRIVATE_BUDGET", "Root task budget exhausted")
+        task.quiescent = all(a.quiescent for a in related)
+        if task.cancel_requested and task.quiescent:
+            task.state = WorkState.FINISHED
+        await self.store.apply(
+            [
+                StoredRecord(
+                    "attempt",
+                    attempt.attempt_id,
+                    attempt.tenant_id,
+                    attempt.model_dump(mode="json"),
+                ),
+                StoredRecord("task", task.task_id, task.tenant_id, task.model_dump(mode="json")),
+            ],
+            {
+                "schema_version": 1,
+                "event_id": identity(),
+                "tenant_id": task.tenant_id,
+                "root_task_id": task.task_id,
+                "step_id": attempt.step_id,
+                "attempt_id": attempt.attempt_id,
+                "generation": attempt.generation,
+                "type": attempt.kind + "." + attempt.state.lower(),
+                "outcome": attempt.outcome,
+                "occurred_at": utc_now(),
+            },
+        )
+        self.attempts[attempt.attempt_id] = attempt.model_copy(deep=True)
+        self.tasks[task.task_id] = task.model_copy(deep=True)
 
     def artifact_size(self) -> int:
         directory = self.directory / "tasks"
@@ -434,6 +462,16 @@ class ClientService:
                 await self._save_task(current)
         finally:
             self.runners.pop(task_id, None)
+            self._retire_model_roots()
+
+    def _retire_model_roots(self) -> None:
+        for task in self.tasks.values():
+            if task.quiescent and task.outcome in (
+                Outcome.SUCCEEDED,
+                Outcome.FAILED,
+                Outcome.CANCELLED,
+            ):
+                self.models.forget_root(task.task_id)
 
     async def cancel(self, task_id: str) -> TaskState:
         async with self.lock:
@@ -488,16 +526,56 @@ class ClientService:
             self.runners[task_id] = asyncio.create_task(self._run(task_id))
             return task
 
-    async def _settle_model(self, attempt: AttemptState, record: GatewayRecord) -> None:
-        attempt.reserved_units = record.reserved_units
-        attempt.consumed_units = record.consumed_units
-        attempt.quiescent = record.quiescent
-        attempt.outcome = record.outcome
-        attempt.state = WorkState.FINISHED if record.quiescent else WorkState.RECONCILING
-        attempt.result = record.reply.model_dump(mode="json") if record.reply else None
-        attempt.settled = record.state == "FINISHED"
-        attempt.error = record.error
-        await self._save_attempt(attempt)
+    @staticmethod
+    def _reserved_units(attempt: AttemptState) -> int:
+        """派发时按原请求记下的预扣量。
+
+        平台完成结算后会把 ``GatewayRecord.reserved_units`` 清零，所以不能
+        拿它当原预扣量；原请求持久化在 ``AttemptState.request_payload`` 里，
+        重启后也能复原。
+        """
+        if attempt.fair_charge_units is not None:
+            return attempt.fair_charge_units
+        if attempt.request_payload is not None:
+            try:
+                return ModelRequest.model_validate(attempt.request_payload).reserve_units
+            except ValueError:
+                pass
+        return attempt.reserved_units
+
+    async def _settle_model(self, attempt: AttemptState, record: GatewayRecord) -> GatewayRecord:
+        async with self.lock:
+            current = self.attempts.get(attempt.attempt_id)
+            if current is not None and current.settled:
+                # Both polling paths must consume the saved final result, even when an
+                # older UNKNOWN response arrives after reconciliation has finished.
+                return record.model_copy(
+                    update={
+                        "state": "FINISHED",
+                        "outcome": current.outcome,
+                        "reserved_units": current.reserved_units,
+                        "consumed_units": current.consumed_units,
+                        "quiescent": current.quiescent,
+                        "error": current.error,
+                        "reply": ModelReply.model_validate(current.result)
+                        if current.result
+                        else None,
+                    }
+                )
+            reserved = self._reserved_units(attempt)
+            attempt.reserved_units = record.reserved_units
+            attempt.consumed_units = record.consumed_units
+            attempt.quiescent = record.quiescent
+            attempt.outcome = record.outcome
+            attempt.state = WorkState.FINISHED if record.quiescent else WorkState.RECONCILING
+            attempt.result = record.reply.model_dump(mode="json") if record.reply else None
+            attempt.error = record.error
+            attempt.settled = record.state == "FINISHED"
+            await self._save_attempt(attempt, locked=True)
+            # Commit the final marker before applying its in-memory fairness correction.
+            if attempt.settled:
+                self.models.settle(attempt.root_task_id, reserved, record.consumed_units)
+            return record
 
     async def model(self, task_id: str, messages: list[JsonObject], round_index: int) -> ModelReply:
         attempt = await self._attempt(task_id, f"{task_id}-model-{round_index}", "model")
@@ -518,21 +596,21 @@ class ClientService:
             )
             attempt.request_payload = request.model_dump(mode="json")
         request = ModelRequest.model_validate(attempt.request_payload)
+        if attempt.fair_charge_units is None:
+            feedback = self.platform_feedback_source.latest
+            attempt.fair_charge_units = (
+                feedback.admission_needs(request)[0]
+                if feedback is not None
+                else request.reserve_units
+            )
         attempt.state = WorkState.WAIT_QUOTA
         await self._save_attempt(attempt)
 
-        async def execute() -> ModelReply:
+        async def execute(_request: ModelRequest) -> GatewayRecord:
             current_task = self.get(task_id)
             if current_task.cancel_requested:
                 raise asyncio.CancelledError
-            if not attempt.reserved_units:
-                await self.wait_platform(request)
-            # The platform admits the root budget on the request's worst-case charge.
-            worst = (
-                self.platform_feedback.admission_needs(request)[0]
-                if self.platform_feedback is not None
-                else request.reserve_units
-            )
+            worst = self._reserved_units(attempt)
             if (
                 current_task.consumed_units
                 + current_task.reserved_units
@@ -551,10 +629,7 @@ class ClientService:
                 while record.state not in ("FINISHED", "UNKNOWN"):
                     await asyncio.sleep(0.05)
                     record = await self.gateway.query(request.request_id)
-                await self._settle_model(attempt, record)
-                if record.reply is None:
-                    raise DomainError("MODEL_" + record.outcome, record.error or record.state)
-                return record.reply
+                return await self._settle_model(attempt, record)
             except asyncio.CancelledError:
                 try:
                     record = await self.gateway.cancel(request.request_id)
@@ -568,10 +643,13 @@ class ClientService:
                 if not admitted and error.code != "DUPLICATE_ID_CONFLICT":
                     attempt.quiescent = True
                     attempt.reserved_units = 0
-                    attempt.settled = True
                     attempt.outcome = Outcome.FAILED
                     attempt.state = WorkState.FINISHED
                     attempt.error = error.code
+                    # 请求没到过平台，实际消费为零，把派发时记的份额原样退回。
+                    if not attempt.settled:
+                        attempt.settled = True
+                        self.models.settle(attempt.root_task_id, self._reserved_units(attempt), 0)
                     await self._save_attempt(attempt)
                 raise
             except Exception:
@@ -581,7 +659,10 @@ class ClientService:
                     await self._save_attempt(attempt)
                 raise
 
-        return await self.models.submit(attempt.attempt_id, task_id, Resources(slots=1), execute)
+        record = await self.models.submit(request, execute, cost_units=attempt.fair_charge_units)
+        if record.reply is None:
+            raise DomainError("MODEL_" + record.outcome, record.error or record.state)
+        return record.reply
 
     async def tool(self, task_id: str, call: ToolCall) -> JsonObject:
         attempt = await self._attempt(task_id, f"{task_id}-tool-{call.call_id}", "tool")
@@ -703,6 +784,8 @@ class ClientService:
             except Exception:
                 continue
 
+        self._retire_model_roots()
+
     async def _reconcile_loop(self) -> None:
         while True:
             await asyncio.sleep(0.2)
@@ -731,25 +814,24 @@ class ClientService:
                     [StoredRecord("profile", "platform-account", feedback.account_id, expected)]
                 )
             self.config.tenant_id = feedback.account_id
-            self.platform_feedback = feedback.model_copy(deep=True)
             self.platform_error = None
 
     async def refresh_platform(self) -> PlatformFeedback:
-        feedback = await self.gateway.feedback()
+        # 先作废缓存再经来源读，调度器与对账循环因此共用同一份快照，
+        # 不会一个读到旧的、一个读到新的。
+        self.platform_feedback_source.invalidate()
+        feedback = await self.platform_feedback_source()
         await self.bind_platform(feedback)
         return feedback
 
     async def wait_platform(self, request: ModelRequest) -> None:
+        """Compatibility wait entry using the same priced admission decision as L3."""
         while True:
             feedback = await self.refresh_platform()
-            worst, tokens = feedback.admission_needs(request)
-            if feedback.account_budget_units - feedback.account_consumed_units < worst:
+            decision = request_decision(feedback, request=request)
+            if decision.action == "refuse":
                 raise DomainError("ACCOUNT_BUDGET", "Platform account budget exhausted")
-            if not self.config.coordinated or (
-                feedback.can_submit
-                and feedback.account_admission_headroom_units >= worst
-                and feedback.account_window_tokens_remaining >= tokens
-            ):
+            if not self.config.coordinated or (feedback.can_submit and decision.action == "submit"):
                 return
             if datetime.now(UTC) >= datetime.fromisoformat(request.deadline_at):
                 raise DomainError(
@@ -760,27 +842,39 @@ class ClientService:
             )
 
     def platform_status(self) -> JsonObject:
+        # The workbench and scheduler use the same feedback source and observation time.
+        feedback = self.platform_feedback_source.latest
         return {
             "platform_url": self.config.platform_url,
-            "connected": self.platform_feedback is not None and self.platform_error is None,
+            "connected": feedback is not None and self.platform_error is None,
             "coordinated": self.config.coordinated,
-            "feedback": self.platform_feedback.model_dump(mode="json")
-            if self.platform_feedback
-            else None,
+            "feedback": feedback.model_dump(mode="json") if feedback else None,
             "error": self.platform_error,
+            "feedback_fresh": self.platform_feedback_source.cached is not None,
+            "scheduler": {
+                "queued": self.models.pending,
+                "in_flight": self.models.in_flight,
+                "max_inflight": self.config.max_inflight,
+            },
         }
 
     def resources(self) -> JsonObject:
+        # 模型侧由 ModelScheduler 自己管在途名额，这里仍按 Resources 的
+        # 对外形状汇报容量与可用量，前端与验收脚本不用改。
+        model_capacity = asdict(Resources(slots=self.config.max_inflight))
         return {
             "capacity": asdict(self.tools.pool.capacity),
             "available": asdict(self.tools.pool.available),
             "queued_tools": len(self.tools.queue),
-            "queued_models": len(self.models.queue),
+            "queued_models": self.models.pending,
             "quarantined": list(self.tools.quarantined),
             "artifact_bytes": self.artifact_size(),
             "artifact_capacity_bytes": self.config.artifact_budget_mib * 1048576,
-            "model_capacity": asdict(self.models.pool.capacity),
-            "model_available": asdict(self.models.pool.available),
+            "model_capacity": model_capacity,
+            "model_available": {
+                **model_capacity,
+                "slots": max(0, self.config.max_inflight - self.models.in_flight),
+            },
             "allocations": [
                 {
                     "attempt_id": key,
@@ -790,8 +884,17 @@ class ClientService:
                     "kind": kind,
                     "resources": asdict(demand),
                 }
-                for kind, pool in (("tool", self.tools.pool), ("model", self.models.pool))
+                for kind, pool in (("tool", self.tools.pool),)
                 for key, demand in pool.allocations.items()
+            ]
+            + [
+                {
+                    "attempt_id": request_id,
+                    "root_task_id": root_task_id,
+                    "kind": "model",
+                    "resources": asdict(Resources(slots=1)),
+                }
+                for request_id, root_task_id in self.models.in_flight_requests
             ],
             "attempts": [a.model_dump(mode="json") for a in self.attempts.values()],
         }

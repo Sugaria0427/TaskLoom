@@ -200,6 +200,8 @@ class AttemptState(Contract):
     quiescent: bool = True
     reserved_units: int = 0
     consumed_units: int = 0
+    # Original L3 fairness debit, in the platform's priced cost units.
+    fair_charge_units: int | None = Field(default=None, ge=1)
     settled: bool = False
     result: JsonObject | None = None
     request_payload: JsonObject | None = None

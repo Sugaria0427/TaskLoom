@@ -132,6 +132,7 @@ def isolated() -> None:
             "README.md",
             "AGENTS.md",
             ".python-version",
+            *(path.name for path in sorted(ROOT.glob("README_v*.md"))),
         ):
             original = ROOT / name
             destination = clean / name

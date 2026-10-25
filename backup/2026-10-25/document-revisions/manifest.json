@@ -1,0 +1,20 @@
+[
+  {
+    "original": "README.md",
+    "archive": "backup/2026-10-25/document-revisions/README.md",
+    "sha256": "d3c919175d69312390a95104a6a20a41c8ce420fc0a8383f02d13fdb192f6f5b",
+    "current": "README_v1.1.md"
+  },
+  {
+    "original": "docs/engineering/TaskLoom_当前实现与开发状态.md",
+    "archive": "backup/2026-10-25/document-revisions/docs/engineering/TaskLoom_当前实现与开发状态.md",
+    "sha256": "d7ab069ed2707813548c0086cb3c5410c897b8f6814f8b8f92589e912393697e",
+    "current": "docs/engineering/TaskLoom_当前实现与开发状态_v1.1.md"
+  },
+  {
+    "original": "docs/engineering/TaskLoom_基础工程架构.md",
+    "archive": "backup/2026-10-25/document-revisions/docs/engineering/TaskLoom_基础工程架构.md",
+    "sha256": "96e0f30cd3d54f848c4785ca6458d63c54177b9efb7a268355aeed2a26d926d7",
+    "current": "docs/engineering/TaskLoom_基础工程架构_v1.1.md"
+  }
+]

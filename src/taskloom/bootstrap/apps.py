@@ -314,6 +314,9 @@ def client_app(base: Path, config: ClientConfig) -> FastAPI:
             config.platform_url = body.platform_url
             adopted = True
             await previous.aclose()
+            # 状态面板读的快照来自 FeedbackSource，必须在换上真实网关之后
+            # 经它读一次，否则面板报的还是换连接前的旧值。
+            await service.refresh_platform()
             return service.platform_status()
         finally:
             if not adopted:
