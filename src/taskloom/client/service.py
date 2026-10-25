@@ -527,16 +527,22 @@ class ClientService:
                 raise asyncio.CancelledError
             if not attempt.reserved_units:
                 await self.wait_platform(request)
+            # The platform admits the root budget on the request's worst-case charge.
+            worst = (
+                self.platform_feedback.admission_needs(request)[0]
+                if self.platform_feedback is not None
+                else request.reserve_units
+            )
             if (
                 current_task.consumed_units
                 + current_task.reserved_units
-                + max(0, request.reserve_units - attempt.reserved_units)
+                + max(0, worst - attempt.reserved_units)
                 > task.specification.budget_units
             ):
                 raise DomainError("PRIVATE_BUDGET", "Root task budget exhausted")
             attempt.state = WorkState.RUNNING
             attempt.quiescent = False
-            attempt.reserved_units = request.reserve_units
+            attempt.reserved_units = worst
             await self._save_attempt(attempt)
             admitted = False
             try:
@@ -736,15 +742,13 @@ class ClientService:
     async def wait_platform(self, request: ModelRequest) -> None:
         while True:
             feedback = await self.refresh_platform()
-            if (
-                feedback.account_budget_units - feedback.account_consumed_units
-                < request.reserve_units
-            ):
+            worst, tokens = feedback.admission_needs(request)
+            if feedback.account_budget_units - feedback.account_consumed_units < worst:
                 raise DomainError("ACCOUNT_BUDGET", "Platform account budget exhausted")
             if not self.config.coordinated or (
                 feedback.can_submit
-                and feedback.account_remaining_units >= request.reserve_units
-                and feedback.account_window_tokens_remaining >= request.reserve_units
+                and feedback.account_admission_headroom_units >= worst
+                and feedback.account_window_tokens_remaining >= tokens
             ):
                 return
             if datetime.now(UTC) >= datetime.fromisoformat(request.deadline_at):

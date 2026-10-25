@@ -100,7 +100,7 @@ def check() -> None:
 def verify() -> None:
     command([str(UV), "sync", "--locked"])
     check()
-    run("pytest", "-q", "tests/unit", "tests/integration")
+    run("pytest", "-q", "tests/unit", "tests/integration", "tests/l4")
     command([str(UV), "build"])
     run("pytest", "-q", "tests/smoke")
     wheel = wheel_path(ROOT)
@@ -247,6 +247,7 @@ def main() -> None:
         paths = [str(ROOT / "tests" / name) for name in args.extra] or [
             "tests/unit",
             "tests/integration",
+            "tests/l4",
             "tests/smoke",
         ]
         if "linux" in args.extra and not os.environ.get("TASKLOOM_CGROUP_ROOT"):
