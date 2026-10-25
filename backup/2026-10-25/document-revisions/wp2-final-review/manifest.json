@@ -1,0 +1,54 @@
+{
+  "date": "2026-10-25",
+  "reason": "WP2 final review and main delivery",
+  "files": [
+    {
+      "original": "README_v1.3.md",
+      "backup": "backup/2026-10-25/document-revisions/wp2-final-review/README_v1.3.md",
+      "sha256": "60b1089c15b70cc6499dbecb10d1902da75890674135abb6f2cbc123b793b0a0",
+      "replacement": "README_v1.4.md"
+    },
+    {
+      "original": "README.md",
+      "backup": "backup/2026-10-25/document-revisions/wp2-final-review/README.md",
+      "sha256": "654ac8695c668e5eefa2b6e79d149237c77d96974288bc3d12a0ae5d57144dda",
+      "replacement": "README.md"
+    },
+    {
+      "original": "docs/engineering/TaskLoom_当前实现与开发状态_v1.3.md",
+      "backup": "backup/2026-10-25/document-revisions/wp2-final-review/docs/engineering/TaskLoom_当前实现与开发状态_v1.3.md",
+      "sha256": "7be8fdaabb1eac76e9b6a9e65bc2a4bdd6f94c66d426ec25845d3416dc167d34",
+      "replacement": "docs/engineering/TaskLoom_当前实现与开发状态_v1.4.md"
+    },
+    {
+      "original": "docs/engineering/TaskLoom_当前实现与开发状态.md",
+      "backup": "backup/2026-10-25/document-revisions/wp2-final-review/docs/engineering/TaskLoom_当前实现与开发状态.md",
+      "sha256": "dd2421342e7eb96e09b1baaa6d79e7a672997477afef4e2799522810721653b2",
+      "replacement": "docs/engineering/TaskLoom_当前实现与开发状态.md"
+    },
+    {
+      "original": "docs/engineering/TaskLoom_基础工程架构_v1.3.md",
+      "backup": "backup/2026-10-25/document-revisions/wp2-final-review/docs/engineering/TaskLoom_基础工程架构_v1.3.md",
+      "sha256": "c9edf9f20fb1ca4c73c7f662954b47b435e2a8c394f0e35e514c4eb86d638bcb",
+      "replacement": "docs/engineering/TaskLoom_基础工程架构_v1.4.md"
+    },
+    {
+      "original": "docs/engineering/TaskLoom_基础工程架构.md",
+      "backup": "backup/2026-10-25/document-revisions/wp2-final-review/docs/engineering/TaskLoom_基础工程架构.md",
+      "sha256": "cda265c38285fe039e10dd030526380ff85ea573288d0ecc1c1207808271a428",
+      "replacement": "docs/engineering/TaskLoom_基础工程架构.md"
+    },
+    {
+      "original": "docs/engineering/TaskLoom_WP2_主线集成修复_v1.0.md",
+      "backup": "backup/2026-10-25/document-revisions/wp2-final-review/docs/engineering/TaskLoom_WP2_主线集成修复_v1.0.md",
+      "sha256": "95ac083fc49b162d9872840597deb418c1187bb1322c2827689e0131fca27cd2",
+      "replacement": "docs/engineering/TaskLoom_WP2_主线集成修复_v1.1.md"
+    },
+    {
+      "original": "docs/engineering/TaskLoom_WP2_工具注册与父子任务最小设计.md",
+      "backup": "backup/2026-10-25/document-revisions/wp2-final-review/docs/engineering/TaskLoom_WP2_工具注册与父子任务最小设计.md",
+      "sha256": "6fefd78127132a097f19ec4499e5e20f5035d76f2166bea4e3e51402dafe7eda",
+      "replacement": "docs/engineering/TaskLoom_WP2_工具注册与父子任务最小设计.md"
+    }
+  ]
+}

@@ -417,3 +417,52 @@ async def test_full_wp4_contract_survives_wp2_logical_identity_upgrade(tmp_path,
     finally:
         await service.close()
         await store.close()
+
+
+async def test_legacy_completed_receipt_must_match_input_version(tmp_path, platform_feedback):
+    store = SQLiteRepository(tmp_path / "client.db")
+    task, attempts = legacy_state(unresolved=True)
+    await seed(store, tmp_path, task, attempts)
+    gateway, executor = ports(platform_feedback)
+    request = ToolRun(
+        attempt_id="original-tool",
+        root_task_id="root",
+        tenant_id="alice",
+        generation=0,
+        input_version="another-input-version",
+    )
+    executor.query.return_value = ToolState(
+        request=request,
+        outcome=Outcome.SUCCEEDED,
+        quiescent=True,
+        result={"files": 1, "words": 3, "input_version": request.input_version},
+    )
+    service = ClientService(store, gateway, executor, tmp_path, ClientConfig())
+    await service.start()
+    try:
+        await runner_finishes(service)
+        # Identical counts do not establish that the tool read this task's documents.
+        assert service.get("root").outcome == Outcome.UNKNOWN
+        assert not service.attempts["original-tool"].quiescent
+        assert set(service.tools.pool.allocations) == {"original-tool"}
+        assert not service.get("root").checkpoint.completed_tools
+        gateway.submit.assert_not_awaited()
+        executor.run.assert_not_awaited()
+
+        corrected = request.model_copy(update={"input_version": task.input_version})
+        executor.query.return_value = ToolState(
+            request=corrected,
+            outcome=Outcome.SUCCEEDED,
+            quiescent=True,
+            result={"files": 1, "words": 3, "input_version": task.input_version},
+        )
+        await service.reconcile()
+        assert not service.tools.pool.allocations
+        await service.resume("root")
+        await runner_finishes(service)
+        assert service.get("root").outcome == Outcome.SUCCEEDED
+        assert service.get("root").step_attempts["root-tool-stats"] == "original-tool"
+        executor.run.assert_not_awaited()
+    finally:
+        await service.close()
+        await store.close()

@@ -938,11 +938,12 @@ class ClientService:
             or request.root_task_id != attempt.root_task_id
             or request.tenant_id != attempt.tenant_id
             or request.generation != attempt.generation
+            or request.input_version != self.get(attempt.root_task_id).input_version
         ):
             return False
         saved = attempt.request_payload
         if saved is None:
-            return request.input_version == self.get(attempt.root_task_id).input_version
+            return True
         if "attempt_id" in saved:
             return request == ToolRun.model_validate(saved)
         return request.tool_name == saved.get("tool_name") and request.arguments == saved.get(
