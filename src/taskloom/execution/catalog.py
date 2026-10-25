@@ -58,7 +58,7 @@ def tool_demand(name: str) -> Resources:
 
 
 def max_demand() -> Resources:
-    """The element-wise maximum demand, used to hold a slot conservatively on restart."""
+    """Element-wise catalog maximum for capacity planning, never an Attempt claim."""
     return Resources(
         slots=max(profile.demand.slots for profile in TOOL_PROFILES.values()),
         memory_bytes=max(profile.demand.memory_bytes for profile in TOOL_PROFILES.values()),

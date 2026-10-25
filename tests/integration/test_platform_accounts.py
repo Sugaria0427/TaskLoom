@@ -167,3 +167,36 @@ async def test_legacy_ledger_copy_retains_original_and_is_idempotent(tmp_path) -
 def test_personal_config_excludes_platform_pool_credentials() -> None:
     with pytest.raises(ValidationError):
         ClientConfig.model_validate({"pool_key": "platform-private-secret"})
+
+
+async def test_platform_status_reports_the_snapshot_admission_used(
+    tmp_path, platform_feedback
+) -> None:
+    """面板报的必须是准入实际依据的那一份，不是对账循环自己的旧副本。"""
+    store = SQLiteRepository(tmp_path / "client.db")
+    gateway = AsyncMock(spec=GatewayPort)
+    executor = AsyncMock(spec=ExecutorPort)
+    reads = 0
+
+    async def feedback():
+        nonlocal reads
+        reads += 1
+        return platform_feedback.model_copy(update={"account_queued": reads})
+
+    gateway.feedback.side_effect = feedback
+    service = ClientService(
+        store, gateway, executor, tmp_path, ClientConfig(feedback_interval_seconds=0.1)
+    )
+    await service.start()
+    try:
+        status = service.platform_status()
+        assert status["feedback"]["account_queued"] == reads
+        # 快照还在有效期内，fresh 为真；过期之后快照仍在，但不再算依据。
+        assert status["feedback_fresh"] is True
+        service.platform_feedback_source.invalidate()
+        stale = service.platform_status()
+        assert stale["feedback_fresh"] is False
+        assert stale["scheduler"] == {"queued": 0, "in_flight": 0, "max_inflight": 2}
+    finally:
+        await service.close()
+        await store.close()

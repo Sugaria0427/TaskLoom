@@ -2,11 +2,11 @@
 
 > 面向有限本地资源与模型额度的 Agent 多任务调度和平台请求协同系统。
 
-**更新日期** 2026-10-15 · **设计状态** 统一系统方案；0.2 基础实现已形成 · **调研依据** 截至 2026-10-14 的归档材料
+**更新日期** 2026-10-20 · **设计状态** 统一系统完整方案；0.2 基础实现与开发增量分开记录 · **调研依据** 截至 2026-10-14 的归档材料
 
 TaskLoom 是一套由个人客户端和模型服务平台共同组成的系统。用户在平台注册账号，在个人端配置该平台地址与账号 API Key；个人端执行 Agent 和本地工具，平台统一管理账户额度与固定模型服务池。两端共同服务完整任务，在相同设备、模型能力、总服务容量和质量要求下，提高及时且合格完成的任务比例。
 
-本文描述完整研究方案。0.2 已实现账户注册与登录、两端任务闭环、基础轮转、账户/全局额度和反馈等待；成本 DRR、阶段银行家、子 Agent 扇出和自适应反馈控制按后续阶段验证。
+本文描述完整研究方案。0.2 已实现账户注册与登录、两端任务闭环、基础轮转、账户/全局额度和反馈等待；当前默认运行使用固定容量模拟模型池和真实 `file_stats` 工具。成本 DRR、阶段银行家、子 Agent 扇出和自适应反馈控制按后续阶段验证。已合并能力、PR 状态和最新工程验证集中见[当前实现与开发状态](engineering/TaskLoom_当前实现与开发状态.md)；第 4 章描述完整技术目标。
 
 本文按四个阶段展开，架构章节先给总体关系，再拆解两端。
 
@@ -45,7 +45,7 @@ TaskLoom 是一套由个人客户端和模型服务平台共同组成的系统�
 
 **相同并发数量可能产生不同的内存、CPU 和实例压力。**
 
-- **核对现象。** OpenClaw #161050 报告特定 10 GB VM 上 CLI 子进程、浏览器及重工具的资源压力。[现场记录](../research/agent-orchestrate/materials/L1_local_resources/OC-I161050/issue_and_comments.md)
+- **核对现象。** OpenClaw #161050 报告特定 10 GB VM 上 CLI 子进程、浏览器及重工具的资源压力。[现场记录](https://github.com/openclaw/openclaw/issues/161050)
 - **定位根因。** 活跃任务数量只能表达数量；内部线程、内存峰值和工具实例成本需要另外计量。
 - **确定切口。** 测量工具画像，采用资源向量准入、信号量和 cgroup；允许可行轻工具先行。
 - **评价改善。** 比较工具失败率、整体内存峰值、交互 P95 和按时合格完成率。
@@ -54,7 +54,7 @@ TaskLoom 是一套由个人客户端和模型服务平台共同组成的系统�
 
 **多个子 Agent 为同一目标工作，服务份额需要归回原始任务。**
 
-- **核对机制。** 所查 OpenClaw 队列身份用于诊断，子 Agent 并发按发起 Session 等范围计量。[队列类型](../research/agent-orchestrate/materials/L2_harness_tasks/OC-S02/command-queue.types.ts)、[子 Agent](../research/agent-orchestrate/materials/L2_harness_tasks/OC-D08/subagents.md)
+- **核对机制。** 所查 OpenClaw 队列身份用于诊断，子 Agent 并发按发起 Session 等范围计量。[队列类型](https://github.com/openclaw/openclaw/blob/6a64431a10b638958cdeccc782f2b36074274776/src/process/command-queue.types.ts)、[子 Agent](https://github.com/openclaw/openclaw/blob/6a64431a10b638958cdeccc782f2b36074274776/docs/tools/subagents.md)
 - **定位根因。** 按调用或分支计量，与按完整任务分配不同；共享 API 的请求数和 token 约束又分别生效。
 - **确定切口。** 让分支继承根任务预算，采用成本 DRR（赤字轮转）、老化和统一请求入口。
 - **评价改善。** 改变分支数与请求成本，测根任务服务量、交互完成 P95 和后台最长等待。
@@ -65,7 +65,7 @@ TaskLoom 是一套由个人客户端和模型服务平台共同组成的系统�
 
 **相同资源可能重复创建，共享文件也需要明确访问顺序。**
 
-- **核对现象。** OpenClaw #95506 报告同配置多会话重复建立 MCP 实例；DeepSeek #3590 报告并发初始化及句柄覆盖。[实例记录](../research/agent-orchestrate/materials/L1_local_resources/OC-I95506/issue_and_comments.md)、[竞态记录](../research/agent-orchestrate/materials/L1_local_resources/D3590/D3590.txt)
+- **核对现象。** OpenClaw #95506 报告同配置多会话重复建立 MCP 实例；DeepSeek #3590 报告并发初始化及句柄覆盖。[实例记录](https://github.com/openclaw/openclaw/issues/95506)、[竞态记录](https://github.com/deepseek-ai/deepseek-harness/discussions/3590)
 - **定位根因。** 缺少初始化互斥会重复创建；按会话隔离虽保护状态，也可能增加重复成本。
 - **确定切口。** 首版实现初始化互斥、single-flight（同一初始化仅执行一次）、文件锁与输入版本检查。
 - **评价改善。** 测重复实例数、重复处理量、共享访问冲突和成果正确性；完整 MCP 共享池列为扩展。
@@ -76,7 +76,7 @@ TaskLoom 是一套由个人客户端和模型服务平台共同组成的系统�
 
 **任务状态、实际资源与消费分别变化，需要可靠交接。**
 
-- **核对机制。** OpenClaw 的 hook 超时会结束等待，handler 仍可能运行；父子让出已有专门机制。[hook 契约](../research/agent-orchestrate/materials/L2_harness_tasks/OC-D18/reference.md)
+- **核对机制。** OpenClaw 的 hook 超时会结束等待，handler 仍可能运行；父子让出已有专门机制。[hook 契约](https://github.com/openclaw/openclaw/blob/6a64431a10b638958cdeccc782f2b36074274776/docs/plugins/hooks/reference.md)
 - **定位根因。** 迟到授权、旧结果和执行器退出可能改变不同账本；界面结束与物理回收的时点不同。
 - **确定切口。** 登记等待原因与尝试代次，使用事件唤醒、幂等确认、真实进程核对和独立守护。
 - **评价改善。** 测取消收敛时延、残留资源、迟到结果及恢复成功率；按版本复测原生能力。
@@ -89,7 +89,7 @@ TaskLoom 是一套由个人客户端和模型服务平台共同组成的系统�
 
 **相同请求数量可以对应不同成本，任务归属也需要额外信息。**
 
-- **核对依据。** API 分别限制请求数与 token；Temporal、LiteLLM 已提供公平或份额机制。[API 合同](../research/agent-orchestrate/materials/L3_client_requests/A01/A01.txt)、[成熟公平](../research/agent-orchestrate/materials/L4_platform_requests/A24/A24.txt)
+- **核对依据。** API 分别限制请求数与 token；Temporal、LiteLLM 已提供公平或份额机制。[API 合同](https://platform.openai.com/docs/guides/rate-limits)、[成熟公平](https://docs.temporal.io/develop/task-queue-priority-fairness)
 - **定位根因。** 单次上下文提供请求内容；根任务、步骤和期限由客户端协议补充，按数量公平与按成本公平不同。
 - **确定切口。** 核验用户和根任务，先分用户、再分根任务；按预计成本分配并用实际用量校正。
 - **评价改善。** 测不同用户、分支数与请求成本下的服务量和任务完成率，确认哪些条件仍有收益。
@@ -100,7 +100,7 @@ TaskLoom 是一套由个人客户端和模型服务平台共同组成的系统�
 
 **等待队列和实际派发分别占用资源，需要分别约束。**
 
-- **核对依据。** 下游限速需要同时管理队列与执行并发；Kubernetes APF 将排队、公平席位和准入分开。[下游控制](../research/agent-orchestrate/materials/L4_platform_requests/A25/A25.txt)、[APF](../research/agent-orchestrate/materials/L4_platform_requests/C10/C10.txt)
+- **核对依据。** 下游限速需要同时管理队列与执行并发；Kubernetes APF 将排队、公平席位和准入分开。[下游控制](https://docs.temporal.io/guides/rate-limit-downstream-apis)、[APF](https://kubernetes.io/docs/concepts/cluster-administration/flow-control/)
 - **定位根因。** 大请求暂不满足额度时，简单 FIFO 会阻挡可行小请求；只限制在途数仍可能积累排队上下文。
 - **确定切口。** 限制队列数量、字节和等待期限，扫描可行候选，并为大请求保留积累机会。
 - **评价改善。** 测排队内存、空闲派发机会、尾延迟和拒绝率，将未完成请求保留在统计中。
@@ -111,7 +111,7 @@ TaskLoom 是一套由个人客户端和模型服务平台共同组成的系统�
 
 **共享域需要统一准入，速率、在途与费用采用不同规则。**
 
-- **核对依据。** Temporal 文档说明缺少联合下游限速会造成 429、工作流失败与浪费执行；费用预留还存在安全与利用率取舍。[A25](../research/agent-orchestrate/materials/L4_platform_requests/A25/A25.txt)、[预留设计讨论](../research/agent-orchestrate/materials/L3_client_requests/A21/A21.txt)
+- **核对依据。** Temporal 文档说明缺少联合下游限速会造成 429、工作流失败与浪费执行；费用预留还存在安全与利用率取舍。[A25](https://docs.temporal.io/guides/rate-limit-downstream-apis)、[预留设计讨论](https://api.github.com/repos/BerriAI/litellm/pulls/38647)
 - **定位根因。** 各来源分别判断额度会遗漏全局占用；重试、断连与迟到结果又改变实际消费。
 - **确定切口。** 使用权威账本与原子预留，统一等待提示和尝试身份，分别处理速率恢复与费用结算。
 - **评价改善。** 测额度违规、429、无效重试、未结算预留与实际预算使用率。
@@ -122,7 +122,7 @@ TaskLoom 是一套由个人客户端和模型服务平台共同组成的系统�
 
 **状态、取消和健康查询需要及时的控制路径。**
 
-- **核对现象。** OpenClaw #165950 记录 health/status 受请求准备队列阻塞；固定 main 快照仅缓解部分路径。[记录与状态](../research/agent-orchestrate/materials/L2_harness_tasks/OC-I165950/issue_and_comments.md)
+- **核对现象。** OpenClaw #165950 记录 health/status 受请求准备队列阻塞；固定 main 快照仅缓解部分路径。[记录与状态](https://github.com/openclaw/openclaw/issues/165950)
 - **定位根因。** 控制 RPC 与耗时准备共享准入或队列，轻查询被前面的慢工作阻挡。
 - **确定切口。** 为平台状态和取消设置独立有界通道、保留处理容量，读取快照并异步处理长工作。
 - **评价改善。** 在重负载下测控制响应 P95、取消传达时延与普通请求吞吐。
@@ -131,7 +131,7 @@ TaskLoom 是一套由个人客户端和模型服务平台共同组成的系统�
 
 ### 1.4 课设目标与开发约束
 
-**先交付可运行核心，再验证有价值的增量。** 课件第 3—16 页是原理、守护与验收依据。[课件原文](<../agent-workspace/inputs/course/操作系统原理课程设计(3).pdf>)
+**先交付可运行核心，再验证有价值的增量。** 课件第 3—16 页是原理、守护与验收依据。课件原文（本地留存：`agent-workspace/inputs/course/操作系统原理课程设计(3).pdf`）
 
 - **覆盖 OS 基础。** 实现进程、线程、信号、IPC、同步互斥、文件与文件锁，并提供独立守护进程。
 - **完成软件闭环。** 交付两端应用、真实工具、成果验收、恢复和可视化。
@@ -324,10 +324,10 @@ L4 先按用户、再按用户内部根任务轮转，从当前可行候选中�
 
 **先选择可行工具，再原子取得资源，最后核验实际归还。**
 
-- **测量画像。** 记录内存、CPU 并行度、实例、产物空间和访问对象；用并发干扰实验校准。[L07](../research/agent-orchestrate/materials/L1_local_resources/L07/L07.txt)
+- **测量画像。** 记录内存、CPU 并行度、实例、产物空间和访问对象；用并发干扰实验校准。[L07](https://arxiv.org/html/2608.24509v1)
 - **筛选候选。** 按根任务加权轮转，在份额内结合紧迫程度与年龄选择可行步骤。
 - **原子预留。** 将信号量许可与资源账本纳入同一分配协议；不足则等待，启动失败核对回滚。
-- **保护实际占用。** 使用进程组及 cgroup v2 的 CPU、内存、进程数量限制，核实后代退出再归还。[C03](../research/agent-orchestrate/materials/L1_local_resources/C03/C03.txt)
+- **保护实际占用。** 使用进程组及 cgroup v2 的 CPU、内存、进程数量限制，核实后代退出再归还。[C03](https://docs.kernel.org/admin-guide/cgroup-v2.html)
 
 大工具等待过久时，暂缓接纳同类新阶段；已准入阶段完成所需的安全申请继续推进。
 
@@ -377,7 +377,7 @@ Max 表示阶段上限，Available 表示当前可用，Allocation 表示已分�
 - **校正服务量。** 将预计与实际用量差额记入后续信用或欠账，减少持续份额偏移。
 - **安排续试。** 结合 Retry-After、指数退避、随机抖动及剩余期限；适配器保持单次派发。
 
-四类约束分别处理，具体计量采用本平台固定服务合同；调研中的服务商限额提供机制参考。[A01](../research/agent-orchestrate/materials/L3_client_requests/A01/A01.txt)、[A02](../research/agent-orchestrate/materials/L3_client_requests/A02/A02.txt)
+四类约束分别处理，具体计量采用本平台固定服务合同；调研中的服务商限额提供机制参考。[A01](https://platform.openai.com/docs/guides/rate-limits)、[A02](https://docs.anthropic.com/en/api/rate-limits)
 
 | 约束 | 控制规则 | 恢复或结算 |
 |---|---|---|
@@ -429,11 +429,12 @@ L3 管理根任务私有预算和本人的发送顺序，L4 权威管理平台�
 **L4 先分用户份额，再分用户内部的根任务份额。**
 
 - **建立两级队列。** 在认证用户外层、根任务内层分配信用，分支使用原根任务份额。
-- **按成本计量。** 使用成本 DRR，依据真实用量校正，允许空闲机会借用。
+- **三个口径分开。** 服务份额决定空槽给谁；费用预算和 token 速率窗口是硬上限，按最坏情况准入，结算时退回未用部分。
+- **份额候选按占槽计量。** 空槽先给当前占槽最少的一方，占槽相同时近期槽位秒少的优先，允许空闲机会借用、不积累空闲额度。竞争资源是池槽位而不是费用：成本 DRR 实测使长解码挤占他人。默认仍为用户/根任务轮转，全量对照确认后再定。[WP5 实验](engineering/TaskLoom_WP5_L4调度策略设计.md)
 - **保护可行工作。** 队首暂不可行时选择其他候选，同时积累大请求所需机会。
 - **限制优先超越。** 为紧迫类别设置有边界份额，使用 Aging（老化）保护后台活性。
 
-平台策略核验客户端紧迫声明，最终排序接受资源、期限与额度约束。[Temporal](../research/agent-orchestrate/materials/L4_platform_requests/A24/A24.txt)、[APF](../research/agent-orchestrate/materials/L4_platform_requests/C10/C10.txt)
+平台策略核验客户端紧迫声明，最终排序接受资源、期限与额度约束。[Temporal](https://docs.temporal.io/develop/task-queue-priority-fairness)、[APF](https://kubernetes.io/docs/concepts/cluster-administration/flow-control/)
 
 #### 4.2.3 权威账本、尝试与消费结算
 
@@ -462,7 +463,7 @@ L3 管理根任务私有预算和本人的发送顺序，L4 权威管理平台�
 - **约束重处理。** 使用有界工作池，避免请求解析或日志积压拖住控制。
 - **验证响应。** 在重负载下测状态 P95、取消传达和普通请求吞吐。
 
-基础账户反馈已进入实现，复杂反馈控制按增量实验推进；反馈开关作为单独消融。[控制面依据](../research/agent-orchestrate/materials/L2_harness_tasks/OC-I165950/issue_and_comments.md)
+基础账户反馈已进入实现，复杂反馈控制按增量实验推进；反馈开关作为单独消融。[控制面依据](https://github.com/openclaw/openclaw/issues/165950)
 
 | 实施档位 | 协作内容 | 规则 |
 |---|---|---|
@@ -536,7 +537,7 @@ L3 管理根任务私有预算和本人的发送顺序，L4 权威管理平台�
 | 工作包 | 建议成员 | 责任与认领入口 |
 |---|---|---|
 | WP1：总体集成。 | 龚旭。 | 公共契约、真实模型后端、装配与集成交付；[工作包 issue](https://gitee.com/Sugaria/TaskLoom/issues/IKM3JP)。 |
-| WP2：个人端 Harness。 | 许世浩。 | Agent 循环、多步骤、多工具、子 Agent 与 OpenClaw 接入；[工作包 issue](https://gitee.com/Sugaria/TaskLoom/issues/IKM3JQ)。 |
+| WP2：个人端 Harness。 | 许世浩。 | 自研轻量运行时、多步骤、多工具与子 Agent；配合原版 OpenClaw 对照，兼容接入作为后续扩展；[工作包 issue](https://gitee.com/Sugaria/TaskLoom/issues/IKM3JQ)。 |
 | WP3：个人端请求调度。 | 杜金泽。 | L3 成本公平、任务优先级、老化与反馈协调；[工作包 issue](https://gitee.com/Sugaria/TaskLoom/issues/IKM3JR)。 |
 | WP4：本地资源与恢复。 | 冀托。 | 工具画像、多资源准入、共享互斥、阶段安全检查与进程回收；[工作包 issue](https://gitee.com/Sugaria/TaskLoom/issues/IKM3JS)。 |
 | WP5：平台端调度。 | 方震。 | L4 分层公平、共享额度、有界接纳与平台反馈；[工作包 issue](https://gitee.com/Sugaria/TaskLoom/issues/IKM3JT)。 |
@@ -585,6 +586,6 @@ L3 管理根任务私有预算和本人的发送顺序，L4 权威管理平台�
 **本说明书是当前完整方案入口，研究索引继续由 research 维护。**
 
 - **定位问题。** 查阅[主题报告](../research/agent-orchestrate/reports/01_layered_theme_report.md)、[OpenClaw 专题](../research/agent-orchestrate/reports/02_solutions_and_integration.md)和[OS 设计](../research/agent-orchestrate/reports/03_os_design_and_validation.md)。
-- **核对版本。** 使用[OC-M01](../research/agent-orchestrate/materials/L2_harness_tasks/OC-M01/pin.json)、[开发路线](TaskLoom_开发路线与OpenClaw对照方案.md)与[组内报告](../agent-workspace/inputs/reports/TaskLoom_是否修改OpenClaw源码_利弊分析.md)。
-- **查阅方法。** 参考[OS 算法补充](TaskLoom_OS算法补充说明.md)、[cgroup v2](../research/agent-orchestrate/materials/L1_local_resources/C03/C03.txt)和[Temporal 公平](../research/agent-orchestrate/materials/L4_platform_requests/A24/A24.txt)。
-- **准备验收。** 按[课件](<../agent-workspace/inputs/course/操作系统原理课程设计(3).pdf>)、[图稿入口](pictures/README.md)与[界面原型](<../agent-workspace/prototypes/index(1).html>)同步当前实现和展示。
+- **核对版本。** 使用[OpenClaw 核查记录](../research/agent-orchestrate/materials/_index/openclaw_audit.json)和[开发路线](TaskLoom_开发路线与OpenClaw对照方案.md)。组内接入报告在本地 `agent-workspace/inputs/reports/` 留存。
+- **查阅方法。** 参考[OS 算法补充](TaskLoom_OS算法补充说明.md)、[cgroup v2](https://docs.kernel.org/admin-guide/cgroup-v2.html)和[Temporal 公平](https://docs.temporal.io/develop/task-queue-priority-fairness)。
+- **准备验收。** 按[当前实现状态](engineering/TaskLoom_当前实现与开发状态.md)、[工作台与指标口径](engineering/TaskLoom_个人端工作台与验收.md)及[工程计划](engineering/TaskLoom_工程骨架搭建计划.md)组织验收；课件保存在本地输入目录，前版图稿与展示材料见[备份索引](../backup/README.md)。

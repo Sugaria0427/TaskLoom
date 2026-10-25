@@ -61,3 +61,28 @@ def test_undeclared_identity_is_rejected() -> None:
     banker = PhaseBanker(Resources(slots=1, memory_bytes=10))
     with pytest.raises(ValueError, match="Undeclared"):
         banker.request("ghost", Resources(slots=1, memory_bytes=1))
+
+
+def test_unsafe_dynamic_maximum_keeps_previous_safe_state() -> None:
+    banker = PhaseBanker(Resources(slots=3))
+    banker.declare("a", Resources(slots=3))
+    banker.declare("b", Resources(slots=2))
+    assert banker.request("a", Resources(slots=1))
+    assert banker.request("b", Resources(slots=1))
+    before = banker.maximum.copy(), banker.allocation.copy()
+    with pytest.raises(ValueError, match="safe sequence"):
+        banker.declare("b", Resources(slots=3))
+    assert (banker.maximum, banker.allocation) == before
+    assert banker.safe() == ["b", "a"]
+    banker.declare("a", Resources(slots=2))
+    assert banker.safe() is not None
+
+
+def test_greedy_dynamic_maximum_remains_an_explicit_baseline() -> None:
+    banker = PhaseBanker(Resources(slots=3), check_safe=False)
+    banker.declare("a", Resources(slots=3))
+    banker.declare("b", Resources(slots=2))
+    assert banker.request("a", Resources(slots=1))
+    assert banker.request("b", Resources(slots=1))
+    banker.declare("b", Resources(slots=3))
+    assert banker.safe() is None

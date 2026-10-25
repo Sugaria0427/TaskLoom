@@ -17,35 +17,64 @@ T = TypeVar("T")
 class SingleFlight:
     """Run one shared operation per key; concurrent callers await the same result."""
 
-    def __init__(self) -> None:
+    def __init__(self, max_inflight: int = 64) -> None:
+        if max_inflight < 1:
+            raise ValueError("max_inflight must be positive")
         self._inflight: dict[Hashable, asyncio.Task[Any]] = {}
+        self._max_inflight = max_inflight
+        self._closed = False
 
     async def run(self, key: Hashable, operation: Callable[[], Coroutine[Any, Any, T]]) -> T:
+        if self._closed:
+            raise RuntimeError("SingleFlight is closed")
         task = self._inflight.get(key)
         if task is None or task.done():
+            if task is None and len(self._inflight) >= self._max_inflight:
+                raise RuntimeError("SingleFlight capacity exhausted")
             task = asyncio.create_task(operation())
             self._inflight[key] = task
-        try:
-            return await task  # type: ignore[no-any-return]
-        finally:
-            if self._inflight.get(key) is task:
-                self._inflight.pop(key, None)
+            task.add_done_callback(lambda done: self._completed(key, done))
+        return await asyncio.shield(task)
+
+    def _completed(self, key: Hashable, task: asyncio.Task[Any]) -> None:
+        if self._inflight.get(key) is task:
+            self._inflight.pop(key, None)
+        if not task.cancelled():
+            task.exception()  # Retrieve errors even when every caller has left.
+
+    async def close(self) -> None:
+        self._closed = True
+        tasks = list(self._inflight.values())
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        self._inflight.clear()
 
 
 class MultiLock:
     """Holds several asyncio locks acquired in a single canonical order."""
 
     def __init__(self, locks: list[asyncio.Lock]) -> None:
-        self._locks = locks
+        self._locks = list(dict.fromkeys(locks))
+        self._acquired: list[asyncio.Lock] = []
 
     async def __aenter__(self) -> "MultiLock":
-        for lock in self._locks:
-            await lock.acquire()
+        try:
+            for lock in self._locks:
+                await lock.acquire()
+                self._acquired.append(lock)
+        except BaseException:
+            self._release()
+            raise
         return self
 
-    async def __aexit__(self, exc_type: object, exc: object, tb: object) -> bool:
-        for lock in reversed(self._locks):
+    def _release(self) -> None:
+        for lock in reversed(self._acquired):
             lock.release()
+        self._acquired.clear()
+
+    async def __aexit__(self, exc_type: object, exc: object, tb: object) -> bool:
+        self._release()
         return False
 
 
@@ -56,7 +85,7 @@ class KeyedMutex:
         self._locks: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
 
     def locks(self, keys: Iterable[str]) -> MultiLock:
-        return MultiLock([self._locks[key] for key in sorted(keys)])
+        return MultiLock([self._locks[key] for key in sorted(set(keys))])
 
 
 class ReadWriteLock:

@@ -42,7 +42,13 @@ class PhaseBanker:
             raise ValueError("Declared maximum exceeds resource capacity")
         if not self.allocation.get(identity, Resources()).fits(maximum):
             raise ValueError("Declared maximum is below the current allocation")
-        self.maximum[identity] = maximum
+        trial = {**self.maximum, identity: maximum}
+        sequence = self._safe_sequence(self.allocation, trial)
+        if self.check_safe and sequence is None:
+            self._reject(identity, maximum, "maximum update would break the safe sequence")
+            raise ValueError("Maximum update would break the safe sequence")
+        self.maximum = trial
+        self.sequence = sequence or []
 
     def request(self, identity: str, demand: Resources) -> bool:
         if identity not in self.maximum:
@@ -74,16 +80,19 @@ class PhaseBanker:
         if len(self.rejections) > 128:
             self.rejections.pop(0)
 
-    def _safe_sequence(self, allocation: dict[str, Resources]) -> list[str] | None:
+    def _safe_sequence(
+        self, allocation: dict[str, Resources], maximum: dict[str, Resources] | None = None
+    ) -> list[str] | None:
+        maximum = self.maximum if maximum is None else maximum
         available = self.capacity
         for demand in allocation.values():
             available -= demand
-        remaining = set(self.maximum)
+        remaining = set(maximum)
         sequence: list[str] = []
         while remaining:
             progressed = False
             for identity in list(remaining):
-                need = self.maximum[identity] - allocation.get(identity, Resources())
+                need = maximum[identity] - allocation.get(identity, Resources())
                 if need.fits(available):
                     available += allocation.get(identity, Resources())
                     sequence.append(identity)
