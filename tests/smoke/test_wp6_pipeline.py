@@ -7,7 +7,9 @@ from pathlib import Path
 import httpx
 
 from taskloom.bootstrap.development import Topology
+from taskloom.execution.catalog import tool_profile
 from taskloom.experiments.capture import capture
+from taskloom.runtime.registry import default_registry
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from tools.wp6_calibrate import calibrate
@@ -49,13 +51,23 @@ def test_actual_runtime_capture_preserves_model_tool_model(tmp_path: Path) -> No
             snapshot, manifest, source="snapshot.json", manifest_source="run.json"
         )
         workflow = calibration["workflows"][0]
-        assert [stage["kind"] for stage in workflow["stages"]] == ["model", "tool", "model"]
+        tool_names = default_registry().names()
+        assert [stage["kind"] for stage in workflow["stages"]] == (
+            [kind for _ in tool_names for kind in ("model", "tool")] + ["model"]
+        )
+        tool_attempts = [a for a in snapshot["resources"]["attempts"] if a["kind"] == "tool"]
+        assert {a["request_payload"]["tool_name"] for a in tool_attempts} == set(tool_names)
+        for attempt in tool_attempts:
+            profile = tool_profile(attempt["request_payload"]["tool_name"])
+            assert attempt["tool_claim"]["memory_bytes"] == profile.demand.memory_bytes
+            assert attempt["request_payload"]["memory_bytes"] == profile.demand.memory_bytes
         assert sum(stage["cost_units"] for stage in workflow["stages"]) == workflow["cost_units"]
         path = tmp_path / "measured.json"
         write_manifest(path, calibration)
         simulated = run_experiment(path, seed=1, days=1, arrivals_per_day=1)
         assert all(
-            row["model_stages"] == 2 and row["tool_stages"] == 1 for row in simulated["summary"]
+            row["model_stages"] == len(tool_names) + 1 and row["tool_stages"] == len(tool_names)
+            for row in simulated["summary"]
         )
         assert all(
             row["total_cost_units"] == workflow["cost_units"] for row in simulated["summary"]

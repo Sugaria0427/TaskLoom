@@ -123,11 +123,11 @@ class ProcessExecutor:
                 "workspace": str(workspace),
                 "output": str(output_dir / "result.json"),
                 "input_version": request.input_version,
-                "tool": request.tool_name,
-                "arguments": request.arguments,
                 "work_iterations": request.work_iterations,
                 "emit_bytes": request.emit_bytes,
                 "cgroup_path": state.cgroup_path,
+                "tool_name": request.tool_name,
+                "arguments": request.arguments,
             }
             atomic_json(output_dir / "spec.json", spec)
             self.states[request.attempt_id] = state

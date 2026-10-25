@@ -48,11 +48,6 @@ def file_stats(spec: dict[str, Any], inputs: Path) -> dict[str, Any]:
     value = combined.digest()
     for index in range(spec["work_iterations"]):
         value = hashlib.sha256(value + index.to_bytes(8, "little")).digest()
-    emit = spec["emit_bytes"]
-    while emit:
-        chunk = b"x" * min(4096, emit)
-        os.write(2, chunk)
-        emit -= len(chunk)
     return {
         "files": len(rows),
         "words": sum(row["words"] for row in rows),
@@ -74,7 +69,9 @@ def list_files(spec: dict[str, Any], inputs: Path) -> dict[str, Any]:
 
 
 def top_words(spec: dict[str, Any], inputs: Path) -> dict[str, Any]:
-    top_n = int(spec.get("arguments", {}).get("top_n", 10))
+    top_n = spec.get("arguments", {}).get("top_n", 10)
+    if type(top_n) is not int or not 1 <= top_n <= 1000:
+        raise ValueError("top_n must be an integer between 1 and 1000")
     contents = read_inputs(inputs)
     counts: Counter[str] = Counter()
     total = 0
@@ -92,8 +89,34 @@ def top_words(spec: dict[str, Any], inputs: Path) -> dict[str, Any]:
     }
 
 
+def grep(spec: dict[str, Any], inputs: Path) -> dict[str, Any]:
+    arguments = spec.get("arguments", {})
+    pattern = arguments.get("pattern")
+    if not isinstance(pattern, str) or set(arguments) != {"pattern"}:
+        raise ValueError("grep requires one string pattern")
+    actual = read_inputs(inputs)
+    lines: list[dict[str, Any]] = []
+    matches = words = 0
+    for name in sorted(actual):
+        for lineno, line in enumerate(actual[name].splitlines(), 1):
+            if pattern in line:
+                matches += 1
+                words += len(line.split())
+                if len(lines) < 64:
+                    lines.append({"file": name, "line": lineno, "text": line})
+    verify_inputs(spec, inputs)
+    return {
+        "files": len(actual),
+        "words": words,
+        "matches": matches,
+        "lines": lines,
+        "input_version": spec["input_version"],
+    }
+
+
 HANDLERS: dict[str, Callable[[dict[str, Any], Path], dict[str, Any]]] = {
     "file_stats": file_stats,
+    "grep": grep,
     "list_files": list_files,
     "top_words": top_words,
 }
@@ -112,13 +135,22 @@ def main() -> None:
     parser.add_argument("--spec", type=Path, required=True)
     args = parser.parse_args()
     spec = json.loads(args.spec.read_text())
-    tool = spec.get("tool", "file_stats")
+    tool = spec.get("tool_name", spec.get("tool", "file_stats"))
+    if "tool" in spec and "tool_name" in spec and spec["tool"] != spec["tool_name"]:
+        raise ValueError("Conflicting tool names")
     if tool not in tool_names():
         raise ValueError(f"Unknown tool: {tool}")
     if spec.get("cgroup_path"):
         (Path(spec["cgroup_path"]) / "cgroup.procs").write_text(str(os.getpid()))
     inputs = Path(spec["workspace"]) / "inputs"
-    publish(spec, HANDLERS[tool](spec, inputs))
+    verify_inputs(spec, inputs)
+    result = HANDLERS[tool](spec, inputs)
+    emit = spec["emit_bytes"]
+    while emit:
+        chunk = b"x" * min(4096, emit)
+        os.write(2, chunk)
+        emit -= len(chunk)
+    publish(spec, result)
 
 
 if __name__ == "__main__":

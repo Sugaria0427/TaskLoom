@@ -39,7 +39,7 @@ async def test_restart_retains_exact_claim_at_minimum_budget(
         root_task_id="root",
         tenant_id="alice",
         agent_id="agent",
-        step_id="root-tool-call",
+        step_id="root-model-0-tool-call",
         kind="tool",
         generation=0,
         quiescent=False,
@@ -98,7 +98,9 @@ async def test_restart_retains_exact_claim_at_minimum_budget(
             quiescent=True,
             result={"files": 1, "words": 2},
         )
-        result = await service.tool("root", ToolCall(call_id="call", name="file_stats"))
+        result = await service.tool(
+            "root", ToolCall(call_id="call", name="file_stats"), model_round=0
+        )
         assert result["words"] == 2
         executor.run.assert_not_awaited()
         assert service.tools.pool.available == service.tools.pool.capacity

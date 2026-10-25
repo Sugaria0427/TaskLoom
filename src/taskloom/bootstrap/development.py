@@ -13,6 +13,7 @@ import httpx
 from taskloom.adapters.linux import OwnerLock, atomic_json
 from taskloom.adapters.supervisor import process_record, stop_record, write_configuration
 from taskloom.contracts.models import ClientConfig, PlatformConfig, PoolConfig
+from taskloom.runtime.registry import default_registry
 
 WP6_CAPACITIES: dict[str, tuple[int, int]] = {
     "unconstrained": (2, 2),
@@ -360,9 +361,10 @@ def self_test(base: Path) -> dict[str, Any]:
                 artifact.raise_for_status()
                 assert artifact.json()["words"] == 5
                 graph = http.get(url + f"/api/v1/tasks/{task_id}/graph").json()
-                assert len(graph["agents"]) == 1 and len(graph["steps"]) == 3
-                assert len(graph["attempts"]) == 3
-                assert sum(bool(s["predecessors"]) for s in graph["steps"]) == 2
+                expected_steps = 2 * len(default_registry()) + 1
+                assert len(graph["agents"]) == 1 and len(graph["steps"]) == expected_steps
+                assert len(graph["attempts"]) == expected_steps
+                assert sum(bool(s["predecessors"]) for s in graph["steps"]) == expected_steps - 1
                 feedback = http.get(url + "/api/v1/platform").json()["feedback"]
                 assert feedback["account_id"] == task["tenant_id"]
             status = http.get(

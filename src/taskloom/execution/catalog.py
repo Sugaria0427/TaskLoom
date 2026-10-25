@@ -14,7 +14,7 @@ from taskloom.domain.model import Resources
 MEBIBYTE = 1048576
 KIBIBYTE = 1024
 
-ToolName = Literal["file_stats", "list_files", "top_words"]
+ToolName = Literal["file_stats", "grep", "list_files", "top_words"]
 
 
 @dataclass(frozen=True)
@@ -28,6 +28,10 @@ class ToolProfile:
 TOOL_PROFILES: dict[str, ToolProfile] = {
     "file_stats": ToolProfile(
         name="file_stats",
+        demand=Resources(slots=1, memory_bytes=128 * MEBIBYTE, artifact_bytes=3 * MEBIBYTE),
+    ),
+    "grep": ToolProfile(
+        name="grep",
         demand=Resources(slots=1, memory_bytes=128 * MEBIBYTE, artifact_bytes=3 * MEBIBYTE),
     ),
     "list_files": ToolProfile(

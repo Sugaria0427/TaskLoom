@@ -1,29 +1,30 @@
 import json
 
-from taskloom.contracts.models import Checkpoint, JsonObject, TaskCreate
+from taskloom.contracts.models import Checkpoint, JsonObject, TaskCreate, tool_step_id
 from taskloom.domain.model import DomainError
 from taskloom.runtime.ports import AgentHost
-
-FILE_STATS_TOOL: JsonObject = {
-    "type": "function",
-    "function": {
-        "name": "file_stats",
-        "description": "Read the task's staged files and return verified file/word statistics.",
-        "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
-    },
-}
+from taskloom.runtime.registry import ToolRegistry, default_registry
 
 
 async def run_agent(
-    host: AgentHost, specification: TaskCreate, checkpoint: Checkpoint, max_steps: int
+    host: AgentHost,
+    task_id: str,
+    specification: TaskCreate,
+    checkpoint: Checkpoint,
+    max_steps: int,
+    registry: ToolRegistry | None = None,
 ) -> JsonObject:
+    if registry is None:
+        registry = default_registry()
     state = checkpoint.model_copy(deep=True)
     if not state.messages:
         state.messages = [
             {
                 "role": "system",
                 "content": (
-                    "Analyze the staged documents using file_stats, then return only JSON "
+                    "Analyze the staged documents using the available tools ("
+                    + ", ".join(registry.names())
+                    + "), then return only JSON "
                     "with files, words, and summary. Tools are executed by the host."
                 ),
             },
@@ -43,10 +44,15 @@ async def run_agent(
     while state.model_round + len(state.completed_tools) < max_steps:
         if state.pending_tools:
             call = state.pending_tools[0]
-            if call.name != "file_stats" or call.arguments:
-                raise DomainError("INVALID_TOOL", "The model requested an unsupported tool")
-            result = await host.tool(call)
-            state.completed_tools[call.call_id] = result
+            spec = registry.require(call.name)
+            spec.check(call)
+            # model_round advances immediately after a reply, so pending calls
+            # belong to the immediately preceding model round.
+            model_round = state.model_round - 1
+            step_id = tool_step_id(task_id, model_round, call.call_id)
+            result = await host.tool(call, model_round)
+            state.completed_tools[step_id] = result
+            state.completed_tool_calls[step_id] = call
             state.messages.append(
                 {
                     "role": "tool",
@@ -81,12 +87,25 @@ async def run_agent(
             final: JsonObject = json.loads(reply.content)
         except (ValueError, TypeError):
             raise DomainError("INVALID_RESULT", "Expected a structured JSON result") from None
-        if not state.completed_tools:
-            raise DomainError("UNVERIFIED_RESULT", "No verified tool result is available")
-        last = next(reversed(state.completed_tools.values()))
-        if final.get("files") != last["files"] or final.get("words") != last["words"]:
+        authoritative = next(
+            (
+                result
+                for key, result in reversed(state.completed_tools.items())
+                if key in state.completed_tool_calls
+                and state.completed_tool_calls[key].name == "file_stats"
+                and "files" in result
+                and "words" in result
+            ),
+            None,
+        )
+        if authoritative is None:
+            raise DomainError("UNVERIFIED_RESULT", "No verified file_stats result is available")
+        if (
+            final.get("files") != authoritative["files"]
+            or final.get("words") != authoritative["words"]
+        ):
             raise DomainError(
-                "RESULT_MISMATCH", "Model summary disagrees with verified tool output"
+                "RESULT_MISMATCH", "Model summary disagrees with verified file_stats output"
             )
         final["input_files"] = list(specification.documents)
         await host.checkpoint(state)

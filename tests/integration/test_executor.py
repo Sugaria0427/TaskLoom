@@ -55,6 +55,58 @@ async def test_real_tool_drains_large_output_and_publishes_result(tmp_path) -> N
         await executor.close()
 
 
+async def test_real_grep_tool_searches_staged_files(tmp_path) -> None:
+    profile, version = staged(tmp_path)
+    executor = ProcessExecutor(profile, CgroupDomain(None))
+    await executor.start()
+    try:
+        started = await executor.run(
+            ToolRun(
+                attempt_id="match",
+                root_task_id="root",
+                tenant_id="alice",
+                generation=0,
+                input_version=version,
+                tool_name="grep",
+                arguments={"pattern": "two"},
+            )
+        )
+        assert started.pid is not None
+        result = await tool_finished(executor, "match")
+        assert result.outcome == Outcome.SUCCEEDED
+        assert result.result["files"] == 1
+        assert result.result["matches"] == 1
+        assert result.result["words"] == 3
+        assert result.result["lines"] == [{"file": "notes.txt", "line": 1, "text": "one two three"}]
+    finally:
+        await executor.close()
+
+
+async def test_real_grep_tool_reports_zero_matches(tmp_path) -> None:
+    profile, version = staged(tmp_path)
+    executor = ProcessExecutor(profile, CgroupDomain(None))
+    await executor.start()
+    try:
+        await executor.run(
+            ToolRun(
+                attempt_id="miss",
+                root_task_id="root",
+                tenant_id="alice",
+                generation=0,
+                input_version=version,
+                tool_name="grep",
+                arguments={"pattern": "absent"},
+            )
+        )
+        result = await tool_finished(executor, "miss")
+        assert result.outcome == Outcome.SUCCEEDED
+        assert result.result["matches"] == 0
+        assert result.result["words"] == 0
+        assert result.result["lines"] == []
+    finally:
+        await executor.close()
+
+
 async def test_cancel_running_and_late_launch_tombstone(tmp_path) -> None:
     profile, version = staged(tmp_path)
     executor = ProcessExecutor(profile, CgroupDomain(None))
@@ -107,5 +159,27 @@ async def test_input_version_checks_actual_file_contents(tmp_path) -> None:
                 )
             )
         assert not executor.processes
+    finally:
+        await executor.close()
+
+
+async def test_unknown_tool_fails_without_publishing_result(tmp_path) -> None:
+    profile, version = staged(tmp_path)
+    executor = ProcessExecutor(profile, CgroupDomain(None))
+    await executor.start()
+    try:
+        with pytest.raises(ValueError, match="tool_name"):
+            await executor.run(
+                ToolRun(
+                    attempt_id="unknown",
+                    root_task_id="root",
+                    tenant_id="alice",
+                    generation=0,
+                    tool_name="rm_rf",
+                    input_version=version,
+                )
+            )
+        assert not executor.processes and not executor.states
+        assert not (profile / "tasks/root/attempts/unknown/result.json").exists()
     finally:
         await executor.close()

@@ -7,6 +7,7 @@ from pathlib import Path
 import httpx
 
 from taskloom.bootstrap.development import Topology
+from taskloom.runtime.registry import default_registry
 
 HEADERS = {"X-TaskLoom-Local": "1"}
 
@@ -85,7 +86,12 @@ def test_supervised_client_recovers_without_reexecuting_tool(tmp_path: Path) -> 
             )
             response.raise_for_status()
             task_id = response.json()["task_id"]
-            wait_tool(client, task_id)
+            before = wait_tool(client, task_id)
+            original_tool_ids = {
+                row["attempt_id"]
+                for row in before["attempts"]
+                if row["root_task_id"] == task_id and row["kind"] == "tool"
+            }
             manifest = topology.base / "clients/alice/supervisor.json"
             original = next(
                 row
@@ -112,7 +118,10 @@ def test_supervised_client_recovers_without_reexecuting_tool(tmp_path: Path) -> 
                 for row in resources["attempts"]
                 if row["root_task_id"] == task_id and row["kind"] == "tool"
             ]
-            assert len(tools) == 1
+            expected = set(default_registry().names())
+            assert len(tools) == len(expected)
+            assert {row["request_payload"]["tool_name"] for row in tools} == expected
+            assert original_tool_ids <= {row["attempt_id"] for row in tools}
             assert done["quiescent"] and done["reserved_units"] == 0
     finally:
         topology.close()

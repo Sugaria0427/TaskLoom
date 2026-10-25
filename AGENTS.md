@@ -3,8 +3,8 @@
 ## 1. 范围与入口
 
 项目范围以 docs/TaskLoom_项目说明书_当前完整方案.md 为准。实施步骤见
-docs/engineering/TaskLoom_工程骨架搭建计划.md，实际能力及开发状态见 docs/engineering/TaskLoom_当前实现与开发状态.md，启动命令见根 README。
-首版在 WSL2 Ubuntu / Python 3.12 运行；Windows 上的 tools/project.py 将操作转交给 WSL。
+docs/engineering/TaskLoom_工程骨架搭建计划.md，实际能力及开发状态见 docs/engineering/TaskLoom_当前实现与开发状态.md 与工程验收记录，启动命令见根 README。
+受管执行面在 x86_64 Linux / Python 3.12 运行；开发机可为独立 Ubuntu 虚拟机（包括 VS Code Remote-SSH）或已配置的 WSL2。Windows 入口仅在已配置 WSL 时转交，不应视为通用运行前提。
 个人端 L1—L3 与平台 L4 调度模型推理以外的执行。OpenClaw 是独立对照与后续接入对象。
 两端是同一 TaskLoom 系统：个人端使用平台注册账号的 API Key，所有模型请求经平台 L4。
 平台持有固定模型服务池。反馈开关只切换算法，保持平台调用路径不变。

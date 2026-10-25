@@ -1,0 +1,66 @@
+{
+  "date": "2026-10-25",
+  "reason": "WP2 integration after WP4/WP6 merges",
+  "files": [
+    {
+      "original": "README_v1.2.md",
+      "backup": "backup/2026-10-25/document-revisions/wp2-integration/README_v1.2.md",
+      "sha256": "b8e1b02f02bfaf27f142004e9f1e62a4b74c24340447c03bd95bc78e73d504f0",
+      "replacement": "README_v1.3.md"
+    },
+    {
+      "original": "README.md",
+      "backup": "backup/2026-10-25/document-revisions/wp2-integration/README.md",
+      "sha256": "79dfe266ae14ec41e4115720f305049e787daa5e5968baf4aa50be527e49d8de",
+      "replacement": "README.md"
+    },
+    {
+      "original": "README.md@37a7ddd",
+      "backup": "backup/2026-10-25/document-revisions/wp2-integration/contributor/README.md",
+      "sha256": "a5e02dee9f8f1e6a402edc68be1a66f4dcc8b53b24d71e5e38ce4cac74ae96d4",
+      "replacement": "README_v1.3.md"
+    },
+    {
+      "original": "docs/engineering/TaskLoom_当前实现与开发状态_v1.2.md",
+      "backup": "backup/2026-10-25/document-revisions/wp2-integration/docs/engineering/TaskLoom_当前实现与开发状态_v1.2.md",
+      "sha256": "49a31d857d1348cb05abe490ab6b448493972b059431fb156b27d172aa72ed45",
+      "replacement": "docs/engineering/TaskLoom_当前实现与开发状态_v1.3.md"
+    },
+    {
+      "original": "docs/engineering/TaskLoom_当前实现与开发状态.md",
+      "backup": "backup/2026-10-25/document-revisions/wp2-integration/docs/engineering/TaskLoom_当前实现与开发状态.md",
+      "sha256": "08be938ec6fb492ea112f40e186cd10b41cc5ce10df98269987040d5a3eb1172",
+      "replacement": "docs/engineering/TaskLoom_当前实现与开发状态.md"
+    },
+    {
+      "original": "docs/engineering/TaskLoom_基础工程架构_v1.2.md",
+      "backup": "backup/2026-10-25/document-revisions/wp2-integration/docs/engineering/TaskLoom_基础工程架构_v1.2.md",
+      "sha256": "2b9207ff857107506249e50ea302bd97396859b065fad14594ea26336b6b66d5",
+      "replacement": "docs/engineering/TaskLoom_基础工程架构_v1.3.md"
+    },
+    {
+      "original": "docs/engineering/TaskLoom_基础工程架构.md",
+      "backup": "backup/2026-10-25/document-revisions/wp2-integration/docs/engineering/TaskLoom_基础工程架构.md",
+      "sha256": "c23e02f1d4e1b1cecbcc017a014181e78b052c12cbe4d7f26594535984e8ceaa",
+      "replacement": "docs/engineering/TaskLoom_基础工程架构.md"
+    },
+    {
+      "original": "docs/engineering/WP6_实验指标与复现_v1.1.md",
+      "backup": "backup/2026-10-25/document-revisions/wp2-integration/docs/engineering/WP6_实验指标与复现_v1.1.md",
+      "sha256": "20f5540f7a61f5ffa208a75bd0477ef620c67c36e7948efa08d5b677f5ab2467",
+      "replacement": "docs/engineering/WP6_实验指标与复现_v1.2.md"
+    },
+    {
+      "original": "docs/engineering/WP6_实验指标与复现.md",
+      "backup": "backup/2026-10-25/document-revisions/wp2-integration/docs/engineering/WP6_实验指标与复现.md",
+      "sha256": "8f9b6d0c464b8de3b7dc296489a808cb4305d071f8a4fe80bc02e47fb51e8b72",
+      "replacement": "docs/engineering/WP6_实验指标与复现.md"
+    },
+    {
+      "original": "docs/engineering/TaskLoom_WP2_工具注册与父子任务最小设计.md",
+      "backup": "backup/2026-10-25/document-revisions/wp2-integration/docs/engineering/TaskLoom_WP2_工具注册与父子任务最小设计.md",
+      "sha256": "f5dc4f4c641d1d667edbf2d800d57c08dd17cd20940c07d176e26af78f3fa919",
+      "replacement": "docs/engineering/TaskLoom_WP2_工具注册与父子任务最小设计_v1.1.md"
+    }
+  ]
+}

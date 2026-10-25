@@ -12,6 +12,12 @@ from taskloom.domain.model import Outcome, WorkState
 from taskloom.policies.reservation import Prices, worst_units
 
 JsonObject = dict[str, Any]
+MAX_MODEL_TOOLS = 8
+
+
+def tool_step_id(task_id: str, model_round: int, call_id: str) -> str:
+    """Stable tool-step identity scoped to the model round that produced it."""
+    return f"{task_id}-model-{model_round}-tool-{call_id}"
 
 
 def mock_tokens(value: object) -> int:
@@ -56,7 +62,7 @@ class ModelRequest(Contract):
     attempt_id: str
     cancel_generation: int = Field(default=0, ge=0)
     messages: list[JsonObject] = Field(min_length=1, max_length=32)
-    tools: list[JsonObject] = Field(default_factory=list, max_length=8)
+    tools: list[JsonObject] = Field(default_factory=list, max_length=MAX_MODEL_TOOLS)
     max_tokens: int = Field(default=512, ge=1, le=4096)
     deadline_at: str
 
@@ -148,6 +154,7 @@ class Checkpoint(Contract):
     messages: list[JsonObject] = Field(default_factory=list)
     pending_tools: list[ToolCall] = Field(default_factory=list)
     completed_tools: dict[str, JsonObject] = Field(default_factory=dict)
+    completed_tool_calls: dict[str, ToolCall] = Field(default_factory=dict)
     model_round: int = 0
 
 
@@ -162,6 +169,7 @@ class TaskState(Contract):
     outcome: Outcome = Outcome.PENDING
     checkpoint: Checkpoint = Field(default_factory=Checkpoint)
     step_attempts: dict[str, str] = Field(default_factory=dict)
+    tool_step_aliases: dict[str, str] = Field(default_factory=dict)
     cancel_generation: int = 0
     cancel_requested: bool = False
     quiescent: bool = True
@@ -227,7 +235,7 @@ class ToolRun(Contract):
     root_task_id: str = Field(pattern=r"^[a-zA-Z0-9_-]{1,96}$")
     tenant_id: str
     generation: int = Field(ge=0)
-    tool_name: Literal["file_stats", "list_files", "top_words"] = "file_stats"
+    tool_name: Literal["file_stats", "grep", "list_files", "top_words"] = "file_stats"
     input_version: str
     work_iterations: int = Field(default=1, ge=1, le=5000000)
     emit_bytes: int = Field(default=0, ge=0, le=8388608)
