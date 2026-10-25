@@ -13,6 +13,14 @@ import httpx
 from taskloom.adapters.linux import OwnerLock, atomic_json
 from taskloom.adapters.supervisor import process_record, stop_record, write_configuration
 from taskloom.contracts.models import ClientConfig, PlatformConfig, PoolConfig
+from taskloom.runtime.registry import default_registry
+
+WP6_CAPACITIES: dict[str, tuple[int, int]] = {
+    "unconstrained": (2, 2),
+    "tool_constrained": (1, 2),
+    "api_constrained": (2, 1),
+    "both_constrained": (1, 1),
+}
 
 
 def free_port() -> int:
@@ -32,7 +40,20 @@ class Topology:
         pool_port: int | None = None,
         second_client_port: int | None = None,
         with_second_client: bool = False,
+        scenario: str = "unconstrained",
+        tool_slots: int | None = None,
+        pool_capacity: int | None = None,
     ) -> None:
+        if scenario not in WP6_CAPACITIES:
+            raise ValueError(f"Unknown WP6 scenario: {scenario}")
+        expected_tool_slots, expected_pool_capacity = WP6_CAPACITIES[scenario]
+        if tool_slots is not None and tool_slots != expected_tool_slots:
+            raise ValueError(f"{scenario} requires tool_slots={expected_tool_slots}")
+        if pool_capacity is not None and pool_capacity != expected_pool_capacity:
+            raise ValueError(f"{scenario} requires pool_capacity={expected_pool_capacity}")
+        self.scenario = scenario
+        self.tool_slots = expected_tool_slots
+        self.pool_capacity = expected_pool_capacity
         self.base = base
         chosen: set[int] = set()
 
@@ -57,6 +78,27 @@ class Topology:
         self.children: list[subprocess.Popen[bytes]] = []
         self.records: list[dict[str, Any]] = []
         self.lock: OwnerLock | None = None
+
+    def client_config(self, profile: str, port: int) -> ClientConfig:
+        return ClientConfig(
+            profile=profile,
+            tenant_id=profile,
+            client_port=port,
+            platform_url=self.platform_url,
+            tool_slots=self.tool_slots,
+        )
+
+    def pool_config(self) -> PoolConfig:
+        return PoolConfig(key=self.pool_key, capacity=self.pool_capacity)
+
+    def platform_config(self) -> PlatformConfig:
+        return PlatformConfig(
+            pool_url=self.pool_url,
+            pool_key=self.pool_key,
+            pool_capacity=self.pool_capacity,
+            account_max_inflight=self.pool_capacity,
+            model=self.pool_config().model,
+        )
 
     def _spawn(
         self, role: str, configuration: Path, port: int | None = None, label: str | None = None
@@ -132,10 +174,17 @@ class Topology:
                     issued = http.post("/v1/accounts/login", json=body)
                 issued.raise_for_status()
                 key = issued.json()["api_key"]
+            feedback = http.get("/v1/account", headers={"Authorization": "Bearer " + key})
+            feedback.raise_for_status()
+            actual_limit = feedback.json()["account_max_inflight"]
+            if actual_limit != self.pool_capacity:
+                raise RuntimeError(
+                    f"The existing account {profile} has inflight limit {actual_limit}; "
+                    f"scenario {self.scenario} requires {self.pool_capacity}. "
+                    "Use a fresh --state-dir for this scenario."
+                )
             atomic_json(credentials, {"platform_url": self.platform_url, "api_key": key})
-        config = ClientConfig(
-            profile=profile, tenant_id=profile, client_port=port, platform_url=self.platform_url
-        )
+        config = self.client_config(profile, port)
         path = directory / "client.toml"
         write_configuration(path, config)
         self._spawn(
@@ -169,20 +218,12 @@ class Topology:
                 self.pool_key = tomllib.loads(pool_path.read_text())["key"]
             else:
                 self.pool_key = secrets.token_urlsafe(32)
-            pool = PoolConfig(key=self.pool_key)
+            pool = self.pool_config()
             write_configuration(pool_path, pool)
             self._spawn("model-pool", pool_path, self.pool_port)
             self.wait(self.pool_url)
             platform_path = self.base / "platform/platform.toml"
-            write_configuration(
-                platform_path,
-                PlatformConfig(
-                    pool_url=self.pool_url,
-                    pool_key=self.pool_key,
-                    pool_capacity=pool.capacity,
-                    model=pool.model,
-                ),
-            )
+            write_configuration(platform_path, self.platform_config())
             self._spawn("platform", platform_path, self.platform_port)
             self.wait(self.platform_url)
             self._provision_client("alice", self.client_port)
@@ -241,6 +282,10 @@ def develop(
     pool_port: int | None = None,
     second_client_port: int | None = None,
     with_second_client: bool = True,
+    *,
+    scenario: str = "unconstrained",
+    tool_slots: int | None = None,
+    pool_capacity: int | None = None,
 ) -> None:
     topology = Topology(
         base,
@@ -249,6 +294,9 @@ def develop(
         pool_port=pool_port,
         second_client_port=second_client_port,
         with_second_client=with_second_client,
+        scenario=scenario,
+        tool_slots=tool_slots,
+        pool_capacity=pool_capacity,
     )
     stopping = False
 
@@ -267,6 +315,9 @@ def develop(
                 "platform": topology.platform_url,
                 "state_dir": str(base),
                 "model_pool": "platform-owned fixed-capacity simulation",
+                "scenario": topology.scenario,
+                "tool_slots": topology.tool_slots,
+                "pool_capacity": topology.pool_capacity,
             },
             ensure_ascii=False,
         ),
@@ -310,9 +361,10 @@ def self_test(base: Path) -> dict[str, Any]:
                 artifact.raise_for_status()
                 assert artifact.json()["words"] == 5
                 graph = http.get(url + f"/api/v1/tasks/{task_id}/graph").json()
-                assert len(graph["agents"]) == 1 and len(graph["steps"]) == 5
-                assert len(graph["attempts"]) == 5
-                assert sum(bool(s["predecessors"]) for s in graph["steps"]) == 4
+                expected_steps = 2 * len(default_registry()) + 1
+                assert len(graph["agents"]) == 1 and len(graph["steps"]) == expected_steps
+                assert len(graph["attempts"]) == expected_steps
+                assert sum(bool(s["predecessors"]) for s in graph["steps"]) == expected_steps - 1
                 feedback = http.get(url + "/api/v1/platform").json()["feedback"]
                 assert feedback["account_id"] == task["tenant_id"]
             status = http.get(

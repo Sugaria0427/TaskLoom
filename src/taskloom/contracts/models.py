@@ -3,12 +3,13 @@ import re
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from taskloom.domain.identity import digest as digest
 from taskloom.domain.identity import identity as identity
 from taskloom.domain.identity import utc_now as utc_now
 from taskloom.domain.model import Outcome, WorkState
+from taskloom.policies.reservation import Prices, worst_units
 
 JsonObject = dict[str, Any]
 MAX_MODEL_TOOLS = 8
@@ -87,10 +88,17 @@ class GatewayRecord(Contract):
     request: ModelRequest
     payload_hash: str
     pool_request_id: str | None = None
+    # Upstream pool account chosen at dispatch; None when the pool is a single account.
+    upstream_account: str | None = None
     state: str = "QUEUED"
     outcome: Outcome = Outcome.PENDING
     reply: ModelReply | None = None
+    # Expected charge while dispatched; feedback and precision report it.
     reserved_units: int = 0
+    # Worst-case charge while dispatched; budget admission sums it, so no budget is overrun.
+    worst_units: int = 0
+    # Tokens charged to the token windows at dispatch; trued up to actual usage at finish.
+    window_tokens: int = 0
     consumed_units: int = 0
     quiescent: bool = False
     cancel_requested: bool = False
@@ -98,11 +106,15 @@ class GatewayRecord(Contract):
     created_at: str = Field(default_factory=utc_now)
     dispatched_at: str | None = None
     completed_at: str | None = None
+    # Pool refusals before execution so far, and when the next dispatch may be tried.
+    dispatch_attempts: int = 0
+    not_before: str | None = None
 
 
 class QuotaState(Contract):
     consumed_units: int = 0
     reserved_units: int = 0
+    worst_units: int = 0
     inflight: int = 0
     window_start: float = 0
     window_requests: int = 0
@@ -120,6 +132,7 @@ class TaskCreate(Contract):
     work_iterations: int = Field(default=1, ge=1, le=5000000)
     emit_bytes: int = Field(default=0, ge=0, le=8388608)
     budget_units: int = Field(default=100000, ge=100, le=10000000)
+    priority: Literal["low", "normal", "high"] = "normal"
     deadline_seconds: float = Field(default=120, ge=1, le=3600)
 
     @field_validator("documents")
@@ -131,6 +144,10 @@ class TaskCreate(Contract):
             if not re.fullmatch(r"[^/\\\x00-\x1f]{1,80}", name) or name in {".", ".."}:
                 raise ValueError("Use simple document filenames")
         return value
+
+
+class PriorityUpdate(Contract):
+    priority: Literal["low", "normal", "high"]
 
 
 class Checkpoint(Contract):
@@ -183,6 +200,13 @@ class ConversationState(Contract):
     updated_at: str = Field(default_factory=utc_now)
 
 
+class ToolClaim(Contract):
+    profile_version: str = "catalog-v1"
+    slots: int = Field(ge=1)
+    memory_bytes: int = Field(ge=0)
+    artifact_bytes: int = Field(ge=0)
+
+
 class AttemptState(Contract):
     attempt_id: str
     root_task_id: str
@@ -196,9 +220,12 @@ class AttemptState(Contract):
     quiescent: bool = True
     reserved_units: int = 0
     consumed_units: int = 0
+    # Original L3 fairness debit, in the platform's priced cost units.
+    fair_charge_units: int | None = Field(default=None, ge=1)
     settled: bool = False
     result: JsonObject | None = None
     request_payload: JsonObject | None = None
+    tool_claim: ToolClaim | None = None
     execution_ref: JsonObject | None = None
     error: str | None = None
 
@@ -208,13 +235,15 @@ class ToolRun(Contract):
     root_task_id: str = Field(pattern=r"^[a-zA-Z0-9_-]{1,96}$")
     tenant_id: str
     generation: int = Field(ge=0)
-    tool_name: str = "file_stats"
-    arguments: JsonObject = Field(default_factory=dict)
+    tool_name: Literal["file_stats", "grep", "list_files", "top_words"] = "file_stats"
     input_version: str
     work_iterations: int = Field(default=1, ge=1, le=5000000)
     emit_bytes: int = Field(default=0, ge=0, le=8388608)
     memory_bytes: int = Field(default=134217728, ge=16777216)
+    cpu_quota: int = Field(default=100000, ge=1000, le=100000)
+    cpu_period: int = Field(default=100000, ge=1000, le=1000000)
     timeout_seconds: float = Field(default=60, gt=0, le=3600)
+    arguments: JsonObject = Field(default_factory=dict)
 
 
 class ToolState(Contract):
@@ -230,6 +259,10 @@ class ToolState(Contract):
     stdout_bytes: int = 0
     stderr_bytes: int = 0
     output_truncated: bool = False
+    peak_memory_bytes: int | None = None
+    cpu_seconds: float | None = None
+    artifact_bytes: int | None = None
+    oom: bool = False
     created_at: str = Field(default_factory=utc_now)
 
 
@@ -245,6 +278,16 @@ class ClientConfig(Contract):
     memory_budget_mib: int = Field(default=512, ge=128)
     artifact_budget_mib: int = Field(default=64, ge=1)
     max_steps: int = Field(default=12, ge=3, le=128)
+
+
+class PoolAccount(Contract):
+    """One upstream account of the platform's fixed model pool, with its own slots and cache."""
+
+    account_id: str = Field(pattern=r"^[a-zA-Z0-9_-]{1,64}$")
+    capacity: int = Field(default=2, ge=1, le=64)
+    # None falls back to PlatformConfig.pool_url / pool_key.
+    url: str | None = None
+    key: str | None = Field(default=None, repr=False)
 
 
 class PlatformConfig(Contract):
@@ -266,6 +309,35 @@ class PlatformConfig(Contract):
     account_max_inflight: int = Field(default=1, ge=1, le=64)
     account_requests_per_window: int = Field(default=60, ge=1)
     account_tokens_per_window: int = Field(default=50000, ge=1)
+    # Pool prices relative to one uncached input token = 1 cost unit. The defaults match the
+    # simulated pool, which bills prompt + completion tokens one unit each without caching.
+    output_price: float = Field(default=1.0, gt=0, le=1000)
+    cache_read_price: float = Field(default=1.0, ge=0, le=1000)
+    cache_write_price: float = Field(default=1.0, ge=0, le=1000)
+    # L4 order: tenant/root round-robin (rr, default until the full comparison is done);
+    # max-min of the slots each tenant (and root) holds now, recent slot-seconds breaking
+    # ties (hybrid, the candidate); cumulative slot-second fairness (drr); or max-min alone.
+    scheduling_policy: Literal["rr", "drr", "maxmin", "hybrid"] = "rr"
+    # Empty: one upstream account from pool_url/pool_key/pool_capacity, as before. Otherwise
+    # pool_capacity is the sum of the account capacities (set here when left unspecified).
+    pool_accounts: list[PoolAccount] = Field(default_factory=list, max_length=64)
+    # How long a request may step aside while the account holding its chain's prompt cache is
+    # full, before it is placed on another account (delay scheduling). 0 places at once.
+    cache_wait_seconds: float = Field(default=0.0, ge=0, le=600)
+
+    @model_validator(mode="after")
+    def consistent_pool(self) -> "PlatformConfig":
+        if not self.pool_accounts:
+            return self
+        if len({a.account_id for a in self.pool_accounts}) != len(self.pool_accounts):
+            raise ValueError("Pool account ids must be unique")
+        total = sum(a.capacity for a in self.pool_accounts)
+        if total > 64:
+            raise ValueError("Pool accounts exceed 64 slots in total")
+        if "pool_capacity" in self.model_fields_set and self.pool_capacity != total:
+            raise ValueError("pool_capacity must equal the sum of pool account capacities")
+        self.pool_capacity = total
+        return self
 
 
 class PoolConfig(Contract):
@@ -348,5 +420,21 @@ class PlatformFeedback(Contract):
     account_window_tokens_remaining: int
     can_submit: bool
     retry_after_seconds: float
+    # Admission budgets sum worst cases: budget minus consumption minus in-flight worst cases,
+    # the smaller of this account and the shared platform budget.
+    account_inflight_worst_units: int = 0
+    account_admission_headroom_units: int = 0
+    output_price: float = 1.0
+    cache_read_price: float = 1.0
+    cache_write_price: float = 1.0
+    # Recent output tokens of this account's requests; None until one has finished.
+    expected_output_tokens: int | None = None
+    blocked_by: Literal["budget", "window", "queue"] | None = None
     recommended_pending_limit: int = 1
     observed_at: str = Field(default_factory=utc_now)
+
+    def admission_needs(self, request: ModelRequest) -> tuple[int, int]:
+        """Worst-case budget units and window tokens L4 admits `request` on."""
+        prices = Prices(self.output_price, self.cache_read_price, self.cache_write_price)
+        worst = worst_units(request.input_tokens, request.max_tokens, prices)
+        return worst, request.reserve_units

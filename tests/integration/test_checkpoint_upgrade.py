@@ -18,6 +18,7 @@ from taskloom.contracts.models import (
     TaskCreate,
     TaskState,
     ToolCall,
+    ToolClaim,
     ToolRun,
     ToolState,
     Usage,
@@ -368,6 +369,51 @@ async def test_unverifiable_checkpoint_is_held_before_automatic_dispatch(
         gateway.submit.assert_not_awaited()
         executor.run.assert_not_awaited()
         assert len(await store.records("checkpoint_backup", "alice")) == 1
+    finally:
+        await service.close()
+        await store.close()
+
+
+async def test_full_wp4_contract_survives_wp2_logical_identity_upgrade(tmp_path, platform_feedback):
+    store = SQLiteRepository(tmp_path / "client.db")
+    task, attempts = legacy_state(unresolved=True)
+    request = ToolRun(
+        attempt_id="original-tool",
+        root_task_id="root",
+        tenant_id="alice",
+        generation=0,
+        input_version=task.input_version,
+        cpu_quota=50000,
+    )
+    attempts[1].request_payload = request.model_dump(mode="json")
+    attempts[1].tool_claim = ToolClaim(
+        profile_version="historical-v0",
+        slots=1,
+        memory_bytes=128 * 1048576,
+        artifact_bytes=3 * 1048576,
+    )
+    await seed(store, tmp_path, task, attempts)
+    gateway, executor = ports(platform_feedback)
+    executor.query.return_value = ToolState(request=request, outcome=Outcome.PENDING)
+    service = ClientService(store, gateway, executor, tmp_path, ClientConfig(memory_budget_mib=128))
+    await service.start()
+    try:
+        saved = await store.get("attempt", "original-tool")
+        assert saved["request_payload"] == request.model_dump(mode="json")
+        assert saved["tool_claim"]["profile_version"] == "historical-v0"
+        assert service.tools.pool.allocations["original-tool"].memory_bytes == 128 * 1048576
+        canonical = tool_step_id("root", 0, "stats")
+        assert service.get("root").tool_step_aliases[canonical] == "root-tool-stats"
+        executor.query.return_value = ToolState(
+            request=request,
+            outcome=Outcome.SUCCEEDED,
+            quiescent=True,
+            result={"files": 1, "words": 3, "input_version": task.input_version},
+        )
+        await runner_finishes(service)
+        assert service.get("root").outcome == Outcome.SUCCEEDED
+        executor.run.assert_not_awaited()
+        assert not service.tools.pool.allocations
     finally:
         await service.close()
         await store.close()

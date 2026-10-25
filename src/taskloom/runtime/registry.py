@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 
 from taskloom.contracts.models import MAX_MODEL_TOOLS, JsonObject, ToolCall
 from taskloom.domain.model import DomainError, Resources
+from taskloom.execution.catalog import tool_demand
 
 
 def _matches_json_type(value: object, expected: str) -> bool:
@@ -164,6 +165,7 @@ def default_registry() -> ToolRegistry:
             name="file_stats",
             description=("Read the task's staged files and return verified file/word statistics."),
             parameters={},
+            demand=tool_demand("file_stats"),
         )
     )
     registry.register(
@@ -174,6 +176,30 @@ def default_registry() -> ToolRegistry:
                 "verified per-line matches with match counts."
             ),
             parameters={"pattern": {"type": "string", "description": "Substring to search for"}},
+            demand=tool_demand("grep"),
+        )
+    )
+    registry.register(
+        ToolSpec(
+            name="list_files",
+            description="List staged files with byte sizes and SHA-256 checksums.",
+            demand=tool_demand("list_files"),
+        )
+    )
+    registry.register(
+        ToolSpec(
+            name="top_words",
+            description="Count staged words and return the most frequent entries.",
+            parameters={
+                "top_n": {"type": "integer", "description": "Number of entries, from 1 to 1000"}
+            },
+            demand=tool_demand("top_words"),
+            validate=_validate_top_words,
         )
     )
     return registry
+
+
+def _validate_top_words(call: ToolCall) -> None:
+    if not 1 <= call.arguments["top_n"] <= 1000:
+        raise DomainError("INVALID_TOOL", "top_n must be between 1 and 1000")

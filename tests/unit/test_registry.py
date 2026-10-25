@@ -29,7 +29,7 @@ def tool(name: str) -> ToolSpec:
 
 def test_default_registry_schemas_declare_required_arguments() -> None:
     registry = default_registry()
-    assert registry.names() == ("file_stats", "grep")
+    assert registry.names() == ("file_stats", "grep", "list_files", "top_words")
     assert registry.schemas()[0] == EXPECTED_FILE_STATS_SCHEMA
     grep_parameters = registry.schemas()[1]["function"]["parameters"]
     assert grep_parameters["properties"]["pattern"] == {
@@ -57,7 +57,7 @@ def test_duplicate_registration_is_rejected() -> None:
     )
     with pytest.raises(DomainError, match="already registered"):
         registry.register(duplicate)
-    assert len(registry) == 2
+    assert len(registry) == 4
 
 
 def test_registry_capacity_is_bounded_by_explicit_limit() -> None:

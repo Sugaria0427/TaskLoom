@@ -25,6 +25,17 @@ VENV = Path(
     os.environ.get("UV_PROJECT_ENVIRONMENT", str(Path.home() / ".cache/taskloom/venvs" / KEY))
 )
 UV = ROOT / ".toolchain/uv/uv"
+DEV_HELP = """usage: python3 tools/project.py dev [--scenario NAME] [--tool-slots N] [--pool-capacity N] [other taskloom dev options]
+
+WP6 scenarios (tool slots / model pool capacity):
+  unconstrained      2 / 2 (default)
+  tool_constrained   1 / 2
+  api_constrained    2 / 1
+  both_constrained   1 / 1
+
+--tool-slots and --pool-capacity may repeat the selected scenario's values;
+mismatches and unknown scenarios are rejected by taskloom dev.
+"""
 
 
 def command(args: list[str], *, cwd: Path = ROOT) -> None:
@@ -100,7 +111,7 @@ def check() -> None:
 def verify() -> None:
     command([str(UV), "sync", "--locked"])
     check()
-    run("pytest", "-q", "tests/unit", "tests/integration")
+    run("pytest", "-q", "tests/unit", "tests/integration", "tests/l4")
     command([str(UV), "build"])
     run("pytest", "-q", "tests/smoke")
     wheel = wheel_path(ROOT)
@@ -132,6 +143,7 @@ def isolated() -> None:
             "README.md",
             "AGENTS.md",
             ".python-version",
+            *(path.name for path in sorted(ROOT.glob("README_v*.md"))),
         ):
             original = ROOT / name
             destination = clean / name
@@ -232,6 +244,9 @@ def main() -> None:
     )
     parser.add_argument("extra", nargs=argparse.REMAINDER)
     args = parser.parse_args()
+    if args.action == "dev" and args.extra == ["--help"]:
+        print(DEV_HELP)
+        return
     if args.action == "doctor":
         doctor()
     elif args.action == "bootstrap":
@@ -247,6 +262,7 @@ def main() -> None:
         paths = [str(ROOT / "tests" / name) for name in args.extra] or [
             "tests/unit",
             "tests/integration",
+            "tests/l4",
             "tests/smoke",
         ]
         if "linux" in args.extra and not os.environ.get("TASKLOOM_CGROUP_ROOT"):

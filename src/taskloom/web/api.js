@@ -47,6 +47,36 @@ function sessionTasks() { return state.tasks.filter((task) => task.conversation_
 function conversation() { return state.conversations.find((item) => item.conversation_id === state.conversationId); }
 function attempts(task) { return (state.resources?.attempts || []).filter((item) => item.root_task_id === task.task_id); }
 function usageLabel() { return state.platform?.feedback?.usage_unit === "token_unit" ? "token 单位" : "模拟单位"; }
+function priorityLabel(value) { return {high: "高", normal: "普通", low: "低"}[value] || "普通"; }
+function phaseAge(task) {
+  if (!isActive(task)) return "—";
+  const pending = attempts(task).findLast((item) => item.outcome === "PENDING" || !item.quiescent);
+  const event = state.events.findLast((item) => item.root_task_id === task.task_id && (!pending || item.attempt_id === pending.attempt_id));
+  if (!event) return "—";
+  const seconds = Math.max(0, Math.floor((Date.now() - Date.parse(event.occurred_at)) / 1000));
+  return Number.isFinite(seconds) ? seconds >= 60 ? `${Math.floor(seconds / 60)}m ${seconds % 60}s` : `${seconds}s` : "—";
+}
+function priorityControl(task) {
+  const label = node("label", "priority-control", "本地优先级");
+  const select = node("select");
+  select.setAttribute("aria-label", `${task.specification.title} 本地排队优先级`);
+  for (const value of ["high", "normal", "low"]) {
+    const option = node("option", "", priorityLabel(value)); option.value = value; select.append(option);
+  }
+  select.value = task.specification.priority || "normal";
+  select.disabled = !isActive(task);
+  select.onchange = async () => {
+    const previous = task.specification.priority || "normal";
+    select.disabled = true;
+    try {
+      const updated = await api(`/api/v1/tasks/${task.task_id}/priority`, {method: "POST", body: JSON.stringify({priority: select.value})});
+      state.tasks = state.tasks.map((item) => item.task_id === task.task_id ? updated : item);
+      toast("本地排队优先级已保存。"); render();
+    } catch (error) { select.value = previous; toast(error.message); select.disabled = false; }
+  };
+  label.append(select);
+  return label;
+}
 function currentTask() {
   const tasks = sessionTasks();
   return tasks.find((task) => task.task_id === state.selectedTaskId) || tasks.findLast(isActive) || tasks.at(-1);
@@ -314,6 +344,7 @@ function renderMessage(task) {
   body.append(executionDetails(task));
   const actions = node("div", "message-actions");
   actions.append(node("span", "", `消耗 ${number(task.consumed_units)} ${usageLabel()}${task.reserved_units ? ` · 预留 ${number(task.reserved_units)}` : ""}`));
+  actions.append(priorityControl(task));
   if (isActive(task)) actions.append(taskButton(task, "cancel", "取消", "stop"));
   else if (task.outcome !== "SUCCEEDED") actions.append(taskButton(task, "resume", "核对并续作", "refresh"));
   if (task.result) {
@@ -421,6 +452,8 @@ function renderInspector() {
     const memory = allocations.reduce((sum, item) => sum + item.resources.memory_bytes, 0);
     card.append(pair("当前工具内存预留", bytes(memory)));
     card.append(pair("任务额度上限", number(task.specification.budget_units)));
+    card.append(pair("当前阶段持续", phaseAge(task)));
+    card.append(node("p", "monitor-note", "资源数值为调度预留；模型消耗由平台结算，工具 CPU/RSS 尚未采集。"));
   } else $("current-execution").replaceChildren(node("p", "execution-empty", "发送第一条消息，查看模型请求与工具执行的完整过程。"));
   $("local-resources").replaceChildren(...localMeters());
   $("platform-resources").replaceChildren(...platformMeters());
@@ -488,7 +521,7 @@ function renderMonitor() {
     const tasks = [...state.tasks].filter((task) => state.filter === "all" || (state.filter === "active" ? isActive(task) : !isActive(task)));
     $("task-table").replaceChildren(...tasks.map((task) => {
       const row = node("tr");
-      const title = node("td"); title.append(node("strong", "", task.specification.title), node("small", "", task.task_id.slice(0,12)));
+      const title = node("td"); title.append(node("strong", "", task.specification.title), node("small", "", `${task.task_id.slice(0,12)} · 优先级 ${priorityLabel(task.specification.priority)}`));
       const status = node("td"); status.append(outcomeBadge(task));
       const allocation = (r.allocations || []).filter((item) => item.root_task_id === task.task_id);
       const assigned = allocation.map((item) => item.kind === "tool" ? `工具 ${item.resources.slots} · ${bytes(item.resources.memory_bytes)}` : `请求名额 ${item.resources.slots}`).join(" / ");
@@ -496,7 +529,7 @@ function renderMonitor() {
       const view = node("button", "table-action", "查看"); view.append(icon("arrow-right"));
       view.onclick = () => { navigate("chat", task.conversation_id); state.selectedTaskId = task.task_id; renderInspector(); requestAnimationFrame(() => $("messages").querySelector(`[data-task-id="${task.task_id}"]`)?.scrollIntoView({block:"center"})); };
       action.append(view);
-      row.append(title, status, node("td", "", phase(task)), node("td", "", assigned || (isActive(task) ? "等待准入" : "已归还")), node("td", "mono", elapsed(task)), node("td", "mono", `${number(task.consumed_units)} / ${number(task.reserved_units)}`), action);
+      row.append(title, status, node("td", "", `${phase(task)} · 阶段 ${phaseAge(task)}`), node("td", "", assigned || (isActive(task) ? "等待准入" : "已归还")), node("td", "mono", elapsed(task)), node("td", "mono", `${number(task.consumed_units)} / ${number(task.reserved_units)}`), action);
       return row;
     }));
     $("task-table-empty").hidden = tasks.length > 0;
@@ -599,7 +632,7 @@ async function sendMessage(event) {
     }
     const task = await api(`/api/v1/conversations/${state.conversationId}/messages`, {method: "POST", body: JSON.stringify({
       title, instruction: content || "请统计所附文本文件并校验结果。", documents,
-      work_iterations: iterations, budget_units: budget,
+      work_iterations: iterations, budget_units: budget, priority: $("task-priority").value,
     })});
     if (!state.tasks.some((item) => item.task_id === task.task_id)) state.tasks.unshift(task);
     state.drafts.delete("new"); state.drafts.delete(state.conversationId);

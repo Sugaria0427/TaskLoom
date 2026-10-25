@@ -85,10 +85,13 @@ def upgrade_checkpoint(
         ):
             raise invalid("Legacy tool ownership cannot be verified")
         payload = {"tool_name": call.name, "arguments": call.arguments}
-        if previous.request_payload is not None and previous.request_payload != payload:
+        if previous.request_payload is not None and any(
+            previous.request_payload.get(key) != value for key, value in payload.items()
+        ):
             raise invalid("Legacy tool arguments differ from the durable model reply")
         current = previous.model_copy(deep=True)
-        current.request_payload = payload
+        if current.request_payload is None:
+            current.request_payload = payload
         if current != previous:
             changed.append(current)
         canonical = tool_step_id(task.task_id, model_round, call_id)

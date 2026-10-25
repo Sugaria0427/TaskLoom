@@ -12,7 +12,7 @@ from taskloom.contracts.models import (
     TaskState,
     digest,
 )
-from taskloom.domain.model import DomainError, Outcome, Resources, WorkState
+from taskloom.domain.model import DomainError, Outcome, WorkState
 from taskloom.domain.ports import StoredRecord
 
 
@@ -25,7 +25,8 @@ async def test_conversations_preserve_ownership_roots_and_archive_semantics(
     executor = AsyncMock(spec=ExecutorPort)
     service = ClientService(repository, gateway, executor, tmp_path, ClientConfig(max_inflight=1))
     await service.start()
-    service.models.pool.reserve("hold", Resources(slots=1))
+    # 平台侧不接受提交，两个任务的模型请求都停在调度队列里。
+    gateway.feedback.return_value = platform_feedback.model_copy(update={"can_submit": False})
     try:
         conversation = await service.create_conversation("研究笔记")
         first = await service.create(

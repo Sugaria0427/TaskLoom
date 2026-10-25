@@ -168,20 +168,18 @@ async def test_unknown_tool_fails_without_publishing_result(tmp_path) -> None:
     executor = ProcessExecutor(profile, CgroupDomain(None))
     await executor.start()
     try:
-        await executor.run(
-            ToolRun(
-                attempt_id="unknown",
-                root_task_id="root",
-                tenant_id="alice",
-                generation=0,
-                tool_name="rm_rf",
-                input_version=version,
+        with pytest.raises(ValueError, match="tool_name"):
+            await executor.run(
+                ToolRun(
+                    attempt_id="unknown",
+                    root_task_id="root",
+                    tenant_id="alice",
+                    generation=0,
+                    tool_name="rm_rf",
+                    input_version=version,
+                )
             )
-        )
-        result = await tool_finished(executor, "unknown")
-        assert result.outcome == Outcome.FAILED
-        assert result.quiescent
-        assert result.result is None
-        assert not (profile / "tasks/root/attempts/unknown/output/result.json").exists()
+        assert not executor.processes and not executor.states
+        assert not (profile / "tasks/root/attempts/unknown/result.json").exists()
     finally:
         await executor.close()

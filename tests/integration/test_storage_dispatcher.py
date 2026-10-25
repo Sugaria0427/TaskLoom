@@ -77,3 +77,48 @@ async def test_unknown_physical_stop_retains_reservation() -> None:
         assert dispatcher.quarantined == {"unknown"}
     finally:
         await dispatcher.close()
+
+
+async def test_recovered_identity_reuses_its_full_capacity_reservation() -> None:
+    dispatcher = Dispatcher(Resources(slots=1, memory_bytes=128))
+    demand = Resources(slots=1, memory_bytes=128)
+    assert dispatcher.pool.reserve("restored", demand)
+    dispatcher.quarantined.add("restored")
+    await dispatcher.start()
+
+    async def confirmed() -> int:
+        return 7
+
+    try:
+        assert (
+            await asyncio.wait_for(dispatcher.submit("restored", "root", demand, confirmed), 1) == 7
+        )
+        assert dispatcher.pool.available == dispatcher.pool.capacity
+        assert not dispatcher.quarantined
+    finally:
+        await dispatcher.close()
+
+
+async def test_conflicting_restored_claim_fails_caller_and_keeps_dispatcher_alive() -> None:
+    from taskloom.domain.model import DomainError
+
+    dispatcher = Dispatcher(Resources(slots=2, memory_bytes=256))
+    demand = Resources(slots=1, memory_bytes=128)
+    assert dispatcher.pool.reserve("unknown", demand)
+    dispatcher.quarantined.add("unknown")
+    await dispatcher.start()
+
+    async def confirmed() -> int:
+        return 7
+
+    try:
+        with pytest.raises(DomainError, match="different demand"):
+            await asyncio.wait_for(
+                dispatcher.submit("unknown", "root", Resources(slots=1), confirmed), 1
+            )
+        assert dispatcher.pool.allocations["unknown"] == demand
+        assert dispatcher.quarantined == {"unknown"}
+        assert await dispatcher.submit("new", "another-root", demand, confirmed) == 7
+        assert dispatcher.loop is not None and not dispatcher.loop.done()
+    finally:
+        await dispatcher.close()

@@ -1,3 +1,4 @@
+import asyncio
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -252,3 +253,57 @@ async def test_legacy_attempt_without_request_payload_fails_closed(tmp_path: Pat
         await service.tools.close()
         await store.close()
         await executor.close()
+
+
+async def test_tool_terminal_settlement_is_idempotent_across_observers(tmp_path: Path) -> None:
+    store = SQLiteRepository(tmp_path / "ledger.db")
+    executor = RecordingExecutor()
+    service = ClientService(store, UnusedGateway(), executor, tmp_path, ClientConfig())
+    specification = TaskCreate()
+    task = TaskState(
+        task_id="root",
+        agent_id="agent",
+        tenant_id="alice",
+        specification=specification,
+        input_version=digest(specification.documents),
+        deadline_at=(datetime.now(UTC) + timedelta(seconds=60)).isoformat(),
+    )
+    service.tasks["root"] = task
+    request = ToolRun(
+        attempt_id="tool",
+        root_task_id="root",
+        tenant_id="alice",
+        generation=0,
+        input_version=task.input_version,
+    )
+    attempt = AttemptState(
+        attempt_id="tool",
+        root_task_id="root",
+        agent_id="agent",
+        tenant_id="alice",
+        step_id="step",
+        kind="tool",
+        generation=0,
+        quiescent=False,
+        request_payload=request.model_dump(mode="json"),
+    )
+    await service._save_attempt(attempt)
+    finished = ToolState(
+        request=request, outcome=Outcome.SUCCEEDED, quiescent=True, result={"files": 1, "words": 3}
+    )
+    try:
+        await asyncio.gather(
+            service._settle_tool(attempt.model_copy(deep=True), finished),
+            service._settle_tool(attempt.model_copy(deep=True), finished),
+        )
+        stale = await service._settle_tool(
+            attempt.model_copy(deep=True), ToolState(request=request)
+        )
+        assert stale.outcome == Outcome.SUCCEEDED and stale.quiescent
+        await service._save_attempt(attempt)
+        saved = await store.get("attempt", "tool")
+        assert saved["outcome"] == Outcome.SUCCEEDED and saved["settled"]
+        events = await store.events("alice", 0)
+        assert len([event for event in events if event["type"] == "tool.finished"]) == 1
+    finally:
+        await store.close()

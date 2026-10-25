@@ -1,7 +1,7 @@
 """WP2 STEP 1 · 多工具工作流功能演示（需在 Linux 环境运行）。
 
 启动一次性 dev 环境，提交一个任务，真实跑出
-「模型→file_stats→模型→grep→模型」的多工具链，
+「模型与四种工具交替推进」的多工具链，
 并把执行时间线与最终结果打印出来，直观体现验收第 1 条。
 
 用法（仓库根目录）：
@@ -51,7 +51,9 @@ def main() -> None:
             task_id = created.json()["task_id"]
             print("=== WP2 STEP 1 · 多工具工作流功能演示 ===\n")
             print("提交文档: notes.txt(4词) + data.txt(5词)")
-            print('fixture 模型将依次调用: file_stats → grep("the") → 汇总\n')
+            print(
+                'fixture 模型将依次调用: file_stats、grep("the")、list_files、top_words，然后汇总\n'
+            )
             print(f"任务已提交: {task_id}")
             task = wait_task(http, task_id)
             graph = http.get(f"/api/v1/tasks/{task_id}/graph").json()
@@ -60,8 +62,8 @@ def main() -> None:
             print(f"\n=== 最终结果 ===\n{summary}")
             print(
                 "\n=== 验证点 ===\n"
-                "1. 时间线中出现两类工具（file_stats + grep）且都有真实执行记录（attempts 带 execution_ref）\n"
-                "2. 出现 3 次模型请求，依赖顺序为 model-0 → tool → model-1 → tool → model-2\n"
+                "1. 时间线中出现四类工具（file_stats、grep、list_files、top_words）且都有真实执行记录（attempts 带 execution_ref）\n"
+                "2. 出现 5 次模型请求，4 次工具执行，各阶段依赖连续\n"
                 "3. 最终汇总与已验证工具输出一致（未触发 RESULT_MISMATCH）"
             )
     finally:
@@ -74,7 +76,7 @@ def timeline(graph: dict[str, object], task: dict[str, object]) -> None:
         cast(str, row["attempt_id"]): row
         for row in cast(list[dict[str, object]], graph["attempts"])
     }
-    print("\n=== 执行时间线（模型 → 工具A → 模型 → 工具B → 模型）===")
+    print("\n=== 执行时间线（模型与已注册工具交替推进）===")
     for index, step in enumerate(steps, 1):
         kind = cast(str, step["kind"])
         attempt = attempts.get(cast(str, step["current_attempt_id"]), {})
