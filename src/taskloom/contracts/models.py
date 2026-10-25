@@ -290,6 +290,9 @@ class PoolAccount(Contract):
     key: str | None = Field(default=None, repr=False)
 
 
+SchedulingPolicyName = Literal["rr", "drr", "maxmin", "hybrid"]
+
+
 class PlatformConfig(Contract):
     listen_host: str = "127.0.0.1"
     pool_url: str = "http://127.0.0.1:8797"
@@ -317,13 +320,15 @@ class PlatformConfig(Contract):
     # L4 order: tenant/root round-robin (rr, default until the full comparison is done);
     # max-min of the slots each tenant (and root) holds now, recent slot-seconds breaking
     # ties (hybrid, the candidate); cumulative slot-second fairness (drr); or max-min alone.
-    scheduling_policy: Literal["rr", "drr", "maxmin", "hybrid"] = "rr"
+    scheduling_policy: SchedulingPolicyName = "rr"
     # Empty: one upstream account from pool_url/pool_key/pool_capacity, as before. Otherwise
     # pool_capacity is the sum of the account capacities (set here when left unspecified).
     pool_accounts: list[PoolAccount] = Field(default_factory=list, max_length=64)
     # How long a request may step aside while the account holding its chain's prompt cache is
     # full, before it is placed on another account (delay scheduling). 0 places at once.
     cache_wait_seconds: float = Field(default=0.0, ge=0, le=600)
+    # Bearer key of the scheduling console (/admin/v1/*); empty disables it. Never a tenant key.
+    admin_key: str = Field(default="", repr=False)
 
     @model_validator(mode="after")
     def consistent_pool(self) -> "PlatformConfig":
@@ -438,3 +443,122 @@ class PlatformFeedback(Contract):
         prices = Prices(self.output_price, self.cache_read_price, self.cache_write_price)
         worst = worst_units(request.input_tokens, request.max_tokens, prices)
         return worst, request.reserve_units
+
+
+class SchedulerSettings(Contract):
+    """Console change to the L4 scheduler; a missing field keeps its current value."""
+
+    policy: SchedulingPolicyName | None = None
+    cache_wait_seconds: float | None = Field(default=None, ge=0, le=600)
+
+    @model_validator(mode="after")
+    def some_change(self) -> "SchedulerSettings":
+        if self.policy is None and self.cache_wait_seconds is None:
+            raise ValueError("Provide policy or cache_wait_seconds")
+        return self
+
+
+# The console snapshot carries identities, counts, times and states only: never request
+# messages, tools or replies.
+SchedulerBlock = Literal[
+    "backoff",
+    "pool",
+    "window",
+    "budget",
+    "account_inflight",
+    "account_window",
+    "account_budget",
+    "turn",
+]
+SchedulerEventKind = Literal[
+    "dispatch", "finish", "reject", "unknown", "expire", "cancel", "settings"
+]
+
+
+class SchedulerPool(Contract):
+    model: str
+    pool_kind: Literal["simulated", "fixed-http"]
+    capacity: int
+    inflight: int
+    queued: int
+    unknown: int
+
+
+class SchedulerShared(Contract):
+    budget_units: int
+    consumed_units: int
+    reserved_units: int
+    worst_units: int
+    window_seconds: float
+    window_remaining_seconds: float
+    requests_per_window: int
+    window_requests: int
+    tokens_per_window: int
+    window_tokens: int
+
+
+class SchedulerRoot(Contract):
+    root_task_id: str
+    running: int
+    queued: int
+    oldest_wait_seconds: float | None = None
+
+
+class SchedulerTenant(Contract):
+    account_id: str
+    running: int
+    queued: int
+    unknown: int
+    max_inflight: int
+    budget_units: int
+    consumed_units: int
+    reserved_units: int
+    worst_units: int
+    requests_per_window: int
+    window_requests: int
+    tokens_per_window: int
+    window_tokens: int
+    oldest_wait_seconds: float | None = None
+    blocked_by: SchedulerBlock | None = None
+    roots: list[SchedulerRoot] = Field(default_factory=list)
+
+
+class SchedulerUpstream(Contract):
+    account_id: str
+    capacity: int
+    busy: int
+
+
+class SchedulerUnknown(Contract):
+    account_id: str
+    request_id: str
+    upstream_account: str | None = None
+    dispatched_at: str | None = None
+    error: str | None = None
+
+
+class SchedulerEvent(Contract):
+    at: str
+    kind: SchedulerEventKind
+    account_id: str | None = None
+    root_task_id: str | None = None
+    request_id: str | None = None
+    upstream_account: str | None = None
+    units: int | None = None
+    detail: str | None = None
+
+
+class SchedulerSnapshot(Contract):
+    at: str
+    ready: bool
+    policy: SchedulingPolicyName
+    policies: list[SchedulingPolicyName]
+    policy_changed_at: str | None = None
+    cache_wait_seconds: float
+    placement: bool
+    pool: SchedulerPool
+    shared: SchedulerShared
+    tenants: list[SchedulerTenant]
+    upstream: list[SchedulerUpstream]
+    unknown: list[SchedulerUnknown]
+    events: list[SchedulerEvent]

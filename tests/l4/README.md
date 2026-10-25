@@ -173,7 +173,63 @@ uv run --locked python tests/l4/bench.py export-traces --abyss PATH/abyss.sqlite
 - abyss 只在回复完成时记录时间，所以请求的开始时间是用时延拟合反推的。
 - 各项锚点、权重和 SLO 档位都是设计选择，需要在组内确认后再固定。
 
-## 5. 约束
+## 5. 调度控制台演示
+
+`console_demo.py` 用于现场演示平台调度控制台（`/admin`）。它启动真实的平台服务（`platform_app`，SQLite 状态库），同时在同一进程里提供一个按轨迹回放的模型池，不需要 Linux、个人端或工具执行器。macOS、Linux、WSL 和 Windows 上都能运行。
+
+### 5.1 在任意设备上启动
+
+只需要 git 和 [uv](https://docs.astral.sh/uv/)。uv 会按 `uv.lock` 自动安装 Python 3.12 和依赖。
+
+```bash
+git clone https://gitee.com/Sugaria/TaskLoom.git && cd TaskLoom
+uv run --locked python tests/l4/console_demo.py
+```
+
+启动后终端会打印三项：负载来源、控制台地址 http://127.0.0.1:8896/admin、管理员 key。在浏览器打开该地址，把 key 粘贴到登录卡即可。
+
+- **管理员 key**：只在本次演示中使用，第一次启动时随机生成，保存在 `.runtime/console-demo/admin_key`，以后启动时沿用。
+- **状态保存**：平台状态也保存在 `.runtime/console-demo/`。在控制台切换的策略会持久化，并覆盖 `--policy` 参数；加 `--reset` 可以从空状态重新开始。
+- **结束**：按 Ctrl+C。
+
+| 参数 | 默认 | 作用 |
+|---|---|---|
+| `--synthetic` | 关 | 即使本地有轨迹也使用合成负载 |
+| `--speedup` | 6 | 时间压缩倍数：30 分钟的窗口在 5 分钟内放完，然后循环 |
+| `--capacity` | 4 | 模型池槽位数，平均分给 upstream-a 和 upstream-b 两个上游账号 |
+| `--policy` | rr | 启动时使用的调度策略（rr / hybrid / drr / maxmin） |
+| `--port` / `--pool-port` | 8896 / 8897 | 平台端口和回放池端口 |
+| `--host` | 127.0.0.1 | 设为 0.0.0.0 后，同一网络中的其他设备也能访问控制台 |
+| `--reset` | 关 | 清空 `.runtime/console-demo/` 后再启动 |
+
+### 5.2 负载从哪里来，远程没有数据时怎么办
+
+演示负载有两个来源，脚本会自动选择：
+
+1. **真实轨迹**（本地存在 `.runtime/l4bench/traces/aether.csv` 时使用）
+   - **轨迹内容**：Aether 网关 `usage` 表的导出数据。用户 ID 和 API Key ID 在数据库内部做哈希，只保留到达时间、耗时、输入/缓存/输出 token 数、状态和模型名，不含任何请求或回复正文。
+   - **窗口选择**：脚本自动选出活跃用户最多的 30 分钟窗口。
+   - **账号与根任务**：每个哈希用户成为一个平台账号，名字是 `u` 加哈希前 8 位；每个 API Key 成为一个根任务。
+   - **保留原值**：到达时间、耗时、输出 token 和缓存比例都取轨迹原值。
+   - **缩放**：输入 token 除以 100，上限 8000，因为真实的提示中位数约 15 万 token，超过平台单请求上限。
+2. **合成负载**（没有轨迹文件，或者传了 `--synthetic` 时使用）
+   - **规模**：6 个用户，30 分钟约 200 个请求。
+   - **分布形状**按真实轨迹设定：一个重度用户加一串轻度用户，泊松到达，输入和输出 token 服从对数正态分布（中位数分别约 1550 和 330），耗时取轨迹拟合的 6 s + 25 ms/输出 token。
+
+**轨迹属于私有数据，不在仓库里。** `.runtime/` 已被 git 忽略，远程仓库和新克隆的副本都没有 `aether.csv`。所以在别的设备上直接运行时，会自动改用合成负载，终端第一行会显示 `synthetic workload (… not found)`。控制台的各项功能完全相同，只是负载形状来自模型而不是真实记录。
+
+需要用真实轨迹演示时，有两种办法：
+
+- **复制文件**：从已有轨迹的机器复制 `.runtime/l4bench/traces/aether.csv`（约 23 MB，只有哈希和数字）到新设备的相同路径。这份数据只在项目成员之间私下传递，不要提交，也不要上传到公开位置。
+- **重新导出**：执行 `uv run --locked python tests/l4/bench.py export-traces`，从 Aether 数据库导出。这一步需要能通过 SSH 访问运行 Aether 的主机 `pi` 及其 `aether-postgres` 容器，只有维护者具备这个条件。
+
+### 5.3 与正式 dev 拓扑的区别
+
+`python3 tools/project.py dev` 启动的是完整系统：个人端、平台和固定模型池，需要 WSL2 或 Linux。完整系统中控制台同样在平台的 `/admin`。管理员 key 保存在状态目录的 `platform/platform.toml`（`admin_key` 字段）中，dev 启动输出里的 `admin_key_file` 给出完整路径；`python3 tools/project.py doctor` 会打印状态目录。
+
+`console_demo.py` 只启动平台和回放池，专门用来展示 L4 调度。
+
+## 6. 约束
 
 - 虚拟循环上只能运行进程内协程。线程通过真实 I/O 完成，虚拟时间会越过它们。
 - 网关目前每 0.1 秒轮询一次，并多处全量扫描请求。规模扩大时运行时间主要受这两点影响。

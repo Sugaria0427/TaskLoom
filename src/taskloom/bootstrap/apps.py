@@ -1,4 +1,5 @@
 import asyncio
+import hmac
 import json
 import os
 from collections.abc import AsyncIterator, Awaitable, Callable
@@ -37,6 +38,8 @@ from taskloom.contracts.models import (
     PoolConfig,
     PriorityUpdate,
     RootRegistration,
+    SchedulerSettings,
+    SchedulerSnapshot,
     TaskCreate,
     TaskState,
     ToolRun,
@@ -72,9 +75,9 @@ def application(name: str, lifespan: Any) -> FastAPI:
         code = 429 if error.retryable else 400
         if error.code == "NOT_FOUND":
             code = 404
-        elif error.code in ("UNAUTHORIZED",):
+        elif error.code in ("UNAUTHORIZED", "ADMIN_UNAUTHORIZED"):
             code = 401
-        elif error.code == "ROOT_NOT_REGISTERED":
+        elif error.code in ("ROOT_NOT_REGISTERED", "ADMIN_DISABLED"):
             code = 403
         elif "CONFLICT" in error.code:
             code = 409
@@ -215,6 +218,33 @@ def platform_app(base: Path, config: PlatformConfig) -> FastAPI:
     @app.post("/v1/requests/{request_id}/cancel")
     async def cancel(request_id: str, user: Annotated[str, Depends(tenant)]) -> GatewayRecord:
         return await service.cancel(user, request_id)
+
+    def admin(authorization: Annotated[str | None, Header()] = None) -> None:
+        # Separate from tenant keys in both directions: tenant keys are looked up by digest in
+        # the account store, the admin key is compared only here.
+        if not config.admin_key:
+            raise DomainError("ADMIN_DISABLED", "The scheduling console has no admin key")
+        token = authorization.removeprefix("Bearer ") if authorization else ""
+        if not hmac.compare_digest(token.encode(), config.admin_key.encode()):
+            raise DomainError("ADMIN_UNAUTHORIZED", "Invalid platform admin key")
+
+    @app.get("/admin/v1/scheduler", dependencies=[Depends(admin)])
+    async def scheduler() -> SchedulerSnapshot:
+        return await service.scheduler_snapshot()
+
+    @app.post("/admin/v1/scheduler/settings", dependencies=[Depends(admin)])
+    async def scheduler_settings(body: SchedulerSettings) -> SchedulerSnapshot:
+        return await service.update_settings(body)
+
+    # The console page itself is public; it asks the operator for the admin key.
+    console = files("taskloom").joinpath("web/admin")
+    app.mount("/admin/static", StaticFiles(directory=str(console), check_dir=False), name="admin")
+
+    @app.get("/admin")
+    async def admin_page() -> FileResponse:
+        return FileResponse(
+            str(console.joinpath("index.html")), headers={"Cache-Control": "no-store"}
+        )
 
     return app
 

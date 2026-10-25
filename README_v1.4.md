@@ -42,6 +42,7 @@ python tools/project.py dev
 | http://127.0.0.1:8795 | Alice 的个人端。 |
 | http://127.0.0.1:8798 | Bob 的个人端。 |
 | http://127.0.0.1:8796/api/v1/status | 平台公共容量与队列概览；/docs 查看接口。 |
+| http://127.0.0.1:8796/admin | 平台调度控制台：按账号和根任务查看占槽、排队原因、账本与事件，热切换调度策略；需要平台管理员密钥：开发拓扑生成后保存在状态目录的 `platform/platform.toml`（字段 `admin_key`），dev 启动输出的 `admin_key_file` 给出完整路径。 |
 | http://127.0.0.1:8797 | 平台内部固定模型池，推理与用量查询需要内部密钥。 |
 
 个人端采用会话工作台：左侧管理会话，中央发送消息、添加 UTF-8 文本文件和查看成果，右侧查看执行步骤、资源预留与平台额度。“调度监控”展示逐任务状态、资源分配、消耗与排队趋势。会话支持搜索、重命名、归档和恢复，记录保存在本机数据库；每条消息启动独立的受控资料分析任务。
@@ -84,7 +85,7 @@ python tools/project.py verify-isolated
 
 check 检查格式、lint、严格类型和模块边界；test 包含领域、集成与完整进程流程。Linux 专项验证真实 OOM、守护重启和 cgroup 回收。verify 执行 locked 安装、静态检查、测试、构建与包审计；verify-isolated 从干净副本和新环境验证，再安装 wheel 到源码之外执行双账户 self-test。
 
-平台配置 `scheduling_policy` 默认仍是 `rr`（用户/根任务轮转）。候选策略 `hybrid` 的规则是：空槽先给当前占槽最少的用户、用户内部再给占槽最少的根任务，占槽相同时近期槽位秒少的优先；全量配对确认后再决定是否改为默认。`drr`、`maxmin` 保留为对照，实验数据见 [WP5 调度策略设计](docs/engineering/TaskLoom_WP5_L4调度策略设计.md)。`pool_accounts` 列出多个上游账号时，网关在派发时按缓存亲和选择账号，留空则与单账号配置相同。下一阶段先增加多工具和子 Agent 工作负载，再比较成本 DRR、阶段银行家、期限/老化与自适应反馈的真实增量。
+平台配置 `scheduling_policy` 默认仍是 `rr`（用户/根任务轮转）。候选策略 `hybrid` 的规则是：空槽先给当前占槽最少的用户、用户内部再给占槽最少的根任务，占槽相同时近期槽位秒少的优先；全量配对确认后再决定是否改为默认。`drr`、`maxmin` 保留为对照，实验数据见 [WP5 调度策略设计](docs/engineering/TaskLoom_WP5_L4调度策略设计.md)。运行中可在平台调度控制台（`/admin`，接口 `GET /admin/v1/scheduler`、`POST /admin/v1/scheduler/settings`）切换策略和 `cache_wait_seconds`：排队请求按原顺序迁移到新策略，修改持久化并留审计事件；`admin_key` 为空时管理接口关闭。不启动完整拓扑也能演示：`uv run --locked python tests/l4/console_demo.py` 在任意系统上启动平台和回放模型池。有本地 Aether 轨迹时回放真实负载，没有时自动改用合成负载，见 [L4 开发环境 §5](tests/l4/README.md#5-调度控制台演示)。`pool_accounts` 列出多个上游账号时，网关在派发时按缓存亲和选择账号，留空则与单账号配置相同。下一阶段先增加多工具和子 Agent 工作负载，再比较成本 DRR、阶段银行家、期限/老化与自适应反馈的真实增量。
 
 
 本地优先级已接入模型成本公平调度与工具加权队列，运行中的执行保持原资源。WP4 保存每次工具执行的资源声明与回执，重启后查询原身份。Agent 和执行器已统一工具目录：file_stats、grep、list_files、top_words。工具按名称、参数模式和资源画像准入，file_stats 的完整统计结果用于最终成果校验。

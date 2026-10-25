@@ -1,10 +1,10 @@
 import asyncio
 import math
 import time
-from collections import Counter
+from collections import Counter, deque
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime, timedelta
-from typing import Literal
+from typing import Literal, get_args
 
 from taskloom.contracts.models import (
     GatewayRecord,
@@ -15,6 +15,18 @@ from taskloom.contracts.models import (
     PlatformFeedback,
     QuotaState,
     RootRegistration,
+    SchedulerBlock,
+    SchedulerEvent,
+    SchedulerEventKind,
+    SchedulerPool,
+    SchedulerRoot,
+    SchedulerSettings,
+    SchedulerShared,
+    SchedulerSnapshot,
+    SchedulerTenant,
+    SchedulerUnknown,
+    SchedulerUpstream,
+    SchedulingPolicyName,
     digest,
     identity,
 )
@@ -27,6 +39,9 @@ from taskloom.policies.reservation import Estimate, Prices, ReservationEstimator
 from taskloom.policies.scheduling import scheduling_policy
 
 LIVE_STATES = ("QUEUED", "DISPATCH_INTENT", "UNKNOWN")
+# Console order: the default first, then the candidate, then the comparison policies.
+CONSOLE_POLICIES: list[SchedulingPolicyName] = ["rr", "hybrid", "drr", "maxmin"]
+assert set(CONSOLE_POLICIES) == set(get_args(SchedulingPolicyName))
 
 
 class GatewayService:
@@ -42,6 +57,10 @@ class GatewayService:
     reject_backoff_seconds = 1.0
     reject_backoff_cap_seconds = 30.0
     max_pool_rejections = 6
+    # The console sees a bounded, in-memory tail of scheduler events: identities and counts
+    # only, lost on restart (the store's event log stays the durable audit).
+    max_console_events = 200
+    max_console_unknown = 50
 
     def __init__(
         self,
@@ -76,6 +95,8 @@ class GatewayService:
         self._recent_roots: dict[str, float] = {}
         self._next_prune = 0.0
         self.ready = False
+        self.events: deque[SchedulerEvent] = deque(maxlen=self.max_console_events)
+        self.policy_changed_at: str | None = None
         self.prices = Prices(config.output_price, config.cache_read_price, config.cache_write_price)
         self.estimator = ReservationEstimator(self.prices)
 
@@ -88,6 +109,15 @@ class GatewayService:
 
     async def start(self) -> None:
         await self.accounts.start()
+        # Console changes outlive restarts and override the configured values; applied before
+        # any queue is rebuilt, so the restored policy receives every queued request.
+        saved = await self.store.get("scheduler_settings", "current")
+        if saved is not None:
+            settings = SchedulerSettings(
+                policy=saved["policy"], cache_wait_seconds=saved["cache_wait_seconds"]
+            )
+            self._apply_settings(settings)
+            self.policy_changed_at = saved.get("changed_at")
         quota = await self.store.get("quota", "shared")
         self.quota = QuotaState.model_validate(quota) if quota else QuotaState()
         for item in await self.store.records("account_quota"):
@@ -297,15 +327,20 @@ class GatewayService:
                 # Only finished records are pruned; cancelling them changes nothing.
                 return await self.query(tenant, request_id)
             record = self.get(tenant, request_id)
+            noted = not record.cancel_requested and record.state != "FINISHED"
             record.cancel_requested = True
+            detail = "requested"
             if record.state == "QUEUED":
                 record.state = "FINISHED"
                 record.outcome = Outcome.CANCELLED
                 record.quiescent = True
                 record.completed_at = self.now()
                 self.policy.discard(self.key(tenant, request_id))
+                detail = "dequeued"
             await self._save(record)
             self.requests[self.key(tenant, request_id)] = record
+            if noted:
+                self._note("cancel", record, detail=detail)
             self.wake.set()
             return record.model_copy(deep=True)
 
@@ -350,32 +385,52 @@ class GatewayService:
         )
 
     def _feasible(self, record: GatewayRecord) -> bool:
+        return self._blocked_by(record) is None
+
+    def _blocked_by(self, record: GatewayRecord) -> SchedulerBlock | None:
+        """The first dispatch condition a queued request fails, in check order; None if none.
+
+        Dispatch and the console share this one judgement, so the reported reason is the
+        one that actually holds the request back.
+        """
         if record.state != "QUEUED":
-            return True
+            return None
         # Backoff after a pool refusal.
         not_before = record.not_before
         if not_before and datetime.fromisoformat(not_before).timestamp() > self.clock():
-            return False
+            return "backoff"
         account = self.accounts.accounts.get(record.tenant_id)
         if account is None:
-            return False
+            # No allowance is known for a missing account, so it has none.
+            return "account_budget"
         personal = self._account_quota(record.tenant_id)
         # Budgets and token windows are hard limits, so both admit the worst case: the full
         # prompt plus max_tokens. The estimate only orders and reports; settlement returns
         # what a request did not use.
         worst = self.worst(record.request)
         tokens = record.request.reserve_units
-        return (
-            self.quota.inflight < self.config.pool_capacity
-            and self.quota.window_requests < self.config.requests_per_window
-            and self.quota.window_tokens + tokens <= self.config.tokens_per_window
-            and self.quota.consumed_units + self.quota.worst_units + worst
-            <= self.config.total_budget_units
-            and personal.inflight < account.max_inflight
-            and personal.window_requests < account.requests_per_window
-            and personal.window_tokens + tokens <= account.tokens_per_window
-            and personal.consumed_units + personal.worst_units + worst <= account.budget_units
-        )
+        if self.quota.inflight >= self.config.pool_capacity:
+            return "pool"
+        if (
+            self.quota.window_requests >= self.config.requests_per_window
+            or self.quota.window_tokens + tokens > self.config.tokens_per_window
+        ):
+            return "window"
+        if (
+            self.quota.consumed_units + self.quota.worst_units + worst
+            > self.config.total_budget_units
+        ):
+            return "budget"
+        if personal.inflight >= account.max_inflight:
+            return "account_inflight"
+        if (
+            personal.window_requests >= account.requests_per_window
+            or personal.window_tokens + tokens > account.tokens_per_window
+        ):
+            return "account_window"
+        if personal.consumed_units + personal.worst_units + worst > account.budget_units:
+            return "account_budget"
+        return None
 
     async def _save(
         self,
@@ -446,6 +501,7 @@ class GatewayService:
                         await self._save(rejected)
                         self.requests[expired_key] = rejected
                         self.policy.discard(expired_key)
+                        self._note("expire", rejected, detail=rejected.error)
                 self._prune()
                 while self.quota.inflight < self.config.pool_capacity:
                     key = self._candidate()
@@ -464,6 +520,7 @@ class GatewayService:
                         record.quiescent = True
                         await self._save(record)
                         self.requests[key] = record
+                        self._note("expire", record, detail=record.error)
                         continue
                     root_key = self.key(record.tenant_id, record.request.root_task_id)
                     root = await self.store.get("root", root_key)
@@ -482,6 +539,7 @@ class GatewayService:
                         record.quiescent = True
                         await self._save(record)
                         self.requests[key] = record
+                        self._note("expire", record, detail=record.error)
                         continue
                     quota = self.quota.model_copy(deep=True)
                     account_quota = self._account_quota(record.tenant_id).model_copy(deep=True)
@@ -512,6 +570,7 @@ class GatewayService:
                         key, record.tenant_id, record.request.root_task_id, self.clock(),
                         record.reserved_units,
                     )  # fmt: skip
+                    self._note("dispatch", record, record.reserved_units)
             try:
                 await asyncio.wait_for(self.wake.wait(), 0.1)
             except TimeoutError:
@@ -538,6 +597,7 @@ class GatewayService:
                 current.error = type(error).__name__ + ": awaiting provider reconciliation"
                 await self._save(current)
                 self.requests[key] = current
+                self._note("unknown", current, detail=type(error).__name__)
         finally:
             self._active.pop(key, None)
             self.wake.set()
@@ -589,6 +649,12 @@ class GatewayService:
             self.account_quotas[record.tenant_id] = account_quota
             # The policy saw a dispatch; the refusal ends it, holding the slot only briefly.
             self.policy.on_finish(key, self.clock(), 0)
+            self._note(
+                "reject",
+                record,
+                detail=f"attempt {record.dispatch_attempts}, "
+                + ("requeued" if record.state == "QUEUED" else record.outcome.value),
+            )
             if record.state == "QUEUED":
                 self._enqueue(record.tenant_id, record.request.root_task_id, key)
 
@@ -633,6 +699,7 @@ class GatewayService:
             self.quota = quota
             self.account_quotas[record.tenant_id] = account_quota
             self.policy.on_finish(key, self.clock(), reply.usage.cost_units)
+            self._note("finish", record, reply.usage.cost_units, record.outcome.value)
             self.estimator.settled(
                 key, record.tenant_id, record.request.agent_id, reply.usage.input_tokens,
                 reply.usage.output_tokens, reply.usage.cost_units, self.clock(),
@@ -698,6 +765,246 @@ class GatewayService:
             "model": self.config.model,
             "pool_kind": self.config.pool_kind,
         }
+
+    def _note(
+        self,
+        kind: SchedulerEventKind,
+        record: GatewayRecord | None = None,
+        units: int | None = None,
+        detail: str | None = None,
+    ) -> None:
+        """Append a console event; identities and counts only, never request content."""
+        self.events.append(
+            SchedulerEvent(
+                at=self.now(),
+                kind=kind,
+                account_id=record.tenant_id if record else None,
+                root_task_id=record.request.root_task_id if record else None,
+                request_id=record.request.request_id if record else None,
+                upstream_account=record.upstream_account if record else None,
+                units=units,
+                detail=detail[:120] if detail else None,
+            )
+        )
+
+    def _switch_policy(self, name: SchedulingPolicyName) -> None:
+        """Hand the live work to a fresh policy; caller holds the lock (or is start()).
+
+        Queued requests are pushed in admission order, then dispatched and unresolved ones
+        are reported as running, so nothing is lost or queued twice. Pushing first lets the
+        no-idle-credit lift see only queued peers, as a fresh start would; running keys then
+        count from their dispatch time with their reservation.
+        """
+        policy = scheduling_policy(name)
+        now = self.clock()
+
+        def admitted(item: tuple[str, GatewayRecord]) -> tuple[float, str]:
+            return datetime.fromisoformat(item[1].created_at).timestamp(), item[0]
+
+        for key, record in sorted(
+            ((k, r) for k, r in self.requests.items() if r.state == "QUEUED"), key=admitted
+        ):
+            policy.push(record.tenant_id, record.request.root_task_id, key, now)
+        for key, record in self.requests.items():
+            if record.state not in ("DISPATCH_INTENT", "UNKNOWN"):
+                continue
+            started = (
+                datetime.fromisoformat(record.dispatched_at).timestamp()
+                if record.dispatched_at
+                else now
+            )
+            policy.on_dispatch(
+                key, record.tenant_id, record.request.root_task_id, started,
+                record.reserved_units,
+            )  # fmt: skip
+        self.policy = policy
+        self.wake.set()
+
+    def _changes(self, settings: SchedulerSettings) -> list[str]:
+        changes: list[str] = []
+        policy, wait = self.config.scheduling_policy, self.config.cache_wait_seconds
+        if settings.policy is not None and settings.policy != policy:
+            changes.append(f"policy {policy} -> {settings.policy}")
+        if settings.cache_wait_seconds is not None and settings.cache_wait_seconds != wait:
+            changes.append(f"cache_wait {wait:g} -> {settings.cache_wait_seconds:g}")
+        return changes
+
+    def _apply_settings(self, settings: SchedulerSettings) -> None:
+        update: JsonObject = {}
+        if settings.policy is not None and settings.policy != self.config.scheduling_policy:
+            update["scheduling_policy"] = settings.policy
+            self._switch_policy(settings.policy)
+        wait = settings.cache_wait_seconds
+        if wait is not None and wait != self.config.cache_wait_seconds:
+            update["cache_wait_seconds"] = wait
+            if self.placement is not None:
+                self.placement.wait_seconds = wait
+        if update:
+            # The configuration object is shared with the app and the account service, so the
+            # effective values are replaced here rather than changed in place.
+            self.config = self.config.model_copy(update=update)
+
+    async def update_settings(self, settings: SchedulerSettings) -> SchedulerSnapshot:
+        async with self.lock:
+            changes = self._changes(settings)
+            if changes:
+                at = self.now()
+                policy = settings.policy or self.config.scheduling_policy
+                wait = settings.cache_wait_seconds
+                changed_at = (
+                    at if policy != self.config.scheduling_policy else self.policy_changed_at
+                )
+                detail = "; ".join(changes)
+                # Persist first: a failed write leaves the running scheduler unchanged. The
+                # whole effective setting is kept, so a restart restores both values.
+                await self.store.apply(
+                    [
+                        StoredRecord(
+                            "scheduler_settings",
+                            "current",
+                            "_platform",
+                            {
+                                "policy": policy,
+                                "cache_wait_seconds": self.config.cache_wait_seconds
+                                if wait is None
+                                else wait,
+                                "changed_at": changed_at,
+                            },
+                        )
+                    ],
+                    {
+                        "schema_version": 1,
+                        "event_id": identity(),
+                        "tenant_id": "_platform",
+                        "type": "scheduler.settings",
+                        "detail": detail,
+                        "occurred_at": at,
+                    },
+                )
+                self._apply_settings(settings)
+                self.policy_changed_at = changed_at
+                self._note("settings", detail=detail)
+            return self._snapshot()
+
+    async def scheduler_snapshot(self) -> SchedulerSnapshot:
+        # Under the lock, like feedback(): the window refresh mutates the ledgers, and the
+        # dispatch loop swaps ledger copies in across its awaits.
+        async with self.lock:
+            return self._snapshot()
+
+    def _snapshot(self) -> SchedulerSnapshot:
+        self._refresh_window()
+        now = self.clock()
+
+        def waited(records: list[GatewayRecord]) -> float | None:
+            if not records:
+                return None
+            oldest = min(datetime.fromisoformat(r.created_at).timestamp() for r in records)
+            return round(max(0.0, now - oldest), 3)
+
+        live: dict[str, list[GatewayRecord]] = {}
+        for record in self.requests.values():
+            if record.state in LIVE_STATES:
+                live.setdefault(record.tenant_id, []).append(record)
+        tenants: list[SchedulerTenant] = []
+        for tenant in sorted(set(live) | set(self.account_quotas)):
+            records = live.get(tenant, [])
+            queued = sorted(
+                (r for r in records if r.state == "QUEUED"),
+                key=lambda r: (r.created_at, r.request.request_id),
+            )
+            blocked: SchedulerBlock | None = None
+            if queued:
+                blocked = self._blocked_by(queued[0]) or "turn"
+            roots: dict[str, list[GatewayRecord]] = {}
+            for record in records:
+                roots.setdefault(record.request.root_task_id, []).append(record)
+            account = self.accounts.accounts.get(tenant)
+            personal = self._account_quota(tenant)
+            tenants.append(
+                SchedulerTenant(
+                    account_id=tenant,
+                    running=sum(r.state == "DISPATCH_INTENT" for r in records),
+                    queued=len(queued),
+                    unknown=sum(r.state == "UNKNOWN" for r in records),
+                    max_inflight=account.max_inflight if account else 0,
+                    budget_units=account.budget_units if account else 0,
+                    consumed_units=personal.consumed_units,
+                    reserved_units=personal.reserved_units,
+                    worst_units=personal.worst_units,
+                    requests_per_window=account.requests_per_window if account else 0,
+                    window_requests=personal.window_requests,
+                    tokens_per_window=account.tokens_per_window if account else 0,
+                    window_tokens=personal.window_tokens,
+                    oldest_wait_seconds=waited(queued),
+                    blocked_by=blocked,
+                    roots=[
+                        SchedulerRoot(
+                            root_task_id=root,
+                            running=sum(r.state == "DISPATCH_INTENT" for r in items),
+                            queued=sum(r.state == "QUEUED" for r in items),
+                            oldest_wait_seconds=waited([r for r in items if r.state == "QUEUED"]),
+                        )
+                        for root, items in sorted(roots.items())
+                    ],
+                )
+            )
+        tenants.sort(key=lambda t: (-t.running, -t.queued, t.account_id))
+        busy = self._upstream_busy()
+        unknown = sorted(
+            (r for r in self.requests.values() if r.state == "UNKNOWN"),
+            key=lambda r: (r.dispatched_at or "", r.request.request_id),
+        )[: self.max_console_unknown]
+        states = Counter(r.state for r in self.requests.values())
+        return SchedulerSnapshot(
+            at=self.now(),
+            ready=self.ready,
+            policy=self.config.scheduling_policy,
+            policies=CONSOLE_POLICIES,
+            policy_changed_at=self.policy_changed_at,
+            cache_wait_seconds=self.config.cache_wait_seconds,
+            placement=self.placement is not None,
+            pool=SchedulerPool(
+                model=self.config.model,
+                pool_kind=self.config.pool_kind,
+                capacity=self.config.pool_capacity,
+                inflight=self.quota.inflight,
+                queued=states["QUEUED"],
+                unknown=states["UNKNOWN"],
+            ),
+            shared=SchedulerShared(
+                budget_units=self.config.total_budget_units,
+                consumed_units=self.quota.consumed_units,
+                reserved_units=self.quota.reserved_units,
+                worst_units=self.quota.worst_units,
+                window_seconds=self.config.window_seconds,
+                window_remaining_seconds=round(
+                    max(0.0, self.quota.window_start + self.config.window_seconds - now), 3
+                ),
+                requests_per_window=self.config.requests_per_window,
+                window_requests=self.quota.window_requests,
+                tokens_per_window=self.config.tokens_per_window,
+                window_tokens=self.quota.window_tokens,
+            ),
+            tenants=tenants,
+            upstream=[
+                SchedulerUpstream(
+                    account_id=a.account_id, capacity=a.capacity, busy=busy[a.account_id]
+                )
+                for a in self.config.pool_accounts
+            ],
+            unknown=[
+                SchedulerUnknown(
+                    account_id=r.tenant_id,
+                    request_id=r.request.request_id,
+                    upstream_account=r.upstream_account,
+                    dispatched_at=r.dispatched_at,
+                    error=r.error,
+                )
+                for r in unknown
+            ],
+            events=list(reversed(self.events)),
+        )
 
     async def feedback(self, tenant: str) -> PlatformFeedback:
         async with self.lock:
