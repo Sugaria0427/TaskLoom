@@ -215,4 +215,3 @@ uv run --locked python tests/l4/bench.py run --policy maxmin --samples 2 --loads
 - **边界**：
   - 管理员密钥 `admin_key` 与租户 API Key 分开，为空时管理接口关闭；
   - 快照只含 ID、数量、时间和状态，不含请求正文或回复；待核对请求继续计入占槽份额，并在根任务明细中单独列出。
-

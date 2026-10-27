@@ -1,2 +1,2 @@
-*.md -text
+*.md -text whitespace=-blank-at-eof
 manifest.json text eol=lf
