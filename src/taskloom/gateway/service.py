@@ -942,6 +942,7 @@ class GatewayService:
                         SchedulerRoot(
                             root_task_id=root,
                             running=sum(r.state == "DISPATCH_INTENT" for r in items),
+                            unknown=sum(r.state == "UNKNOWN" for r in items),
                             queued=sum(r.state == "QUEUED" for r in items),
                             oldest_wait_seconds=waited([r for r in items if r.state == "QUEUED"]),
                         )

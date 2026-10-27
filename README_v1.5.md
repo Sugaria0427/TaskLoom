@@ -1,6 +1,6 @@
 # TaskLoom「织序」
 
-文档版本：v1.4 · 更新日期：2026-10-25。
+文档版本：v1.5 · 更新日期：2026-10-27。
 
 由个人 Agent 客户端和统一模型服务平台组成的协同调度系统。
 
@@ -10,13 +10,13 @@
 
 ## 1. 当前实现
 
-0.2 已贯通平台注册、个人端连接、双用户任务、共享模型池和反馈等待。模型池使用固定容量仿真；文件工具、进程、cgroup、账户和持久账本实际运行。当前真实工具为 `file_stats`，默认模型池提供模拟决策与用量。个人端已接入成本 DRR、期限/老化与反馈准入，平台已接入可配置的用户—根任务调度及硬预算保护。阶段银行家、子 Agent 扇出、自适应反馈与原版 OpenClaw 对照继续按后续阶段实施。已合并、待合并和研究设计集中记录在[当前实现与开发状态](docs/engineering/TaskLoom_当前实现与开发状态.md)。
+0.2 已贯通平台注册、个人端连接、双用户任务、共享模型池和反馈等待。模型池使用固定容量仿真；文件工具、进程、cgroup、账户和持久账本实际运行。当前真实工具为 `file_stats`、`grep`、`list_files`、`top_words`，默认模型池提供模拟决策与用量。个人端已接入成本 DRR、期限/老化与反馈准入，平台已接入可配置的用户—根任务调度及硬预算保护。阶段银行家、子 Agent 扇出、自适应反馈与原版 OpenClaw 对照继续按后续阶段实施。已合并、待合并和研究设计集中记录在[当前实现与开发状态](docs/engineering/TaskLoom_当前实现与开发状态.md)。
 
 | 部分 | 已实现能力 |
 |---|---|
 | 个人端 L1—L3。 | 有界 Agent 循环、成本 DRR、期限/老化、工具准入、费用与 Token 分离判断、取消与续作。 |
 | 平台端 L4。 | 注册/登录、Key 签发与撤销、用户/根任务可配置调度、费用及 Token 硬上界、有界队列、旧账本恢复与幂等结算。 |
-| 固定模型池。 | 平台内部密钥、固定并发容量、实际在途/峰值记录、模拟结果与按请求查询。 |
+| 固定模型池。 | 平台内部密钥、固定并发容量、实际在途/峰值记录、模拟结果与按请求查询；活动请求锁及时回收，历史幂等回执保存在 SQLite。 |
 | OS 与工程保障。 | Unix socket、子进程和读取线程、cgroup、独立守护、SQLite WAL、锁定依赖、类型与分层验证。 |
 
 浏览器是个人端操作界面。本地 Python 服务推进 Agent 并调用工具；受管执行环境为 x86_64 Linux，可使用 Ubuntu 虚拟机、VS Code Remote-SSH 或 WSL2。
@@ -85,7 +85,7 @@ python tools/project.py verify-isolated
 
 check 检查格式、lint、严格类型和模块边界；test 包含领域、集成与完整进程流程。Linux 专项验证真实 OOM、守护重启和 cgroup 回收。verify 执行 locked 安装、静态检查、测试、构建与包审计；verify-isolated 从干净副本和新环境验证，再安装 wheel 到源码之外执行双账户 self-test。
 
-平台配置 `scheduling_policy` 默认仍是 `rr`（用户/根任务轮转）。候选策略 `hybrid` 的规则是：空槽先给当前占槽最少的用户、用户内部再给占槽最少的根任务，占槽相同时近期槽位秒少的优先；全量配对确认后再决定是否改为默认。`drr`、`maxmin` 保留为对照，实验数据见 [WP5 调度策略设计](docs/engineering/TaskLoom_WP5_L4调度策略设计.md)。运行中可在平台调度控制台（`/admin`，接口 `GET /admin/v1/scheduler`、`POST /admin/v1/scheduler/settings`）切换策略和 `cache_wait_seconds`：排队请求按原顺序迁移到新策略，修改持久化并留审计事件；`admin_key` 为空时管理接口关闭。不启动完整拓扑也能演示：`uv run --locked python tests/l4/console_demo.py` 在任意系统上启动平台和回放模型池。有本地 Aether 轨迹时回放真实负载，没有时自动改用合成负载，见 [L4 开发环境 §5](tests/l4/README.md#5-调度控制台演示)。`pool_accounts` 列出多个上游账号时，网关在派发时按缓存亲和选择账号，留空则与单账号配置相同。下一阶段先增加多工具和子 Agent 工作负载，再比较成本 DRR、阶段银行家、期限/老化与自适应反馈的真实增量。
+平台配置 `scheduling_policy` 默认仍是 `rr`（用户/根任务轮转）。候选策略 `hybrid` 的规则是：空槽先给当前占槽最少的用户、用户内部再给占槽最少的根任务，占槽相同时近期槽位秒少的优先；全量配对确认后再决定是否改为默认。`drr`、`maxmin` 保留为对照，实验数据见 [WP5 调度策略设计](docs/engineering/TaskLoom_WP5_L4调度策略设计.md)。运行中可在平台调度控制台（`/admin`，接口 `GET /admin/v1/scheduler`、`POST /admin/v1/scheduler/settings`）切换策略和 `cache_wait_seconds`：排队请求按原顺序迁移到新策略，修改持久化并留审计事件；`admin_key` 为空时管理接口关闭。不启动完整拓扑也能演示：`uv run --locked python tests/l4/console_demo.py` 在任意系统上启动平台和回放模型池。有本地 Aether 轨迹时回放真实负载，没有时自动改用合成负载，见 [L4 开发环境 §5](tests/l4/README_v1.1.md#5-调度控制台演示)。`pool_accounts` 列出多个上游账号时，网关在派发时按缓存亲和选择账号，留空则与单账号配置相同。下一阶段先增加多工具和子 Agent 工作负载，再比较成本 DRR、阶段银行家、期限/老化与自适应反馈的真实增量。
 
 
 本地优先级已接入模型成本公平调度与工具加权队列，运行中的执行保持原资源。WP4 保存每次工具执行的资源声明与回执，重启后查询原身份。Agent 和执行器已统一工具目录：file_stats、grep、list_files、top_words。工具按名称、参数模式和资源画像准入，file_stats 的完整统计结果用于最终成果校验。

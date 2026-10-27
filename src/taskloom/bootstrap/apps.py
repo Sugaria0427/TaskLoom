@@ -521,7 +521,9 @@ def pool_app(base: Path, config: PoolConfig) -> FastAPI:
         finally:
             legacy_owner.close()
     store = SQLiteRepository(base / "platform/pool.db")
-    locks: dict[str, asyncio.Lock] = {}
+    # Only callers currently using or awaiting a request lock retain it. Durable replies
+    # remain in SQLite, independently of this transient synchronization table.
+    locks: dict[str, tuple[asyncio.Lock, int]] = {}
     active = 0
     peak = 0
     completed = 0
@@ -587,11 +589,22 @@ def pool_app(base: Path, config: PoolConfig) -> FastAPI:
             active -= 1
             completed += 1
 
+    @asynccontextmanager
+    async def request_lock(request_id: str) -> AsyncIterator[None]:
+        lock, users = locks.get(request_id, (asyncio.Lock(), 0))
+        locks[request_id] = (lock, users + 1)
+        try:
+            async with lock:
+                yield
+        finally:
+            _, users = locks[request_id]
+            if users == 1:
+                del locks[request_id]
+            else:
+                locks[request_id] = (lock, users - 1)
+
     async def generate(body: ChatInput, request_id: str) -> JsonObject:
-        if len(locks) >= 2048 and request_id not in locks:
-            raise DomainError("QUEUE_FULL", "Fixture history capacity exhausted", True)
-        lock = locks.setdefault(request_id, asyncio.Lock())
-        async with lock:
+        async with request_lock(request_id):
             previous = await store.get("mock", request_id)
             hashed = digest(body.model_dump())
             if previous:

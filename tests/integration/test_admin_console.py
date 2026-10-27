@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 from importlib.resources import files
 
 import httpx
+import pytest
 
 from taskloom.adapters.sqlite import SQLiteRepository
 from taskloom.bootstrap.apps import platform_app
@@ -185,6 +186,7 @@ async def test_snapshot_reports_slots_queues_reasons_and_events_without_content(
                 {
                     "root_task_id": "root",
                     "running": 1,
+                    "unknown": 0,
                     "queued": 1,
                     "oldest_wait_seconds": alice["oldest_wait_seconds"],
                 }
@@ -326,4 +328,67 @@ async def test_settings_persist_across_restart_and_reach_placement(tmp_path) -> 
         assert restarted.status()["policy"] == "hybrid"
     finally:
         await restarted.close()
+        await store.close()
+
+
+async def test_unknown_work_keeps_its_slot_and_identity_across_all_switches(tmp_path) -> None:
+    class UnknownProvider(ControlledProvider):
+        async def generate(self, request: ModelRequest, account: str | None = None) -> ModelReply:
+            self.identities.append(request.request_id)
+            raise TimeoutError("ambiguous upstream outcome")
+
+    store = SQLiteRepository(tmp_path / "gateway.db")
+    provider = UnknownProvider()
+    service = await started(store, provider, PlatformConfig(pool_capacity=1))
+    try:
+        await service.submit("alice", request("unresolved"))
+        await until(lambda: service.get("alice", "unresolved").state == "UNKNOWN")
+        await service.submit("bob", request("waiting"))
+        before = service.quota.model_dump()
+        for policy in ("hybrid", "maxmin", "drr", "rr"):
+            snapshot = await service.update_settings(SchedulerSettings(policy=policy))
+            alice = next(t for t in snapshot.tenants if t.account_id == "alice")
+            assert (alice.running, alice.unknown, alice.roots[0].unknown) == (0, 1, 1)
+            assert snapshot.pool.inflight == snapshot.pool.unknown == snapshot.pool.queued == 1
+            assert len(service.policy) == 1
+            assert service.quota.model_dump() == before
+        assert len(provider.identities) == 1
+        await service._finish(
+            service.key("alice", "unresolved"),
+            ModelReply(
+                content="reconciled", usage=Usage(input_tokens=1, output_tokens=1, cost_units=2)
+            ),
+        )
+        await until(lambda: len(provider.identities) == 2)
+        assert service.get("alice", "unresolved").consumed_units == 2
+    finally:
+        await service.close()
+        await store.close()
+
+
+async def test_failed_settings_write_preserves_live_policy_and_queue(tmp_path, monkeypatch) -> None:
+    store = SQLiteRepository(tmp_path / "gateway.db")
+    provider = ControlledProvider()
+    service = await started(store, provider, PlatformConfig(pool_capacity=1))
+    try:
+        await service.submit("alice", request("running"))
+        await until(lambda: len(provider.identities) == 1)
+        await service.submit("bob", request("queued"))
+        original_policy = service.policy
+        before = service.quota.model_dump()
+
+        async def failed_apply(*args, **kwargs):
+            raise OSError("storage unavailable")
+
+        with monkeypatch.context() as scoped:
+            scoped.setattr(store, "apply", failed_apply)
+            with pytest.raises(OSError, match="storage unavailable"):
+                await service.update_settings(SchedulerSettings(policy="hybrid"))
+        assert service.policy is original_policy and len(service.policy) == 1
+        assert service.config.scheduling_policy == "rr"
+        assert service.quota.model_dump() == before
+        assert await store.get("scheduler_settings", "current") is None
+        assert not any(event.kind == "settings" for event in service.events)
+    finally:
+        await service.close()
         await store.close()

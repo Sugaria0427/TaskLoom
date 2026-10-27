@@ -11,7 +11,7 @@ const REQUEST_TIMEOUT_MS = 10000;
 
 const POLICIES = {
   rr: {name: "rr", title: "轮转（默认）", note: "有排队的账号依次轮流派发，每轮一个请求。"},
-  hybrid: {name: "hybrid", title: "候选", note: "优先派发当前占槽最少的账号，同数时轮转。"},
+  hybrid: {name: "hybrid", title: "候选", note: "账号与根任务分层调度：占槽少的优先，同数时累计槽位秒少的优先。"},
   drr: {name: "drr", title: "累计占槽秒", note: "按累计占用槽位的时长，补偿占得少的账号。"},
   maxmin: {name: "maxmin", title: "当前占槽 max-min", note: "让各账号当前占槽数尽量均衡（最小者优先）。"},
 };
@@ -127,18 +127,19 @@ function budgetParts(entry) {
   return {budget, consumed, worst, reserved: Math.max(0, num(entry.reserved_units)), remaining};
 }
 
-/* 占槽份额：每个账号 running / capacity；有需求账号（在跑或排队）平分 capacity 作为参考线。 */
+/* 待核对请求保留槽位；份额按在跑与待核对的合计占槽计算。 */
 function shareModel(snapshot) {
   const capacity = Math.max(0, num(snapshot?.pool?.capacity));
   const tenants = Array.isArray(snapshot?.tenants) ? snapshot.tenants : [];
-  const demanding = tenants.filter((t) => num(t.running) > 0 || num(t.queued) > 0);
+  const demanding = tenants.filter((t) => num(t.running) + num(t.unknown) > 0 || num(t.queued) > 0);
   const anyQueued = tenants.some((t) => num(t.queued) > 0);
   const fair = demanding.length ? capacity / demanding.length : 0;
   return {
     capacity, fair, demanding: demanding.length, showFair: anyQueued && capacity > 0,
     rows: demanding.map((t) => ({
       account_id: String(t.account_id), running: num(t.running), queued: num(t.queued),
-      share: ratio(t.running, capacity),
+      unknown: num(t.unknown), held: num(t.running) + num(t.unknown),
+      share: ratio(num(t.running) + num(t.unknown), capacity),
     })),
   };
 }
@@ -484,7 +485,7 @@ function renderShareChart(s) {
     name.title = row.account_id;
     const track = node("div", "share-track");
     track.setAttribute("role", "img");
-    track.setAttribute("aria-label", `${row.account_id} 占 ${row.running} / ${model.capacity} 槽，排队 ${row.queued}`);
+    track.setAttribute("aria-label", `${row.account_id} 占 ${row.held} / ${model.capacity} 槽，其中待核对 ${row.unknown}，排队 ${row.queued}`);
     const fill = node("span", "share-fill");
     fill.style.width = `${(row.share * 100).toFixed(2)}%`;
     track.append(fill);
@@ -499,7 +500,8 @@ function renderShareChart(s) {
       track.append(mark);
     }
     const value = node("span", "share-value");
-    value.append(node("strong", "", `${row.running}/${model.capacity}`));
+    value.append(node("strong", "", `${row.held}/${model.capacity}`));
+    if (row.unknown) value.append(document.createTextNode(` · 待核对 ${row.unknown}`));
     if (row.queued) value.append(document.createTextNode(` · 排 ${row.queued}`));
     line.append(name, track, value);
     list.append(line);
@@ -511,14 +513,14 @@ function renderShareChart(s) {
     el.append(node("i", `swatch ${swatchClass}`), node("span", "", label));
     return el;
   };
-  legend.append(item("consumed", "在跑占槽"));
-  if (model.showFair) legend.append(item("fair", "平均应得"));
+  legend.append(item("consumed", "在跑与待核对占槽"));
+  if (model.showFair) legend.append(item("fair", "均分参考"));
   foot.append(legend);
   if (model.showFair) {
     const fairText = Number.isInteger(model.fair) ? String(model.fair) : model.fair.toFixed(2);
-    foot.append(node("span", "", `平均应得 = ${model.capacity} 槽 ÷ ${model.demanding} 个有需求账号 = ${fairText} 槽`));
+    foot.append(node("span", "", `均分参考 = ${model.capacity} 槽 ÷ ${model.demanding} 个有需求账号 = ${fairText} 槽；实际分配受账号并发上限与请求可行性约束。`));
   } else {
-    foot.append(node("span", "", "没有排队时不显示平均应得参考线"));
+    foot.append(node("span", "", "没有排队时不显示均分参考线"));
   }
   box.append(list, foot);
 }
@@ -535,7 +537,7 @@ function rootsRow(tenant) {
     const wrap = node("div", "mini-table-wrap");
     const table = node("table", "mini-table");
     const head = node("tr");
-    for (const [label, cls] of [["根任务", ""], ["在跑", "num"], ["排队", "num"], ["最长等待", "num"]]) {
+    for (const [label, cls] of [["根任务", ""], ["在跑", "num"], ["待核对", "num"], ["排队", "num"], ["最长等待", "num"]]) {
       const th = node("th", cls, label);
       th.scope = "col";
       head.append(th);
@@ -547,7 +549,7 @@ function rootsRow(tenant) {
       const row = node("tr");
       const idCell = node("td");
       idCell.append(idText(root.root_task_id, "id-strong"));
-      row.append(idCell, node("td", "num", formatNumber(root.running)), node("td", "num", formatNumber(root.queued)),
+      row.append(idCell, node("td", "num", formatNumber(root.running)), node("td", "num", formatNumber(root.unknown)), node("td", "num", formatNumber(root.queued)),
         node("td", "num", num(root.queued) ? formatSeconds(root.oldest_wait_seconds) : "—"));
       body.append(row);
     }
@@ -596,7 +598,7 @@ function renderTenants(s) {
     first.append(cell);
 
     const slots = node("td", "num");
-    const strong = node("span", "slots", formatNumber(t.running));
+    const strong = node("span", "slots", formatNumber(num(t.running) + num(t.unknown)));
     strong.append(node("span", "of", ` / ${formatNumber(t.max_inflight)}`));
     slots.append(strong);
     const queued = node("td", num(t.queued) ? "num" : "num zero", formatNumber(t.queued));
@@ -883,7 +885,7 @@ function acceptSnapshot(data) {
 
 async function poll(manual = false) {
   state.timer = null;
-  if (!state.key || state.authError || document.hidden || state.polling) return;
+  if (!state.key || state.authError || document.hidden || state.polling || state.applying) return;
   if (!manual && !state.autoRefresh) return;
   state.polling = true;
   $("refresh-now").classList.add("spinning");
@@ -1023,11 +1025,16 @@ async function onSettingsSubmit(event) {
     if (!ok || !state.snapshot) return;
   }
   state.applying = true;
+  // Invalidate an older poll so it cannot overwrite the newly applied settings.
+  state.generation += 1;
+  const generation = state.generation;
+  if (state.controller) state.controller.abort();
   render();
   try {
     const data = await adminFetch(SETTINGS_ENDPOINT, {
       method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body),
     });
+    if (generation !== state.generation) return;
     acceptSnapshot(data);
     state.formDirty = false;
     const parts = [];
@@ -1035,6 +1042,7 @@ async function onSettingsSubmit(event) {
     if (body.cache_wait_seconds !== undefined) parts.push(`cache_wait_seconds = ${num(data.cache_wait_seconds)}`);
     toast(`${parts.join("，")}。`, "success", "配置已应用");
   } catch (error) {
+    if (generation !== state.generation) return;
     if (isAuthError(error)) { state.authError = authMessage(error); state.snapshot = null; }
     showSettingsError(error);
     toast(error.message || "提交失败", "error", "配置未应用");

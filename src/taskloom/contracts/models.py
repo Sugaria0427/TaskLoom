@@ -500,6 +500,7 @@ class SchedulerShared(Contract):
 class SchedulerRoot(Contract):
     root_task_id: str
     running: int
+    unknown: int = 0
     queued: int
     oldest_wait_seconds: float | None = None
 

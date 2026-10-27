@@ -30,6 +30,7 @@ from collections import Counter
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Annotated, Any, get_args
+from uuid import uuid4
 
 import httpx
 import uvicorn
@@ -64,6 +65,8 @@ def busiest_window(rows: list[traces.TraceRequest]) -> list[traces.TraceRequest]
 
 def from_trace(path: Path) -> list[dict[str, Any]]:
     window = busiest_window(traces.load(path))
+    if not window:
+        raise ValueError("No completed requests fit the replay window; use --synthetic")
     origin = window[0].start
     return [
         {
@@ -157,16 +160,22 @@ def replay_pool(rows: list[dict[str, Any]], key: str, capacity: int, speedup: fl
 
 async def drive(platform: str, rows: list[dict[str, Any]], speedup: float) -> None:
     keys: dict[str, str] = {}
+    # New arrivals after a restart are new requests, even when replaying the same trace.
+    run_id = uuid4().hex
     async with httpx.AsyncClient(base_url=platform, timeout=15) as http:
         for user in sorted({r["user"] for r in rows}):
             login = {"username": user, "password": "console-demo-password"}
             reply = await http.post("/v1/accounts/register", json=login)
             if reply.status_code != 201:
+                if reply.status_code != 409:
+                    reply.raise_for_status()
                 reply = await http.post("/v1/accounts/login", json=login)
+            reply.raise_for_status()
             keys[user] = reply.json()["api_key"]
         for user, root in {(r["user"], r["root"]) for r in rows}:
-            await http.post("/v1/roots", json={"root_task_id": root, "budget_units": 10_000_000},
-                            headers={"Authorization": "Bearer " + keys[user]})  # fmt: skip
+            reply = await http.post("/v1/roots", json={"root_task_id": root, "budget_units": 10_000_000},
+                                    headers={"Authorization": "Bearer " + keys[user]})  # fmt: skip
+            reply.raise_for_status()
         lap = 0
         while True:
             began = time.monotonic()
@@ -177,17 +186,18 @@ async def drive(platform: str, rows: list[dict[str, Any]], speedup: float) -> No
                 # mock_tokens counts JSON bytes / 4, so the filler sizes the scaled prompt.
                 filler = "x" * max(0, row["prompt"] * 4 - 40)
                 body = {
-                    "request_id": f"l{lap}-{index}",
+                    "request_id": f"{run_id}-l{lap}-{index}",
                     "root_task_id": row["root"],
                     "agent_id": row["agent"],
                     "step_id": f"s{index}",
-                    "attempt_id": f"a{lap}-{index}",
+                    "attempt_id": f"{run_id}-a{lap}-{index}",
                     "messages": [{"role": "user", "content": f"[row {index}] {filler}"}],
                     "max_tokens": min(OUTPUT_CAP, max(256, 2 * row["output"])),
                     "deadline_at": (datetime.now(UTC) + timedelta(minutes=15)).isoformat(),
                 }
-                await http.post("/v1/requests", json=body,
-                                headers={"Authorization": "Bearer " + keys[row["user"]]})  # fmt: skip
+                reply = await http.post("/v1/requests", json=body,
+                                       headers={"Authorization": "Bearer " + keys[row["user"]]})  # fmt: skip
+                reply.raise_for_status()
             lap += 1
 
 
