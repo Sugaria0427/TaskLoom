@@ -1,0 +1,26 @@
+[
+  {
+    "original": "README.md",
+    "backup": "backup/2026-10-27/document-revisions/pr8-admin-console/README.md",
+    "sha256": "067738d39d636c9a67e25192c1477ba04c90e9c2c2b083b83c2877559bea6401",
+    "source": "main before PR #8 (84f4e48)"
+  },
+  {
+    "original": "README_v1.4.md",
+    "backup": "backup/2026-10-27/document-revisions/pr8-admin-console/README_v1.4.md",
+    "sha256": "f73924cfbeebf647663b6197cee9f2f837da4ef508c2b601c1a7e9483b0b7df9",
+    "source": "main before PR #8 (84f4e48)"
+  },
+  {
+    "original": "docs/engineering/TaskLoom_WP5_L4调度策略设计.md",
+    "backup": "backup/2026-10-27/document-revisions/pr8-admin-console/docs/engineering/TaskLoom_WP5_L4调度策略设计.md",
+    "sha256": "62b2286da204cc31cfc3198fe9f754ee4f55b28f8bc40fd45ab92a6c549e9220",
+    "source": "main before PR #8 (84f4e48)"
+  },
+  {
+    "original": "tests/l4/README.md",
+    "backup": "backup/2026-10-27/document-revisions/pr8-admin-console/tests/l4/README.md",
+    "sha256": "f33afb8faf272d09b0cd2edd68ebfeddc4607e89856854639a0a8788142dfb25",
+    "source": "main before PR #8 (84f4e48)"
+  }
+]

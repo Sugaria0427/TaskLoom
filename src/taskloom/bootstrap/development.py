@@ -75,6 +75,8 @@ class Topology:
             f"http://127.0.0.1:{self.second_client_port}" if self.second_client_port else None
         )
         self.pool_key = ""
+        self.admin_key = ""
+        self.platform_path = self.base / "platform/platform.toml"
         self.children: list[subprocess.Popen[bytes]] = []
         self.records: list[dict[str, Any]] = []
         self.lock: OwnerLock | None = None
@@ -95,6 +97,7 @@ class Topology:
         return PlatformConfig(
             pool_url=self.pool_url,
             pool_key=self.pool_key,
+            admin_key=self.admin_key,
             pool_capacity=self.pool_capacity,
             account_max_inflight=self.pool_capacity,
             model=self.pool_config().model,
@@ -222,9 +225,16 @@ class Topology:
             write_configuration(pool_path, pool)
             self._spawn("model-pool", pool_path, self.pool_port)
             self.wait(self.pool_url)
-            platform_path = self.base / "platform/platform.toml"
-            write_configuration(platform_path, self.platform_config())
-            self._spawn("platform", platform_path, self.platform_port)
+            # The console's admin key persists like the pool key, in the private platform.toml.
+            if self.platform_path.exists():
+                import tomllib
+
+                previous = tomllib.loads(self.platform_path.read_text())
+                self.admin_key = previous.get("admin_key") or secrets.token_urlsafe(32)
+            else:
+                self.admin_key = secrets.token_urlsafe(32)
+            write_configuration(self.platform_path, self.platform_config())
+            self._spawn("platform", self.platform_path, self.platform_port)
             self.wait(self.platform_url)
             self._provision_client("alice", self.client_port)
             if self.second_client_port:
@@ -313,6 +323,9 @@ def develop(
                 "client": topology.client_url,
                 "second_client": topology.second_client_url,
                 "platform": topology.platform_url,
+                "admin_console": topology.platform_url + "/admin",
+                # The key itself is not printed: it is admin_key in this private file.
+                "admin_key_file": str(topology.platform_path),
                 "state_dir": str(base),
                 "model_pool": "platform-owned fixed-capacity simulation",
                 "scenario": topology.scenario,
