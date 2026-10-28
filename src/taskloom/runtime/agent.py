@@ -25,7 +25,9 @@ async def run_agent(
                     "Analyze the staged documents using the available tools ("
                     + ", ".join(registry.names())
                     + "), then return only JSON "
-                    "with files, words, and summary. Tools are executed by the host."
+                    "with files, words, and summary. You MUST call file_stats at least once "
+                    "and copy its exact files and words counts into the final JSON. "
+                    "Do not wrap JSON in Markdown. Tools are executed by the host."
                 ),
             },
             {

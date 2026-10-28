@@ -152,6 +152,7 @@ def platform_app(base: Path, config: PlatformConfig) -> FastAPI:
             for account in config.pool_accounts
         },
         Prices(config.output_price, config.cache_read_price, config.cache_write_price),
+        thinking=config.thinking,
     )
     service = GatewayService(store, provider, config)
 
