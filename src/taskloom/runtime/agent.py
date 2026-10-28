@@ -1,6 +1,6 @@
 import json
 
-from taskloom.contracts.models import Checkpoint, JsonObject, TaskCreate, tool_step_id
+from taskloom.contracts.models import Checkpoint, JsonObject, TaskCreate, ToolCall, tool_step_id
 from taskloom.domain.model import DomainError
 from taskloom.runtime.ports import AgentHost
 from taskloom.runtime.prompts import GENERAL_PROMPT, SKILLS
@@ -118,20 +118,32 @@ async def run_agent(
             await host.checkpoint(state)
             continue
         reply = await host.model(state.messages, state.model_round)
+        calls = list(reply.tool_calls)
+        if (
+            specification.mode == "chat"
+            and specification.skill == "stats"
+            and not any(call.name == "file_stats" for call in calls)
+            and not any(call.name == "file_stats" for call in state.completed_tool_calls.values())
+        ):
+            # The selected skill owns this required step; model tool choice is optional.
+            call_id = "taskloom_skill_stats"
+            while any(call.call_id == call_id for call in calls):
+                call_id += "_"
+            calls.append(ToolCall(call_id=call_id, name="file_stats"))
         state.model_round += 1
         assistant: JsonObject = {"role": "assistant", "content": reply.content or None}
-        if reply.tool_calls:
+        if calls:
             assistant["tool_calls"] = [
                 {
                     "id": call.call_id,
                     "type": "function",
                     "function": {"name": call.name, "arguments": json.dumps(call.arguments)},
                 }
-                for call in reply.tool_calls
+                for call in calls
             ]
         state.messages.append(assistant)
-        state.pending_tools = reply.tool_calls
-        if reply.tool_calls:
+        state.pending_tools = calls
+        if calls:
             await host.checkpoint(state)
             continue
         if specification.mode == "chat":
@@ -143,11 +155,23 @@ async def run_agent(
                         for key, value in reversed(state.completed_tools.items())
                         if state.completed_tool_calls.get(key) is not None
                         and state.completed_tool_calls[key].name == "file_stats"
+                        and "error" not in value
+                        and "files" in value
+                        and "words" in value
                     ),
                     None,
                 )
                 if stats is None:
-                    raise DomainError("UNVERIFIED_RESULT", "资料统计技能缺少 file_stats 核验回执")
+                    failed = next(
+                        (
+                            value.get("error", "统计工具未返回完整结果")
+                            for key, value in reversed(state.completed_tools.items())
+                            if state.completed_tool_calls.get(key) is not None
+                            and state.completed_tool_calls[key].name == "file_stats"
+                        ),
+                        "统计工具未返回结果",
+                    )
+                    raise DomainError("STATISTICS_FAILED", "附件统计失败：" + str(failed))
                 result.update({"files": stats["files"], "words": stats["words"]})
             await host.checkpoint(state)
             return result
