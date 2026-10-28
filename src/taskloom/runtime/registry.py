@@ -203,3 +203,68 @@ def default_registry() -> ToolRegistry:
 def _validate_top_words(call: ToolCall) -> None:
     if not 1 <= call.arguments["top_n"] <= 1000:
         raise DomainError("INVALID_TOOL", "top_n must be between 1 and 1000")
+
+
+def agent_registry() -> ToolRegistry:
+    registry = default_registry()
+    descriptions = {
+        "file_stats": "核验当前消息上传的纯文本附件，返回文件数、词数与校验值。仅在需要统计时使用。",
+        "grep": "在当前消息的纯文本附件中搜索指定字面内容，返回匹配行。",
+        "list_files": "列出当前消息上传的纯文本附件及文件大小。",
+        "top_words": "统计当前消息纯文本附件中的高频词，top_n 为 1 到 1000。",
+    }
+    # Rebuild descriptions without changing the legacy registry's compatibility surface.
+    modern = ToolRegistry()
+    for name in registry.names():
+        old = registry.require(name)
+        modern.register(
+            ToolSpec(name, descriptions[name], old.parameters, old.demand, old.validate)
+        )
+    modern.register(
+        ToolSpec(
+            "read_file",
+            "读取指定路径的本地纯文本或图片；图片会作为视觉消息返回。相对路径基于工作目录；工作区外读取由系统弹出确认卡，请直接调用以申请授权。",
+            {
+                "path": {
+                    "type": "string",
+                    "description": "本地绝对路径、Windows 路径或工作区相对路径",
+                },
+                "max_bytes": {"type": "integer", "description": "文本读取上限，1 到 65536"},
+            },
+            tool_demand("read_file"),
+            _validate_read,
+        )
+    )
+    modern.register(
+        ToolSpec(
+            "run_command",
+            "申请执行一条本地 shell 指令。调用后系统弹出确认卡，用户确认完整指令与工作目录后执行，返回退出码和有界输出。",
+            {
+                "command": {"type": "string", "description": "需要执行的完整 shell 指令"},
+                "cwd": {
+                    "type": "string",
+                    "description": "工作区内的工作目录，相对路径或绝对路径；通常使用 .",
+                },
+                "timeout_seconds": {"type": "integer", "description": "超时秒数，1 到 120"},
+            },
+            tool_demand("run_command"),
+            _validate_command,
+        )
+    )
+    return modern
+
+
+def _validate_read(call: ToolCall) -> None:
+    if (
+        not call.arguments["path"]
+        or len(call.arguments["path"]) > 2048
+        or not 1 <= call.arguments["max_bytes"] <= 65536
+    ):
+        raise DomainError("INVALID_TOOL", "文件路径或读取上限无效")
+
+
+def _validate_command(call: ToolCall) -> None:
+    if not call.arguments["command"].strip() or len(call.arguments["command"]) > 8192:
+        raise DomainError("INVALID_TOOL", "指令不能为空，长度上限为 8192")
+    if len(call.arguments["cwd"]) > 2048 or not 1 <= call.arguments["timeout_seconds"] <= 120:
+        raise DomainError("INVALID_TOOL", "工作目录或超时设置无效")

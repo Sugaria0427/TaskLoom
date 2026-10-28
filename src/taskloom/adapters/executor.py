@@ -21,7 +21,13 @@ from taskloom.domain.model import DomainError, Outcome
 class ProcessExecutor:
     """Persistent launch intent + one owned process group per Attempt."""
 
-    def __init__(self, profile_dir: Path, cgroups: CgroupDomain, slots: int = 2) -> None:
+    def __init__(
+        self,
+        profile_dir: Path,
+        cgroups: CgroupDomain,
+        slots: int = 2,
+        workspace_root: str | None = None,
+    ) -> None:
         self.directory = profile_dir
         self.cgroups = cgroups
         self.slots = slots
@@ -30,6 +36,12 @@ class ProcessExecutor:
         self.watchers: dict[str, asyncio.Task[None]] = {}
         self.cancelled: dict[str, int] = {}
         self.lock = asyncio.Lock()
+        self.workspace_root = (
+            Path(workspace_root).resolve()
+            if workspace_root
+            else (profile_dir / "workspace").resolve()
+        )
+        self.workspace_root.mkdir(parents=True, exist_ok=True)
         (self.directory / "executions").mkdir(parents=True, exist_ok=True)
         (self.directory / "cancelled").mkdir(exist_ok=True)
 
@@ -87,6 +99,14 @@ class ProcessExecutor:
                     raise DomainError("ATTEMPT_CONFLICT", "Tool attempt changed")
                 return previous.model_copy(deep=True)
             state = ToolState(request=request)
+            if request.workspace_root is not None and request.workspace_root != str(
+                self.workspace_root
+            ):
+                raise DomainError(
+                    "WORKSPACE_CONFLICT", "Tool workspace differs from executor configuration"
+                )
+            if request.tool_name == "run_command" and not request.command_approved:
+                raise DomainError("APPROVAL_REQUIRED", "Command was not approved")
             if self.cancelled.get(request.attempt_id, -1) >= request.generation:
                 state.outcome = Outcome.CANCELLED
                 state.quiescent = True
@@ -128,6 +148,11 @@ class ProcessExecutor:
                 "cgroup_path": state.cgroup_path,
                 "tool_name": request.tool_name,
                 "arguments": request.arguments,
+                "workspace_root": str(self.workspace_root),
+                "tasks_root": str((self.directory / "tasks").resolve()),
+                "approved_external_path": request.approved_external_path,
+                "command_approved": request.command_approved,
+                "approved_command_cwd": request.approved_command_cwd,
             }
             atomic_json(output_dir / "spec.json", spec)
             self.states[request.attempt_id] = state
@@ -238,6 +263,11 @@ class ProcessExecutor:
                 state.error = "TOOL_OOM"
             elif code != 0 or state.error:
                 state.outcome = Outcome.FAILED
+                if not state.error and state.request.tool_name in ("read_file", "run_command"):
+                    diagnostic = await asyncio.to_thread(
+                        lambda: (output / "stderr.log").read_text(errors="replace")[-2000:]
+                    )
+                    state.error = f"Tool exited with {code}: " + diagnostic
                 state.error = state.error or f"Tool exited with {code}"
             else:
                 result_path = output / "result.json"

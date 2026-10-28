@@ -1,3 +1,4 @@
+import base64
 import json
 import re
 from datetime import datetime
@@ -61,7 +62,7 @@ class ModelRequest(Contract):
     step_id: str
     attempt_id: str
     cancel_generation: int = Field(default=0, ge=0)
-    messages: list[JsonObject] = Field(min_length=1, max_length=32)
+    messages: list[JsonObject] = Field(min_length=1, max_length=64)
     tools: list[JsonObject] = Field(default_factory=list, max_length=MAX_MODEL_TOOLS)
     max_tokens: int = Field(default=512, ge=1, le=4096)
     deadline_at: str
@@ -80,10 +81,28 @@ class ModelRequest(Contract):
         if self.token_count_mode == "utf8-bound":
             # A byte-level upper estimate plus chat/tool envelope allowance. Actual usage
             # always comes from the provider response, never from this admission estimate.
-            payload = json.dumps(
-                {"messages": self.messages, "tools": self.tools}, ensure_ascii=False
+            images = 0
+            messages = []
+            for message in self.messages:
+                current = dict(message)
+                if isinstance(current.get("content"), list):
+                    blocks = []
+                    for block in current["content"]:
+                        if isinstance(block, dict) and block.get("type") == "image_url":
+                            images += 1
+                            blocks.append({"type": "image_url", "image_url": {"url": "image"}})
+                        else:
+                            blocks.append(block)
+                    current["content"] = blocks
+                messages.append(current)
+            payload = json.dumps({"messages": messages, "tools": self.tools}, ensure_ascii=False)
+            return (
+                len(payload.encode())
+                + 128
+                + 64 * len(messages)
+                + 256 * len(self.tools)
+                + images * 8192
             )
-            return len(payload.encode()) + 128 + 64 * len(self.messages) + 256 * len(self.tools)
         return mock_tokens({"messages": self.messages, "tools": self.tools})
 
     @property
@@ -129,12 +148,34 @@ class QuotaState(Contract):
     window_tokens: int = 0
 
 
+class ImageAttachment(Contract):
+    name: str = Field(min_length=1, max_length=80)
+    mime_type: Literal["image/png", "image/jpeg", "image/webp", "image/gif"]
+    data_base64: str = Field(max_length=524288)
+
+    @model_validator(mode="after")
+    def valid_image(self) -> "ImageAttachment":
+        if not re.fullmatch(r"[^/\\\x00-\x1f]{1,80}", self.name) or self.name in {".", ".."}:
+            raise ValueError("Use a simple attachment filename")
+        try:
+            data = base64.b64decode(self.data_base64, validate=True)
+        except ValueError:
+            raise ValueError("Invalid image encoding") from None
+        if not data or len(data) > 393216:
+            raise ValueError("Image exceeds 384 KiB")
+        from taskloom.execution.images import inspect_image
+
+        if inspect_image(data) != self.mime_type:
+            raise ValueError("Image bytes differ from their declared format")
+        return self
+
+
 class TaskCreate(Contract):
     title: str = Field(default="资料统计与摘要", min_length=1, max_length=120)
     instruction: str = Field(default="", max_length=16000)
     documents: dict[str, str] = Field(
         default_factory=lambda: {"notes.txt": "Operating systems manage processes and resources."},
-        min_length=1,
+        min_length=0,
         max_length=16,
     )
     work_iterations: int = Field(default=1, ge=1, le=5000000)
@@ -142,6 +183,26 @@ class TaskCreate(Contract):
     budget_units: int = Field(default=100000, ge=100, le=10000000)
     priority: Literal["low", "normal", "high"] = "normal"
     deadline_seconds: float = Field(default=120, ge=1, le=3600)
+    mode: Literal["legacy", "chat"] = "legacy"
+    message: str = Field(default="", max_length=16000)
+    skill: Literal["notes", "stats"] | None = None
+    images: list[ImageAttachment] = Field(default_factory=list, max_length=4)
+
+    @model_validator(mode="after")
+    def chat_inputs(self) -> "TaskCreate":
+        if self.mode == "chat":
+            if "documents" not in self.model_fields_set:
+                self.documents = {}
+            if not self.message.strip() and not self.documents and not self.images:
+                raise ValueError("A message or attachment is required")
+        names = [*self.documents, *(image.name for image in self.images)]
+        if len(names) != len(set(names)) or len(names) > 16:
+            raise ValueError("Attachment names must be unique, with at most 16 files")
+        total = sum(len(text.encode()) for text in self.documents.values())
+        total += sum(len(base64.b64decode(image.data_base64)) for image in self.images)
+        if total > 524288:
+            raise ValueError("Attachments exceed 512 KiB")
+        return self
 
     @field_validator("documents")
     @classmethod
@@ -185,6 +246,7 @@ class TaskState(Contract):
     reserved_units: int = 0
     result: JsonObject | None = None
     error: str | None = None
+    pending_approval: JsonObject | None = None
     created_at: str = Field(default_factory=utc_now)
     deadline_at: str
     completed_at: str | None = None
@@ -243,7 +305,9 @@ class ToolRun(Contract):
     root_task_id: str = Field(pattern=r"^[a-zA-Z0-9_-]{1,96}$")
     tenant_id: str
     generation: int = Field(ge=0)
-    tool_name: Literal["file_stats", "grep", "list_files", "top_words"] = "file_stats"
+    tool_name: Literal[
+        "file_stats", "grep", "list_files", "top_words", "read_file", "run_command"
+    ] = "file_stats"
     input_version: str
     work_iterations: int = Field(default=1, ge=1, le=5000000)
     emit_bytes: int = Field(default=0, ge=0, le=8388608)
@@ -252,6 +316,10 @@ class ToolRun(Contract):
     cpu_period: int = Field(default=100000, ge=1000, le=1000000)
     timeout_seconds: float = Field(default=60, gt=0, le=3600)
     arguments: JsonObject = Field(default_factory=dict)
+    workspace_root: str | None = None
+    approved_external_path: str | None = None
+    command_approved: bool = False
+    approved_command_cwd: str | None = None
 
 
 class ToolState(Contract):
@@ -286,6 +354,7 @@ class ClientConfig(Contract):
     memory_budget_mib: int = Field(default=512, ge=128)
     artifact_budget_mib: int = Field(default=64, ge=1)
     max_steps: int = Field(default=12, ge=3, le=128)
+    workspace_root: str | None = None
 
 
 class PoolAccount(Contract):

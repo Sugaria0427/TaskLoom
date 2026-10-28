@@ -8,16 +8,21 @@ recomputable from the staged inputs.
 """
 
 import argparse
+import base64
+import codecs
 import hashlib
 import json
 import os
+import subprocess
 from collections import Counter
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 from taskloom.domain.identity import digest
+from taskloom.execution.access import local_path, readable
 from taskloom.execution.catalog import tool_names
+from taskloom.execution.images import inspect_image, model_image
 
 
 def read_inputs(inputs: Path) -> dict[str, str]:
@@ -114,7 +119,103 @@ def grep(spec: dict[str, Any], inputs: Path) -> dict[str, Any]:
     }
 
 
+def read_file(spec: dict[str, Any], inputs: Path) -> dict[str, Any]:
+    args = spec["arguments"]
+    root = Path(spec["workspace_root"]).resolve()
+    path = local_path(args["path"], root)
+    if not readable(path, root, Path(spec["tasks_root"]), spec.get("approved_external_path")):
+        raise ValueError("File access was not approved")
+    if not path.is_file():
+        raise ValueError("File not found")
+    before = path.stat()
+    with path.open("rb") as stream:
+        head = stream.read(16)
+        stream.seek(0)
+        image = head.startswith((b"\x89PNG", b"\xff\xd8", b"GIF8")) or (
+            head[:4] == b"RIFF" and head[8:12] == b"WEBP"
+        )
+        if image:
+            if before.st_size > 16 * 1048576:
+                raise ValueError("Image source exceeds 16 MiB")
+            data = stream.read(16 * 1048576 + 1)
+            source_mime = inspect_image(data)
+            result = {
+                "path": str(path),
+                "mime_type": source_mime,
+                "image_mime_type": "image/jpeg",
+                "bytes": len(data),
+                "image_data_url": "data:image/jpeg;base64,"
+                + base64.b64encode(model_image(data)).decode(),
+            }
+        else:
+            limit = args["max_bytes"]
+            data = stream.read(limit)
+            text = codecs.getincrementaldecoder("utf-8-sig")().decode(
+                data, final=before.st_size <= limit
+            )
+            if "\x00" in text:
+                raise ValueError("File is not supported plain text")
+            result = {
+                "path": str(path),
+                "content": text,
+                "truncated": before.st_size > limit,
+                "bytes": len(data),
+            }
+    after = path.stat()
+    if (before.st_ino, before.st_mtime_ns, before.st_size) != (
+        after.st_ino,
+        after.st_mtime_ns,
+        after.st_size,
+    ):
+        raise ValueError("File changed while being read")
+    return {**result, "files": 1, "input_version": spec["input_version"]}
+
+
+def run_command(spec: dict[str, Any], inputs: Path) -> dict[str, Any]:
+    if not spec.get("command_approved"):
+        raise ValueError("Command approval is required")
+    args = spec["arguments"]
+    root = Path(spec["workspace_root"]).resolve()
+    cwd = local_path(args["cwd"], root)
+    if (
+        not cwd.is_relative_to(root)
+        or not cwd.is_dir()
+        or str(cwd) != spec.get("approved_command_cwd")
+    ):
+        raise ValueError("Command directory is outside the workspace")
+    home = Path(spec["output"]).parent / "home"
+    home.mkdir(exist_ok=True)
+    process = subprocess.Popen(
+        ["/bin/bash", "--noprofile", "--norc", "-c", args["command"]],
+        cwd=cwd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        stdin=subprocess.DEVNULL,
+        env={"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": str(home), "LANG": "C.UTF-8"},
+    )
+    assert process.stdout is not None
+    stream = process.stdout
+    kept = bytearray()
+    total = 0
+    for chunk in iter(lambda: stream.read(8192), b""):
+        total += len(chunk)
+        if len(kept) < 65536:
+            kept.extend(chunk[: 65536 - len(kept)])
+    code = process.wait()
+    return {
+        "files": 0,
+        "command": args["command"],
+        "cwd": str(cwd),
+        "exit_code": code,
+        "output": kept.decode("utf-8", errors="replace"),
+        "output_truncated": total > len(kept),
+        "input_version": spec["input_version"],
+    }
+
+
 HANDLERS: dict[str, Callable[[dict[str, Any], Path], dict[str, Any]]] = {
+    "read_file": read_file,
+    "run_command": run_command,
     "file_stats": file_stats,
     "grep": grep,
     "list_files": list_files,
@@ -127,7 +228,7 @@ def publish(spec: dict[str, Any], result: dict[str, Any]) -> None:
     temporary = target.with_suffix(".tmp")
     temporary.write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")
     temporary.replace(target)
-    print(json.dumps({"artifact": str(target), "files": result["files"]}), flush=True)
+    print(json.dumps({"artifact": str(target), "files": result.get("files", 0)}), flush=True)
 
 
 def main() -> None:
