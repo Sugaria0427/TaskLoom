@@ -91,6 +91,7 @@ class Topology:
             client_port=port,
             platform_url=self.platform_url,
             tool_slots=self.tool_slots,
+            workspace_root=str(Path.cwd()),
         )
 
     def pool_config(self) -> PoolConfig:

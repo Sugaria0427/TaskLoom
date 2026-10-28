@@ -354,3 +354,22 @@ dialog input::placeholder { color: #636960; }
 @media(prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; scroll-behavior: auto !important; } }
 
 @media(max-width:700px) { .monitor-platform { grid-template-columns: repeat(2,minmax(0,1fr)); padding: 16px; } .resource-surface .meter-top { display: flex; } }
+
+/* Agent conversation, attachment previews and explicit operation decisions. */
+.assistant-text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.8; }
+.message-image { max-width: min(280px,100%); max-height: 220px; border-radius: 12px; object-fit: contain; }
+.attachment-image { width: 36px; height: 36px; object-fit: cover; border-radius: 6px; }
+.skill-menu { border: 1px solid var(--line,#ddd); border-radius: 12px; padding: 6px; margin-bottom: 10px; background: var(--surface,#fff); }
+.skill-option { display: flex; flex-direction: column; gap: 4px; text-align: left; width: 100%; padding: 12px; border: 0; border-radius: 8px; background: transparent; cursor: pointer; }
+.skill-option:hover,.skill-option:focus { background: #edf4ef; }
+.skill-option span { font-size: 12px; color: #627169; }
+.selected-skill { display: flex; gap: 12px; align-items: start; padding: 10px 12px; margin-bottom: 8px; border-radius: 10px; background: #edf4ef; font-size: 12px; }
+.selected-skill p { line-height: 1.7; max-width: 600px; }
+.approval-card { margin: 16px 0; padding: 18px; border: 1px solid #b4cfb9; background: #f2f7f2; border-radius: 12px; }
+.approval-card pre,.tool-output pre,.agent-config pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 320px; overflow: auto; font-size: 12px; line-height: 1.7; }
+.approval-card p { font-size: 12px; color: #526858; line-height: 1.6; }
+.approval-actions { display: flex; gap: 10px; margin-top: 12px; }
+.tool-output { margin: 4px 0 12px 24px; font-size: 12px; }
+.tool-output summary { cursor: pointer; color: #526858; }
+.agent-config { margin: 16px 0; font-size: 12px; }
+.agent-config p { line-height: 1.7; overflow-wrap: anywhere; }

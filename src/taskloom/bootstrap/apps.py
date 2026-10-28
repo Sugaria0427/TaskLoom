@@ -55,6 +55,7 @@ from taskloom.experiments.comparison import ComparisonSpec
 from taskloom.experiments.service import ComparisonService
 from taskloom.gateway.service import GatewayService
 from taskloom.policies.reservation import Prices
+from taskloom.runtime.prompts import GENERAL_PROMPT, SKILLS
 
 
 def application(name: str, lifespan: Any) -> FastAPI:
@@ -257,11 +258,18 @@ class CancelTool(BaseModel):
     generation: int = Field(ge=0)
 
 
+class ApprovalDecision(BaseModel):
+    generation: int = Field(ge=0)
+    allowed: bool
+
+
 def executor_app(base: Path, config: ClientConfig) -> FastAPI:
     profile = base / "clients" / config.profile
     group_root = os.environ.get("TASKLOOM_CGROUP_ROOT")
     cgroups = CgroupDomain(Path(group_root) if group_root else None)
-    backend: ToolBackend = ProcessExecutor(profile, cgroups, config.tool_slots)
+    backend: ToolBackend = ProcessExecutor(
+        profile, cgroups, config.tool_slots, config.workspace_root
+    )
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
@@ -415,6 +423,19 @@ def client_app(base: Path, config: ClientConfig) -> FastAPI:
     @app.post("/api/v1/tasks", status_code=202)
     async def create(body: TaskCreate) -> TaskState:
         return await service.create(body)
+
+    @app.get("/api/v1/agent")
+    async def agent_settings() -> JsonObject:
+        return {
+            "workspace": str(service.workspace_root),
+            "system_prompt": GENERAL_PROMPT,
+            "skills": [{"id": key, **value} for key, value in SKILLS.items()],
+            "tools": service.chat_registry.schemas(),
+        }
+
+    @app.post("/api/v1/tasks/{task_id}/approvals/{approval_id}")
+    async def approve(task_id: str, approval_id: str, body: ApprovalDecision) -> TaskState:
+        return await service.decide_approval(task_id, approval_id, body.allowed, body.generation)
 
     @app.get("/api/v1/conversations")
     async def conversations() -> list[JsonObject]:
@@ -695,6 +716,10 @@ def pool_app(base: Path, config: PoolConfig) -> FastAPI:
             await asyncio.sleep(config.latency_seconds)
             tool_messages = [message for message in body.messages if message.get("role") == "tool"]
             available = [tool["function"]["name"] for tool in body.tools]
+            chat_mode = "read_file" in available
+            if chat_mode:
+                prompt = str(body.messages[0].get("content", ""))
+                available = ["file_stats"] if "本轮启用「资料统计」" in prompt else []
             called: list[str] = []
             for call_message in body.messages:
                 if call_message.get("role") == "assistant" and call_message.get("tool_calls"):
@@ -727,7 +752,9 @@ def pool_app(base: Path, config: PoolConfig) -> FastAPI:
             elif not tool_messages:
                 message = {
                     "role": "assistant",
-                    "content": json.dumps(
+                    "content": "当前为仿真模型。消息已收到；连接真实模型后可进行分析、读取文件和调用指令。"
+                    if chat_mode
+                    else json.dumps(
                         {
                             "files": 0,
                             "words": 0,
@@ -749,7 +776,9 @@ def pool_app(base: Path, config: PoolConfig) -> FastAPI:
                 result = stats_result or json.loads(tool_messages[-1]["content"])
                 message = {
                     "role": "assistant",
-                    "content": json.dumps(
+                    "content": f"已核对 {result['files']} 份文本附件，共 {result['words']} 个词。"
+                    if chat_mode
+                    else json.dumps(
                         {
                             "files": result["files"],
                             "words": result["words"],

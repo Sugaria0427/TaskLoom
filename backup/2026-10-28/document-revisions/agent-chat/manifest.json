@@ -1,0 +1,37 @@
+[
+  {
+    "original": "README.md",
+    "backup": "backup/2026-10-28/document-revisions/agent-chat/README.md",
+    "sha256": "28d76dc6365a5c257f32f94d6bc41cc2593b505af410180ed413d80d44c3288f"
+  },
+  {
+    "original": "README_v1.6.md",
+    "backup": "backup/2026-10-28/document-revisions/agent-chat/README_v1.6.md",
+    "sha256": "9f5b08a2b0a4800fa331a55ac2d97d97286abfc6dba157e42071fb42cff0419b"
+  },
+  {
+    "original": "docs/engineering/TaskLoom_当前实现与开发状态.md",
+    "backup": "backup/2026-10-28/document-revisions/agent-chat/docs/engineering/TaskLoom_当前实现与开发状态.md",
+    "sha256": "3acde95762d232231605a6787a93ecddc4c6473c49182bb2b73b2c8a5c918736"
+  },
+  {
+    "original": "docs/engineering/TaskLoom_当前实现与开发状态_v1.5.md",
+    "backup": "backup/2026-10-28/document-revisions/agent-chat/docs/engineering/TaskLoom_当前实现与开发状态_v1.5.md",
+    "sha256": "b9a70748a7b7ba45b437a7dc4e5f9d01138697403a59c45ff41bf8cbfd3f5200"
+  },
+  {
+    "original": "docs/engineering/TaskLoom_基础工程架构.md",
+    "backup": "backup/2026-10-28/document-revisions/agent-chat/docs/engineering/TaskLoom_基础工程架构.md",
+    "sha256": "714ed2bb0664551ff6310053f95ff3a20f23b3d9795479f39ce70a35f810d0a7"
+  },
+  {
+    "original": "docs/engineering/TaskLoom_基础工程架构_v1.5.md",
+    "backup": "backup/2026-10-28/document-revisions/agent-chat/docs/engineering/TaskLoom_基础工程架构_v1.5.md",
+    "sha256": "ec63788c87cbc5b5aaf19102642226766c05813f96216ea007f49ed66009dbb6"
+  },
+  {
+    "original": "docs/engineering/TaskLoom_个人端工作台与验收.md",
+    "backup": "backup/2026-10-28/document-revisions/agent-chat/docs/engineering/TaskLoom_个人端工作台与验收.md",
+    "sha256": "c9e11a48e8f73658d02108cb9249af958f312445860b1aca46d0b58d12af0361"
+  }
+]

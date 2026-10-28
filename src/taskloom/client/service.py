@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import json
 from dataclasses import asdict
 from datetime import UTC, datetime, timedelta
@@ -36,9 +37,10 @@ from taskloom.contracts.models import (
 )
 from taskloom.domain.model import Agent, DomainError, Outcome, Resources, Step, WorkState
 from taskloom.domain.ports import Repository, StoredRecord
+from taskloom.execution.access import local_path, readable
 from taskloom.execution.catalog import tool_profile
 from taskloom.runtime.agent import run_agent
-from taskloom.runtime.registry import ToolRegistry, default_registry
+from taskloom.runtime.registry import ToolRegistry, agent_registry, default_registry
 
 # L3 调度器的算法参数。刻意不进 ClientConfig：它们是调度策略的一部分，
 # 改它们只应改这一处，装配层不需要知道。
@@ -68,6 +70,14 @@ class ClientService:
         self.runners: dict[str, asyncio.Task[None]] = {}
         self.lock = asyncio.Lock()
         self.registry: ToolRegistry = default_registry()
+        self.chat_registry = agent_registry()
+        self.workspace_root = (
+            Path(config.workspace_root).resolve()
+            if config.workspace_root
+            else (profile_dir / "workspace").resolve()
+        )
+        self.workspace_root.mkdir(parents=True, exist_ok=True)
+        self.approval_waiters: dict[str, asyncio.Future[bool]] = {}
         self.platform_feedback_source = FeedbackSource(
             self.gateway.feedback, config.feedback_interval_seconds
         )
@@ -357,6 +367,9 @@ class ClientService:
                 raise DomainError("QUEUE_FULL", "Personal task capacity exhausted", True)
             size = self.artifact_size()
             demand = sum(len(content.encode()) for content in specification.documents.values())
+            demand += sum(
+                len(base64.b64decode(image.data_base64)) for image in specification.images
+            )
             reserved = sum(r.artifact_bytes for r in self.tools.pool.allocations.values())
             if size + demand + reserved > self.config.artifact_budget_mib * 1048576:
                 raise DomainError("ARTIFACT_BUDGET", "Personal artifact capacity exhausted")
@@ -365,6 +378,13 @@ class ClientService:
                 if conversation.archived:
                     raise DomainError(
                         "CONVERSATION_ARCHIVED", "Restore the conversation before sending"
+                    )
+                if specification.mode == "chat" and any(
+                    t.conversation_id == conversation_id and t.outcome == Outcome.PENDING
+                    for t in self.tasks.values()
+                ):
+                    raise DomainError(
+                        "CONVERSATION_BUSY", "当前对话仍在执行，请等待完成或新建对话。"
                     )
             else:
                 if len(self.conversations) >= 256:
@@ -392,6 +412,12 @@ class ClientService:
             (workspace / "inputs").mkdir(parents=True)
             for name, content in specification.documents.items():
                 (workspace / "inputs" / name).write_text(content, encoding="utf-8", newline="")
+            if specification.images:
+                (workspace / "attachments").mkdir()
+                for image in specification.images:
+                    (workspace / "attachments" / image.name).write_bytes(
+                        base64.b64decode(image.data_base64)
+                    )
             (workspace / "input.json").write_text(
                 json.dumps(
                     {
@@ -468,7 +494,22 @@ class ClientService:
             )
             for predecessor in predecessors:
                 prior = task.step_attempts.get(predecessor)
-                if prior is None or self.attempts[prior].outcome != Outcome.SUCCEEDED:
+                observation = self.attempts.get(prior) if prior else None
+                observed_failure = (
+                    task.specification.mode == "chat"
+                    and kind == "model"
+                    and observation is not None
+                    and observation.kind == "tool"
+                    and observation.quiescent
+                    and observation.settled
+                    and observation.result is not None
+                    and (
+                        observation.result.get("approved") is False or "error" in observation.result
+                    )
+                )
+                if not observed_failure and (
+                    observation is None or observation.outcome != Outcome.SUCCEEDED
+                ):
                     raise DomainError("DEPENDENCY_NOT_READY", "A revealed step is not complete")
             step_record = Step(
                 step_id=step,
@@ -512,17 +553,32 @@ class ClientService:
                 task.specification,
                 task.checkpoint,
                 self.config.max_steps,
-                self.registry,
+                self.chat_registry if task.specification.mode == "chat" else self.registry,
+                history=self._chat_history(task),
+                workspace=str(self.workspace_root),
+                attachments={
+                    **{
+                        name: str(self.directory / "tasks" / task_id / "inputs" / name)
+                        for name in task.specification.documents
+                    },
+                    **{
+                        image.name: str(
+                            self.directory / "tasks" / task_id / "attachments" / image.name
+                        )
+                        for image in task.specification.images
+                    },
+                },
             )
             async with self.lock:
                 current = self.get(task_id)
                 if current.cancel_generation != generation or current.cancel_requested:
                     return
                 self.verify_inputs(current)
-                target = self.directory / "tasks" / task_id / "summary.json"
-                temporary = target.with_suffix(".tmp")
-                temporary.write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")
-                temporary.replace(target)
+                if current.specification.mode != "chat":
+                    target = self.directory / "tasks" / task_id / "summary.json"
+                    temporary = target.with_suffix(".tmp")
+                    temporary.write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")
+                    temporary.replace(target)
                 current.result = result
                 current.completed_at = utc_now()
                 current.outcome = Outcome.SUCCEEDED
@@ -566,7 +622,18 @@ class ClientService:
             task.outcome = Outcome.CANCELLED
             task.completed_at = utc_now()
             task.state = WorkState.FINISHED if task.quiescent else WorkState.RECONCILING
-            await self._save_task(task)
+            extra = []
+            if task.pending_approval and task.pending_approval["status"] == "PENDING":
+                task.pending_approval["status"] = "CANCELLED"
+                extra = [
+                    StoredRecord(
+                        "approval",
+                        task.pending_approval["approval_id"],
+                        task.tenant_id,
+                        task.pending_approval,
+                    )
+                ]
+            await self._save_task(task, extra)
         runner = self.runners.get(task_id)
         if runner:
             runner.cancel()
@@ -697,7 +764,10 @@ class ClientService:
                 attempt_id=attempt.attempt_id,
                 cancel_generation=attempt.generation,
                 messages=messages,
-                tools=self.registry.schemas(),
+                max_tokens=2048 if task.specification.mode == "chat" else 512,
+                tools=(
+                    self.chat_registry if task.specification.mode == "chat" else self.registry
+                ).schemas(),
                 deadline_at=task.deadline_at,
                 token_count_mode="utf8-bound"
                 if self.platform_feedback_source.latest is not None
@@ -818,6 +888,19 @@ class ClientService:
                 cpu_quota=profile.cpu_quota,
                 cpu_period=profile.cpu_period,
                 arguments=call.arguments,
+                workspace_root=str(self.workspace_root)
+                if call.name in ("read_file", "run_command")
+                else None,
+                approved_external_path=(task.pending_approval or {}).get("path")
+                if call.name == "read_file"
+                else None,
+                command_approved=call.name == "run_command",
+                approved_command_cwd=(task.pending_approval or {}).get("cwd")
+                if call.name == "run_command"
+                else None,
+                timeout_seconds=call.arguments["timeout_seconds"]
+                if call.name == "run_command"
+                else 60,
             )
             attempt.request_payload = request.model_dump(mode="json")
         request = ToolRun.model_validate(attempt.request_payload)
@@ -834,7 +917,10 @@ class ClientService:
         return Resources(claim.slots, claim.memory_bytes, claim.artifact_bytes), request
 
     async def tool(self, task_id: str, call: ToolCall, model_round: int) -> JsonObject:
-        spec = self.registry.require(call.name)
+        task = self.get(task_id)
+        spec = (self.chat_registry if task.specification.mode == "chat" else self.registry).require(
+            call.name
+        )
         spec.check(call)
         canonical = tool_step_id(task_id, model_round, call.call_id)
         step_id = self.get(task_id).tool_step_aliases.get(canonical, canonical)
@@ -843,6 +929,25 @@ class ClientService:
         if attempt.outcome == Outcome.SUCCEEDED and attempt.result is not None:
             return attempt.result
         recovering = attempt.outcome == Outcome.UNKNOWN or not attempt.quiescent
+        need_approval = call.name == "run_command"
+        if call.name == "read_file":
+            path = local_path(call.arguments["path"], self.workspace_root)
+            need_approval = not readable(
+                path, self.workspace_root, (self.directory / "tasks").resolve()
+            )
+        if need_approval and not await self._approve_tool(task_id, call, attempt):
+            attempt.result = {
+                "files": 0,
+                "approved": False,
+                "message": "用户拒绝了本次操作。",
+                "input_version": task.input_version,
+            }
+            attempt.outcome = Outcome.CANCELLED
+            attempt.quiescent = True
+            attempt.settled = True
+            attempt.state = WorkState.FINISHED
+            await self._save_attempt(attempt)
+            return attempt.result
         demand, request = self._prepare_tool(attempt, call)
         attempt.state = WorkState.WAIT_RESOURCE
         await self._save_attempt(attempt)
@@ -883,6 +988,12 @@ class ClientService:
                 if not state.quiescent:
                     raise QuarantinedExecution("Tool resources remain unconfirmed")
                 if state.outcome != Outcome.SUCCEEDED or state.result is None:
+                    if (
+                        task.specification.mode == "chat"
+                        and state.outcome == Outcome.FAILED
+                        and state.result is not None
+                    ):
+                        return state.result
                     raise DomainError("TOOL_" + state.outcome, state.error or "Tool failed")
                 return state.result
             except asyncio.CancelledError:
@@ -935,6 +1046,135 @@ class ClientService:
             priority=self.get(task_id).specification.priority,
         )
 
+    def _chat_history(self, task: TaskState) -> list[JsonObject]:
+        if task.specification.mode != "chat":
+            return []
+        previous = sorted(
+            (
+                t
+                for t in self.tasks.values()
+                if t.conversation_id == task.conversation_id
+                and t.task_id != task.task_id
+                and t.outcome == Outcome.SUCCEEDED
+                and t.created_at < task.created_at
+            ),
+            key=lambda t: t.created_at,
+        )[-8:]
+        history: list[JsonObject] = []
+        for turn in previous:
+            text = turn.specification.message or turn.specification.instruction
+            paths = {
+                name: str(self.directory / "tasks" / turn.task_id / "inputs" / name)
+                for name in turn.specification.documents
+            }
+            paths.update(
+                {
+                    image.name: str(
+                        self.directory / "tasks" / turn.task_id / "attachments" / image.name
+                    )
+                    for image in turn.specification.images
+                }
+            )
+            if paths:
+                text += "\n附件路径：" + json.dumps(paths, ensure_ascii=False)
+            history.extend(
+                [
+                    {"role": "user", "content": text},
+                    {
+                        "role": "assistant",
+                        "content": (turn.result or {}).get(
+                            "content", (turn.result or {}).get("summary", "")
+                        ),
+                    },
+                ]
+            )
+        return history
+
+    async def _approve_tool(self, task_id: str, call: ToolCall, attempt: AttemptState) -> bool:
+        key = attempt.attempt_id
+        existing = await self.store.get("approval", key)
+        if existing is not None and existing["arguments"] != call.arguments:
+            raise DomainError("APPROVAL_CONFLICT", "审批内容与原工具调用不一致")
+        if existing is not None and existing["status"] in ("APPROVED", "REJECTED"):
+            async with self.lock:
+                task = self.get(task_id)
+                task.pending_approval = existing
+                await self._save_task(task)
+            return bool(existing["status"] == "APPROVED")
+        if call.name == "run_command":
+            cwd = local_path(call.arguments["cwd"], self.workspace_root)
+            if not cwd.is_relative_to(self.workspace_root) or not cwd.is_dir():
+                raise DomainError("INVALID_TOOL", "指令工作目录必须位于工作区内")
+            detail = {"command": call.arguments["command"], "cwd": str(cwd)}
+        else:
+            detail = {"path": str(local_path(call.arguments["path"], self.workspace_root))}
+        waiter: asyncio.Future[bool] = asyncio.get_running_loop().create_future()
+        self.approval_waiters[key] = waiter
+        try:
+            async with self.lock:
+                task = self.get(task_id)
+                if task.cancel_requested:
+                    raise asyncio.CancelledError
+                approval = {
+                    "approval_id": key,
+                    "task_id": task_id,
+                    "tool": call.name,
+                    "arguments": call.arguments,
+                    "generation": task.cancel_generation,
+                    "status": "PENDING",
+                    **detail,
+                }
+                task.pending_approval = approval
+                task.state = WorkState.WAIT_APPROVAL
+                await self._save_task(
+                    task, [StoredRecord("approval", key, task.tenant_id, approval)]
+                )
+            remaining = (
+                datetime.fromisoformat(task.deadline_at) - datetime.now(UTC)
+            ).total_seconds()
+            try:
+                return await asyncio.wait_for(waiter, max(0, remaining))
+            except TimeoutError:
+                async with self.lock:
+                    task = self.get(task_id)
+                    if task.pending_approval:
+                        task.pending_approval["status"] = "EXPIRED"
+                        await self._save_task(
+                            task,
+                            [StoredRecord("approval", key, task.tenant_id, task.pending_approval)],
+                        )
+                raise DomainError("DEADLINE_EXPIRED", "等待操作确认超时") from None
+        finally:
+            self.approval_waiters.pop(key, None)
+
+    async def decide_approval(
+        self, task_id: str, approval_id: str, allowed: bool, generation: int
+    ) -> TaskState:
+        async with self.lock:
+            task = self.get(task_id)
+            approval = task.pending_approval
+            if (
+                task.cancel_requested
+                or task.outcome != Outcome.PENDING
+                or task.cancel_generation != generation
+            ):
+                raise DomainError("APPROVAL_CONFLICT", "任务状态已改变，本次审批已失效")
+            if (
+                not approval
+                or approval["approval_id"] != approval_id
+                or approval["status"] != "PENDING"
+            ):
+                raise DomainError("APPROVAL_CONFLICT", "该审批已处理或不存在")
+            approval["status"] = "APPROVED" if allowed else "REJECTED"
+            task.state = WorkState.RUNNING
+            await self._save_task(
+                task, [StoredRecord("approval", approval_id, task.tenant_id, approval)]
+            )
+            waiter = self.approval_waiters.get(approval_id)
+            if waiter is not None and not waiter.done():
+                waiter.set_result(allowed)
+            return self.get(task_id)
+
     def _tool_receipt_matches(self, attempt: AttemptState, state: ToolState) -> bool:
         request = state.request
         if (
@@ -970,6 +1210,21 @@ class ClientService:
                 )
             if not self._tool_receipt_matches(attempt, state):
                 raise QuarantinedExecution("Executor receipt differs from the saved tool contract")
+            task = self.get(attempt.root_task_id)
+            if (
+                task.specification.mode == "chat"
+                and state.quiescent
+                and state.outcome == Outcome.FAILED
+            ):
+                state = state.model_copy(
+                    update={
+                        "result": {
+                            "error": state.error or "工具执行失败",
+                            "files": 0,
+                            "input_version": task.input_version,
+                        }
+                    }
+                )
             attempt.quiescent = state.quiescent
             attempt.outcome = state.outcome
             attempt.result = state.result
