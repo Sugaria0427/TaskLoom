@@ -1,0 +1,6 @@
+{
+  "base_url": "https://api.deepseek.com",
+  "api_key": "replace-with-your-private-provider-key",
+  "model": "deepseek-flash",
+  "thinking": "disabled"
+}

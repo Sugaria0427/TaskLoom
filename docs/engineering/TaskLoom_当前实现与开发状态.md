@@ -1,3 +1,3 @@
-# TaskLoom_当前实现与开发状态
+# TaskLoom 当前实现与开发状态
 
-当前文档：[最新完整版本](TaskLoom_当前实现与开发状态_v1.4.md)。历史原件及校验值见仓库 `backup/2026-10-25/document-revisions/manifest.json`。
+当前完整版本见 [TaskLoom_当前实现与开发状态_v1.5.md](TaskLoom_当前实现与开发状态_v1.5.md)。修订前原件及校验值保存在 `backup/2026-10-28/document-revisions/course-demo/manifest.json`。

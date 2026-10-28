@@ -33,6 +33,10 @@ WP6 scenarios (tool slots / model pool capacity):
   api_constrained    2 / 1
   both_constrained   1 / 1
 
+--upstream-config PATH reads a private upstream JSON file and runs real model calls
+through the platform. Its provider/model ledger is separate from the simulation.
+Pass the same flag to stop when ending this real-model topology.
+
 --tool-slots and --pool-capacity may repeat the selected scenario's values;
 mismatches and unknown scenarios are rejected by taskloom dev.
 """

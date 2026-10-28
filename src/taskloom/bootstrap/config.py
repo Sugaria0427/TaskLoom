@@ -14,7 +14,7 @@ from taskloom.contracts.models import (
 
 def load_upstream(path: Path) -> UpstreamConfig:
     try:
-        return UpstreamConfig.model_validate_json(path.expanduser().read_text(encoding="utf-8"))
+        return UpstreamConfig.model_validate_json(path.expanduser().read_text(encoding="utf-8-sig"))
     except (OSError, ValueError):
         # Validation errors can echo an input mapping containing a credential.
         raise ValueError("Private upstream configuration is missing or invalid") from None

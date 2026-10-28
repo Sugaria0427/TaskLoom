@@ -51,7 +51,7 @@ def main() -> None:
         "--pool-capacity", type=int, help="Expected model pool capacity for scenario"
     )
     parser.add_argument("--daemon", action="store_true")
-    parser.add_argument("--upstream-config", type=Path, help="Private upstream JSON, dev only")
+    parser.add_argument("--upstream-config", type=Path, help="Private upstream JSON for dev / stop")
     args = parser.parse_args()
     if args.upstream_config is not None and args.role not in ("dev", "stop"):
         parser.error("--upstream-config is supported by dev and stop")

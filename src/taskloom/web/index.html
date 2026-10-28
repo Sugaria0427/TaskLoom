@@ -47,6 +47,7 @@
       <nav class="primary-nav" aria-label="主导航">
         <button id="nav-chat" class="nav-item active" aria-current="page"><svg class="icon"><use href="#i-chat"/></svg>Agent 工作台<span class="nav-count" id="active-count">0</span></button>
         <button id="nav-monitor" class="nav-item"><svg class="icon"><use href="#i-grid"/></svg>调度监控<span class="live-dot"></span></button>
+        <a href="/experiments" class="nav-item"><svg class="icon"><use href="#i-grid"/></svg>对照实验</a>
       </nav>
       <div class="session-heading"><span>会话记录</span><button class="icon-button" id="show-archived" aria-label="查看已归档会话" title="查看已归档会话" aria-pressed="false"><svg class="icon"><use href="#i-archive"/></svg></button></div>
       <label class="session-search"><svg class="icon"><use href="#i-search"/></svg><input id="session-search" type="search" placeholder="搜索会话" aria-label="搜索会话"></label>
@@ -73,7 +74,7 @@
         </div>
       </section>
       <section class="monitor-view" id="monitor-view" aria-label="调度监控" hidden>
-        <div class="monitor-intro"><div><p class="eyebrow">SCHEDULING OBSERVATORY</p><h2>任务在推进，资源有去向。</h2><p>从本地工具到平台请求，查看真实执行状态与分配结果。</p></div><span class="sampling-badge"><span class="live-dot"></span>每秒更新</span></div>
+        <div class="monitor-intro"><div><p class="eyebrow">SCHEDULING OBSERVATORY</p><h2>任务在推进，资源有去向。</h2><p>从本地工具到平台请求，查看真实执行状态与分配结果。</p></div><a class="secondary-button" href="/api/v1/observations/export">导出执行记录</a></div>
         <div class="monitor-kpis" id="monitor-kpis"></div>
         <div class="monitor-platform" id="monitor-platform" role="region" aria-label="共享平台状态"></div>
         <div class="monitor-middle"><section class="surface resource-surface"><div class="section-heading"><h3>资源分配</h3><span>预算与预留</span></div><div id="monitor-resources"></div><p class="surface-note">内存展示调度器预留量；工具测量值由本地执行器单独记录。</p></section><section class="surface trend-surface"><div class="section-heading"><h3>本地排队趋势</h3><span id="trend-range">当前页面采样</span></div><div class="trend-legend"><span><i class="legend-dot green"></i>工具队列</span><span><i class="legend-dot blue"></i>模型队列</span></div><div id="queue-chart" class="queue-chart"></div></section></div>

@@ -6,10 +6,19 @@ import httpx
 import pytest
 
 from taskloom.adapters.provider import HTTPProvider
+from taskloom.adapters.sqlite import SQLiteRepository
 from taskloom.adapters.supervisor import write_configuration
 from taskloom.bootstrap.config import load_upstream
 from taskloom.bootstrap.development import Topology
-from taskloom.contracts.models import ModelRequest, PlatformConfig
+from taskloom.contracts.models import (
+    AccountLogin,
+    ModelRequest,
+    PlatformConfig,
+    RootRegistration,
+    digest,
+)
+from taskloom.domain.model import DomainError
+from taskloom.gateway.service import GatewayService
 
 
 @pytest.mark.parametrize("base", ["https://example.test", "https://example.test/v1"])
@@ -82,3 +91,55 @@ def test_private_upstream_is_platform_owned_and_toml_roundtrips(tmp_path):
     with pytest.raises(ValueError, match="missing or invalid") as error:
         load_upstream(path)
     assert "test-private-upstream-key" not in str(error.value)
+
+
+async def test_real_platform_forces_conservative_admission_and_fixture_hash_stays_compatible(
+    tmp_path,
+):
+    from unittest.mock import AsyncMock
+
+    request = ModelRequest(
+        request_id="old-request",
+        root_task_id="root",
+        agent_id="agent",
+        step_id="step",
+        attempt_id="attempt",
+        messages=[{"role": "user", "content": "hello"}],
+        max_tokens=1,
+        deadline_at=(datetime.now(UTC) + timedelta(seconds=60)).isoformat(),
+    )
+    provider = AsyncMock()
+    store = SQLiteRepository(tmp_path / "real.db")
+    service = GatewayService(
+        store, provider, PlatformConfig(pool_kind="fixed-http", total_budget_units=100)
+    )
+    await service.start()
+    try:
+        await service.accounts.register(
+            AccountLogin(username="alice", password="test-password-123")
+        )
+        await service.register_root("alice", RootRegistration(root_task_id="root"))
+        assert request.reserve_units < 100
+        with pytest.raises(DomainError, match="budget domain"):
+            await service.submit("alice", request)
+        assert not service.requests
+        provider.generate.assert_not_awaited()
+    finally:
+        await service.close()
+        await store.close()
+    store = SQLiteRepository(tmp_path / "fixture.db")
+    service = GatewayService(store, AsyncMock(), PlatformConfig())
+    await service.start()
+    try:
+        await service.accounts.register(
+            AccountLogin(username="alice", password="test-password-123")
+        )
+        await service.register_root("alice", RootRegistration(root_task_id="root"))
+        record = await service.submit("alice", request)
+        old_payload = request.model_dump(mode="json")
+        old_payload.pop("token_count_mode")
+        assert record.payload_hash == digest(old_payload)
+        assert (await service.submit("alice", request)).payload_hash == record.payload_hash
+    finally:
+        await service.close()
+        await store.close()
