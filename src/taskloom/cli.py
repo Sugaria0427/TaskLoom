@@ -9,9 +9,9 @@ from taskloom import package_version
 from taskloom.adapters.linux import executor_socket
 from taskloom.adapters.supervisor import stop_supervisor, supervise
 from taskloom.bootstrap.apps import client_app, executor_app, platform_app, pool_app
-from taskloom.bootstrap.config import load_config
+from taskloom.bootstrap.config import load_config, load_upstream
 from taskloom.bootstrap.development import WP6_CAPACITIES, develop, self_test, stop_development
-from taskloom.contracts.models import ClientConfig, PlatformConfig, PoolConfig
+from taskloom.contracts.models import ClientConfig, PlatformConfig, PoolConfig, digest
 
 
 def main() -> None:
@@ -51,12 +51,23 @@ def main() -> None:
         "--pool-capacity", type=int, help="Expected model pool capacity for scenario"
     )
     parser.add_argument("--daemon", action="store_true")
+    parser.add_argument("--upstream-config", type=Path, help="Private upstream JSON for dev / stop")
     args = parser.parse_args()
+    if args.upstream_config is not None and args.role not in ("dev", "stop"):
+        parser.error("--upstream-config is supported by dev and stop")
     if args.role != "dev" and any(
         value is not None for value in (args.scenario, args.tool_slots, args.pool_capacity)
     ):
         parser.error("WP6 scenario and capacity flags are only supported by dev")
     base = args.state_dir.expanduser().resolve()
+    if args.upstream_config is not None:
+        try:
+            upstream = load_upstream(args.upstream_config)
+        except ValueError as error:
+            raise SystemExit(str(error)) from None
+        # Keep provider/model histories, obligations and usage units in separate ledgers.
+        namespace = digest({"url": upstream.base_url, "model": upstream.model})[:12]
+        base = base / "upstreams" / namespace
     base.mkdir(parents=True, exist_ok=True)
     os.umask(0o077)
     if args.role == "dev":
@@ -71,6 +82,7 @@ def main() -> None:
                 scenario=args.scenario or "unconstrained",
                 tool_slots=args.tool_slots,
                 pool_capacity=args.pool_capacity,
+                upstream_config=args.upstream_config,
             )
         except (RuntimeError, ValueError) as error:
             raise SystemExit(str(error)) from None

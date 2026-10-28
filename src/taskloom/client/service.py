@@ -699,6 +699,10 @@ class ClientService:
                 messages=messages,
                 tools=self.registry.schemas(),
                 deadline_at=task.deadline_at,
+                token_count_mode="utf8-bound"
+                if self.platform_feedback_source.latest is not None
+                and self.platform_feedback_source.latest.pool_kind == "fixed-http"
+                else "fixture",
             )
             attempt.request_payload = request.model_dump(mode="json")
         request = ModelRequest.model_validate(attempt.request_payload)

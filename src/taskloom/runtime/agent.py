@@ -22,10 +22,8 @@ async def run_agent(
             {
                 "role": "system",
                 "content": (
-                    "Analyze the staged documents using the available tools ("
-                    + ", ".join(registry.names())
-                    + "), then return only JSON "
-                    "with files, words, and summary. Tools are executed by the host."
+                    "Use file_stats to verify the staged documents. Then return ONLY JSON "
+                    "with files, words, summary, copying the verified counts. Other tools may help."
                 ),
             },
             {

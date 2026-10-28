@@ -46,10 +46,13 @@ from taskloom.contracts.models import (
     ToolState,
     digest,
     mock_tokens,
+    utc_now,
 )
 from taskloom.domain.model import DomainError
 from taskloom.domain.ports import StoredRecord
 from taskloom.execution.ports import ToolBackend
+from taskloom.experiments.comparison import ComparisonSpec
+from taskloom.experiments.service import ComparisonService
 from taskloom.gateway.service import GatewayService
 from taskloom.policies.reservation import Prices
 
@@ -152,6 +155,7 @@ def platform_app(base: Path, config: PlatformConfig) -> FastAPI:
             for account in config.pool_accounts
         },
         Prices(config.output_price, config.cache_read_price, config.cache_write_price),
+        thinking=config.thinking,
     )
     service = GatewayService(store, provider, config)
 
@@ -312,14 +316,17 @@ def client_app(base: Path, config: ClientConfig) -> FastAPI:
         connection.api_key if connection else os.environ.get("TASKLOOM_API_KEY", ""),
     )
     service = ClientService(store, gateway, executor, profile, config)
+    comparisons = ComparisonService(store, config.tenant_id)
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         lock = OwnerLock(profile / "client.lock")
         try:
             await service.start()
+            await comparisons.start()
             yield
         finally:
+            await comparisons.close()
             await service.close()
             await store.close()
             lock.close()
@@ -494,12 +501,72 @@ def client_app(base: Path, config: ClientConfig) -> FastAPI:
             raise DomainError("NOT_FOUND", "No verified summary has been published")
         return FileResponse(path, media_type="application/json", filename="summary.json")
 
+    @app.post("/api/v1/experiments", status_code=202)
+    async def experiment(body: ComparisonSpec) -> JsonObject:
+        return await comparisons.submit(body)
+
+    @app.get("/api/v1/experiments")
+    async def experiments() -> list[JsonObject]:
+        return await comparisons.history()
+
+    @app.get("/api/v1/experiments/{run_id}")
+    async def experiment_record(run_id: str) -> JsonObject:
+        return await comparisons.get(run_id)
+
+    @app.get("/api/v1/experiments/{run_id}/export")
+    async def export_experiment(run_id: str) -> JSONResponse:
+        return JSONResponse(
+            await comparisons.get(run_id),
+            headers={
+                "Content-Disposition": f'attachment; filename="taskloom-comparison-{run_id}.json"',
+            },
+        )
+
+    @app.get("/api/v1/observations/export")
+    async def export_observations() -> JSONResponse:
+        observations: list[JsonObject] = []
+        cursor = 0
+        page: list[JsonObject] = []
+        for _ in range(20):
+            page = await store.events(config.tenant_id, cursor)
+            observations.extend(page)
+            if not page or len(page) < 100:
+                break
+            cursor = page[-1]["event_seq"]
+        truncated = (
+            bool(await store.events(config.tenant_id, cursor, limit=1))
+            if len(observations) == 2000
+            else False
+        )
+        return JSONResponse(
+            {
+                "schema_version": 1,
+                "source": "real-client-snapshot",
+                "captured_at": utc_now(),
+                "platform": service.platform_status(),
+                "tasks": [task.model_dump(mode="json") for task in service.tasks.values()],
+                "resources": service.resources(),
+                "events": observations,
+                "events_truncated": truncated,
+                "event_limit": 2000,
+            },
+            headers={
+                "Content-Disposition": 'attachment; filename="taskloom-execution-records.json"'
+            },
+        )
+
     web = files("taskloom").joinpath("web")
     app.mount("/static", StaticFiles(directory=str(web)), name="static")
 
     @app.get("/")
     async def index() -> FileResponse:
         return FileResponse(str(web.joinpath("index.html")), headers={"Cache-Control": "no-store"})
+
+    @app.get("/experiments")
+    async def comparison_page() -> FileResponse:
+        return FileResponse(
+            str(web.joinpath("experiments.html")), headers={"Cache-Control": "no-store"}
+        )
 
     return app
 

@@ -3,7 +3,21 @@ import tomllib
 from pathlib import Path
 from typing import Any
 
-from taskloom.contracts.models import ClientConfig, Contract, PlatformConfig, PoolConfig
+from taskloom.contracts.models import (
+    ClientConfig,
+    Contract,
+    PlatformConfig,
+    PoolConfig,
+    UpstreamConfig,
+)
+
+
+def load_upstream(path: Path) -> UpstreamConfig:
+    try:
+        return UpstreamConfig.model_validate_json(path.expanduser().read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError):
+        # Validation errors can echo an input mapping containing a credential.
+        raise ValueError("Private upstream configuration is missing or invalid") from None
 
 
 def load_config[T: Contract](

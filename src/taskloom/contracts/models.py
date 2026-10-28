@@ -65,6 +65,7 @@ class ModelRequest(Contract):
     tools: list[JsonObject] = Field(default_factory=list, max_length=MAX_MODEL_TOOLS)
     max_tokens: int = Field(default=512, ge=1, le=4096)
     deadline_at: str
+    token_count_mode: Literal["fixture", "utf8-bound"] = "fixture"
 
     @field_validator("deadline_at")
     @classmethod
@@ -76,6 +77,13 @@ class ModelRequest(Contract):
 
     @property
     def input_tokens(self) -> int:
+        if self.token_count_mode == "utf8-bound":
+            # A byte-level upper estimate plus chat/tool envelope allowance. Actual usage
+            # always comes from the provider response, never from this admission estimate.
+            payload = json.dumps(
+                {"messages": self.messages, "tools": self.tools}, ensure_ascii=False
+            )
+            return len(payload.encode()) + 128 + 64 * len(self.messages) + 256 * len(self.tools)
         return mock_tokens({"messages": self.messages, "tools": self.tools})
 
     @property
@@ -329,6 +337,7 @@ class PlatformConfig(Contract):
     cache_wait_seconds: float = Field(default=0.0, ge=0, le=600)
     # Bearer key of the scheduling console (/admin/v1/*); empty disables it. Never a tenant key.
     admin_key: str = Field(default="", repr=False)
+    thinking: Literal["disabled", "enabled"] | None = None
 
     @model_validator(mode="after")
     def consistent_pool(self) -> "PlatformConfig":
@@ -350,6 +359,27 @@ class PoolConfig(Contract):
     latency_seconds: float = Field(default=0.05, ge=0, le=30)
     key: str = Field(default="", repr=False)
     model: str = "taskloom-fixed-model"
+
+
+class UpstreamConfig(Contract):
+    """Private, platform-owned upstream configuration; never returned to a personal client."""
+
+    base_url: str
+    api_key: str = Field(min_length=1, repr=False)
+    model: str = Field(min_length=1)
+    thinking: Literal["disabled", "enabled"] | None = "disabled"
+
+    @field_validator("base_url")
+    @classmethod
+    def https_endpoint(cls, value: str) -> str:
+        from urllib.parse import urlsplit
+
+        parsed = urlsplit(value)
+        if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
+            raise ValueError("The upstream must be an HTTPS URL without embedded credentials")
+        if parsed.query or parsed.fragment:
+            raise ValueError("The upstream URL must not contain a query or fragment")
+        return value.rstrip("/")
 
 
 class AccountLogin(Contract):

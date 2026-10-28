@@ -31,7 +31,7 @@ def write_configuration(path: Path, config: Contract) -> None:
                 if isinstance(value, bool)
                 else json.dumps(value, ensure_ascii=False)
             )
-            for key, value in config.model_dump().items()
+            for key, value in config.model_dump(exclude_none=True).items()
         ),
         encoding="utf-8",
     )

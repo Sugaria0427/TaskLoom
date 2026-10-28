@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>调度对照实验 · TaskLoom 织序</title>
+  <link rel="icon" href="/static/mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/experiments.css?v=course-1">
+  <script src="/static/experiments.js?v=course-1" defer></script>
+</head>
+<body>
+  <header class="top"><a href="/" class="brand"><img src="/static/mark.svg" alt="" width="32" height="32"><span>TaskLoom <small>织序 · 调度实验室</small></span></a><nav aria-label="主要导航"><a href="/">返回工作台</a><a href="/#monitor">执行监控</a></nav><span class="source-tag">离散事件仿真</span></header>
+  <main>
+    <section class="intro"><div><p class="eyebrow">SCHEDULING COMPARISON</p><h1>同一份工作负载，比较三种调度。</h1><p>把模型请求与本地工具放进同一个任务流程，观察多天运行中的交互响应、按时完成和后台等待。</p></div><div class="history"><label for="history">历史实验</label><select id="history"><option value="">暂无记录</option></select></div></section>
+    <div class="layout">
+      <aside class="panel configuration">
+        <div class="panel-heading"><h2>实验条件</h2><span>固定条件 · 配对比较</span></div>
+        <form id="experiment-form">
+          <fieldset><legend>运行规模</legend><div class="fields">
+            <label>模拟天数<select name="days"><option value="1">1 天</option><option value="7" selected>7 天</option><option value="30">30 天</option></select></label>
+            <label>每日任务<input name="tasks_per_day" type="number" min="8" max="200" value="60" required></label>
+            <label>重复种子数<input name="repeats" type="number" min="1" max="5" value="3" required></label>
+            <label>起始种子<input name="seed" type="number" min="0" max="2147483647" value="42" required></label>
+          </div></fieldset>
+          <fieldset><legend>资源容量</legend><div class="fields">
+            <label>用户数量<input name="users" type="number" min="2" max="8" value="4" required></label>
+            <label>共享模型槽位<input name="model_slots" type="number" min="1" max="8" value="2" required></label>
+            <label>每人工具槽位<input name="tool_slots" type="number" min="1" max="4" value="2" required></label>
+            <label>每人请求名额<input name="local_model_slots" type="number" min="1" max="4" value="2" required></label>
+          </div><label class="full">每人内存预算<select name="memory_mib"><option value="384">384 MiB</option><option value="512" selected>512 MiB</option><option value="1024">1024 MiB</option></select></label></fieldset>
+          <fieldset><legend>到达形态</legend><label class="full">每日任务集中到达的时段<select name="active_seconds_per_day"><option value="60">1 分钟 · 密集突发</option><option value="300" selected>5 分钟 · 混合突发</option><option value="1800">30 分钟 · 较分散</option><option value="3600">1 小时 · 分散</option></select></label><p class="help">60% 交互、15% 分析、25% 后台任务。后台集中于一名用户并在时段起始突发，其余任务分散到达。</p></fieldset>
+          <button class="primary" id="run" type="submit">运行对照实验</button><p class="error" id="error" role="alert" hidden></p><p class="help">直接推进模拟时间，不调用付费 API。每次实验使用连续的固定种子，结果自动保存。</p>
+        </form>
+      </aside>
+      <div class="results">
+        <section class="panel empty" id="empty"><span class="empty-mark">≋</span><h2>先固定条件，再看改善。</h2><p>运行后可查看三组策略的均值、波动、每日变化及调度事件。默认 7 天、3 个种子；也可以选择 30 天。</p><div class="policy-explainer"><p><b>FIFO</b>：本地和平台都按先到先服务。</p><p><b>平台轮转</b>：本地 FIFO，平台按用户与根任务轮转。</p><p><b>TaskLoom</b>：本地成本公平、期限与老化，平台采用 hybrid。</p></div></section>
+        <section class="progress panel" id="progress" role="status" hidden><span class="spinner"></span><div><h2>正在运行配对实验</h2><p>使用相同的任务、容量和服务时长，分别推进三种策略。</p></div></section>
+        <div id="report" hidden>
+          <section class="report-heading"><div><span class="source-tag">合成负载 · 仿真结果</span><h2 id="report-title">实验结果</h2><p id="report-meta"></p></div><a id="export" class="secondary" href="#">导出完整记录</a></section>
+          <div class="baseline"><label for="baseline">改善幅度的比较基线</label><select id="baseline"><option value="fifo">FIFO 先到先服务</option><option value="round_robin">平台轮转</option></select><span>正值表示改善，负值表示变差。</span></div>
+          <section class="kpis" id="kpis" aria-label="核心对比指标"></section>
+          <section class="panel"><div class="panel-heading"><h2>三组策略的完整对照</h2><span>均值 ± 种子间标准差</span></div><div class="table-wrap"><table><thead><tr><th>策略</th><th>交互平均 / 秒</th><th>交互 P95 / 秒</th><th>按时完成率</th><th>整体周转 / 秒</th><th>后台最大等待 / 秒</th></tr></thead><tbody id="summary"></tbody></table></div><p class="help" id="conservation"></p></section>
+          <section class="panel"><div class="panel-heading"><h2>逐日交互平均周转时间</h2><span>秒 · 越低越好</span></div><div class="legend"><span class="fifo">FIFO</span><span class="rr">平台轮转</span><span class="optimized">TaskLoom</span></div><div id="daily-chart" class="chart" role="img" aria-label="逐日交互周转时间对比"></div></section>
+          <section class="panel"><div class="panel-heading"><h2>调度事件记录</h2><select id="trace-policy" aria-label="选择事件策略"><option value="taskloom">TaskLoom</option><option value="fifo">FIFO</option><option value="round_robin">平台轮转</option></select></div><p class="help" id="trace-note"></p><div class="table-wrap trace"><table><thead><tr><th>模拟时间 / 秒</th><th>事件</th><th>用户 / 根任务</th><th>平台占槽</th><th>本地工具 / 内存</th></tr></thead><tbody id="trace"></tbody></table></div></section>
+          <section class="panel methodology"><h2>实验模型与结果口径</h2><ul id="assumptions"></ul><p>真实模型任务的输出、消耗和执行事件保存在工作台中，可从执行监控导出。本页的长期变化来自合成工作负载；按时完成不等于真实输出质量通过。</p></section>
+        </div>
+      </div>
+    </div>
+  </main>
+</body></html>
