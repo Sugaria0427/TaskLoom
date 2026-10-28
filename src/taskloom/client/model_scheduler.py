@@ -484,7 +484,19 @@ class ModelScheduler:
         self._by_id.pop(request_id, None)
         execution = asyncio.create_task(self._execute(pending))
         self._executions[request_id] = execution
-        execution.add_done_callback(lambda _: self._executions.pop(request_id, None))
+        execution.add_done_callback(lambda task: self._execution_done(pending, task))
+
+    def _execution_done(self, pending: _Pending, execution: asyncio.Task[None]) -> None:
+        # A task cancelled before its first tick never enters _execute's finally block.
+        # Retire its slot and waiter here as well, without touching a reused identity.
+        request_id = pending.request.request_id
+        if self._executions.get(request_id) is execution:
+            self._executions.pop(request_id, None)
+        if self._in_flight.get(request_id) is pending:
+            self._in_flight.pop(request_id, None)
+        if execution.cancelled() and not pending.future.done():
+            pending.future.cancel()
+        self._wake.set()
 
     async def _execute(self, pending: _Pending) -> None:
         """跑完一个请求的回调并把结果交给调用者。"""

@@ -1,6 +1,8 @@
 import asyncio
 from unittest.mock import AsyncMock
 
+import pytest
+
 from taskloom.adapters.sqlite import SQLiteRepository
 from taskloom.client.ports import ExecutorPort, GatewayPort
 from taskloom.client.service import ClientService
@@ -44,8 +46,9 @@ async def test_cancel_before_model_dispatch_closes_durable_attempt(
         await repository.close()
 
 
+@pytest.mark.parametrize("reply_pending", [False, True])
 async def test_cancel_after_model_dispatch_reaches_the_execution(
-    tmp_path, platform_feedback
+    tmp_path, platform_feedback, reply_pending
 ) -> None:
     """复现审查意见 2.2：取消必须传到已经派发的模型执行路径。
 
@@ -59,6 +62,7 @@ async def test_cancel_after_model_dispatch_reaches_the_execution(
     service = ClientService(repository, gateway, executor, tmp_path, ClientConfig(max_inflight=1))
 
     request_record = None
+    accepted = asyncio.Event()
 
     async def submit(request):
         nonlocal request_record
@@ -70,6 +74,10 @@ async def test_cancel_after_model_dispatch_reaches_the_execution(
             outcome=Outcome.PENDING,
             reserved_units=request.reserve_units,
         )
+        accepted.set()
+        if reply_pending:
+            # The platform admitted the request but its submit response is still in transit.
+            await asyncio.Event().wait()
         return request_record
 
     gateway.submit.side_effect = submit
@@ -81,12 +89,8 @@ async def test_cancel_after_model_dispatch_reaches_the_execution(
     await service.start()
     try:
         task = await service.create(TaskCreate(documents={"a.txt": "one two"}))
-        for _ in range(3000):
-            if service.models.in_flight:
-                break
-            await asyncio.sleep(0.001)
-        else:
-            raise AssertionError("Model request never reached the in-flight set")
+        # Occupying a scheduler slot precedes execution; synchronize on actual admission.
+        await asyncio.wait_for(accepted.wait(), timeout=3)
 
         cancelled = await service.cancel(task.task_id)
         gateway.cancel.assert_awaited()

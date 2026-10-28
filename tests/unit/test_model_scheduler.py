@@ -355,6 +355,40 @@ async def test_close_cancels_pending_and_in_flight() -> None:
         await second
 
 
+async def test_execution_cancelled_before_first_tick_releases_slot(monkeypatch) -> None:
+    """A cancelled background task must release its slot even before its body starts."""
+    scheduler = _scheduler(max_inflight=1)
+    launch = scheduler._launch
+    callback_started = False
+
+    async def callback(request: ModelRequest) -> GatewayRecord:
+        nonlocal callback_started
+        callback_started = True
+        return _record(request)
+
+    def cancel_at_launch(pending) -> None:
+        launch(pending)
+        scheduler._executions[pending.request.request_id].cancel()
+
+    monkeypatch.setattr(scheduler, "_launch", cancel_at_launch)
+    await scheduler.start()
+    try:
+        with pytest.raises(asyncio.CancelledError):
+            await asyncio.wait_for(
+                scheduler.submit(_request("never-started", "root-a"), callback), timeout=1
+            )
+        assert not callback_started
+        assert scheduler.in_flight == 0
+        assert scheduler.pending == 0
+        monkeypatch.setattr(scheduler, "_launch", launch)
+        result = await asyncio.wait_for(
+            scheduler.submit(_request("next", "root-b"), _record), timeout=1
+        )
+        assert result.request.request_id == "next"
+    finally:
+        await scheduler.close()
+
+
 async def test_submit_before_start_is_rejected() -> None:
     scheduler = _scheduler()
     with pytest.raises(RuntimeError):
