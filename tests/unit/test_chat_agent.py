@@ -96,6 +96,35 @@ async def test_skill_is_explicit_per_turn_and_statistics_have_receipt(skill):
         assert result["words"] == 2
 
 
+@pytest.mark.parametrize("read_first", [False, True])
+async def test_statistics_skill_supplies_required_tool_when_model_omits_it(read_first):
+    calls = (
+        [ToolCall(call_id="read", name="read_file", arguments={"path": "a.txt", "max_bytes": 1024})]
+        if read_first
+        else []
+    )
+    host = Host(
+        [reply("已阅读附件", calls), reply("附件中有两个词。")],
+        {
+            "read": {"content": "one two", "files": 1},
+            "taskloom_skill_stats": {"files": 1, "words": 2},
+        },
+    )
+    result = await run_agent(
+        host,
+        "root",
+        TaskCreate(mode="chat", message="统计附件", skill="stats", documents={"a.txt": "one two"}),
+        Checkpoint(),
+        12,
+        agent_registry(),
+    )
+    checkpoint = host.checkpoints[-1]
+    assert result["files"] == 1 and result["words"] == 2
+    assert result["content"] == "附件中有两个词。"
+    assert sum(call.name == "file_stats" for call in checkpoint.completed_tool_calls.values()) == 1
+    assert checkpoint.model_round == 2
+
+
 async def test_image_tool_results_follow_all_tool_responses():
     calls = [
         ToolCall(call_id=key, name="read_file", arguments={"path": key + ".png", "max_bytes": 1024})
