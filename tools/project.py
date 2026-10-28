@@ -125,6 +125,8 @@ def verify() -> None:
         names = package.namelist()
         assert any(name.endswith("web/index.html") for name in names)
         assert any(name.endswith("web/admin/index.html") for name in names)
+        assert any(name.endswith("web/experiments.html") for name in names)
+        assert any(name.endswith("web/experiments.js") for name in names)
         assert not any(
             part in name.split("/")
             for name in names
