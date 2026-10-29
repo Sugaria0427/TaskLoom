@@ -1,10 +1,13 @@
 import asyncio
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from functools import partial
+from time import monotonic
 from typing import Any, TypeVar
 
-from taskloom.domain.model import ResourcePool, Resources
+from taskloom.domain.model import DomainError, Resources
 from taskloom.policies.fair import FairQueue
+from taskloom.policies.resources import PhaseResourcePool
 
 T = TypeVar("T")
 
@@ -21,11 +24,28 @@ class Pending[T]:
     callback: Callable[[], Awaitable[T]]
     future: asyncio.Future[T]
     priority: str
+    enqueued_at: float
+    bypasses: int = 0
 
 
 class Dispatcher:
-    def __init__(self, capacity: Resources, max_pending: int = 64) -> None:
-        self.pool = ResourcePool(capacity)
+    def __init__(
+        self,
+        capacity: Resources,
+        max_pending: int = 64,
+        *,
+        check_safe: bool = True,
+        protection_seconds: float = 5.0,
+        bypass_limit: int = 8,
+        protect_large: bool = True,
+    ) -> None:
+        if protection_seconds <= 0 or bypass_limit < 1:
+            raise ValueError("Protection thresholds must be positive")
+        self.pool = PhaseResourcePool(capacity, check_safe)
+        self.protection_seconds = protection_seconds
+        self.bypass_limit = bypass_limit
+        self.protect_large = protect_large
+        self.protected: Pending[Any] | None = None
         self.max_pending = max_pending
         self.queues: dict[str, FairQueue[Pending[Any]]] = {
             name: FairQueue() for name in ("high", "normal", "low")
@@ -36,6 +56,91 @@ class Dispatcher:
         self.quarantined: set[str] = set()
         self.wake = asyncio.Event()
         self.loop: asyncio.Task[None] | None = None
+
+    def _waiting(self) -> list[Pending[Any]]:
+        return [item for queue in self.queues.values() for item in queue.items()]
+
+    def _refresh_protection(self) -> None:
+        waiting = self._waiting()
+        if self.protected is not None and (
+            self.protected not in waiting or self.protected.future.done()
+        ):
+            self.protected = None
+        if not self.protect_large or self.protected is not None:
+            return
+        now = monotonic()
+        aged = [
+            item
+            for item in waiting
+            if not item.future.done()
+            and item.identity not in self.pool.allocations
+            and (
+                now - item.enqueued_at >= self.protection_seconds
+                or item.bypasses >= self.bypass_limit
+            )
+        ]
+        if aged:
+            self.protected = min(aged, key=lambda item: item.enqueued_at)
+
+    def _eligible(self, item: Pending[Any]) -> bool:
+        if item.future.cancelled():
+            return True
+        if item.identity in self.active:
+            return False
+        if item.identity in self.pool.allocations:
+            # Existing holders must be able to finish and return their resources.
+            return True
+        allowed, reason = self.pool.decision(item.identity, item.demand)
+        if not allowed:
+            self.pool.record_blocked(
+                item.identity, item.demand, reason or "resource admission denied"
+            )
+            return False
+        protected = self.protected
+        if protected is not None and protected is not item:
+            # Drain conflicting dimensions. Preserve WRR among eligible work;
+            # never reserve partial physical allocations for the waiting target.
+            if any(
+                a and b
+                for a, b in zip(
+                    (item.demand.slots, item.demand.memory_bytes, item.demand.artifact_bytes),
+                    (
+                        protected.demand.slots,
+                        protected.demand.memory_bytes,
+                        protected.demand.artifact_bytes,
+                    ),
+                    strict=True,
+                )
+            ):
+                self.pool.blocked[item.identity] = "capacity protected for " + protected.identity
+                return False
+        self.pool.blocked.pop(item.identity, None)
+        return True
+
+    def snapshot(self) -> dict[str, object]:
+        self._refresh_protection()
+        now = monotonic()
+        return {
+            "enabled": self.protect_large,
+            "protected_attempt_id": self.protected.identity if self.protected else None,
+            "waiting": [
+                {
+                    "attempt_id": item.identity,
+                    "root_task_id": item.owner,
+                    "priority": item.priority,
+                    "wait_seconds": now - item.enqueued_at,
+                    "bypass_count": item.bypasses,
+                    "protected": item is self.protected,
+                    "protection_reason": (
+                        "bypass_limit" if item.bypasses >= self.bypass_limit else "wait_threshold"
+                    )
+                    if item is self.protected
+                    else None,
+                    "blocked_by": self.pool.blocked.get(item.identity),
+                }
+                for item in self._waiting()
+            ],
+        }
 
     @property
     def queue(self) -> "Dispatcher":
@@ -69,15 +174,23 @@ class Dispatcher:
         demand: Resources,
         callback: Callable[[], Awaitable[T]],
         priority: str = "normal",
+        maximum: Resources | None = None,
     ) -> T:
+        if maximum is not None and not demand.fits(maximum):
+            raise DomainError("RESOURCE_MAXIMUM_CONFLICT", "Initial demand exceeds maximum")
         if not demand.fits(self.pool.capacity):
             raise ValueError("Demand exceeds total resource capacity")
         if priority not in self.queues:
             raise ValueError("Unknown priority")
         if sum(len(queue) for queue in self.queues.values()) >= self.max_pending:
-            raise ValueError("Local pending queue full")
+            raise DomainError("LOCAL_QUEUE_FULL", "Local pending queue full", retryable=True)
+        if identity in self.active or any(item.identity == identity for item in self._waiting()):
+            raise DomainError("RESERVATION_CONFLICT", "Identity already has a dispatcher waiter")
+        if identity in self.pool.allocations and self.pool.allocations[identity] != demand:
+            raise DomainError("RESERVATION_CONFLICT", "Identity has a different demand")
+        self.pool.declare(identity, maximum or demand)
         future: asyncio.Future[T] = asyncio.get_running_loop().create_future()
-        pending = Pending(identity, owner, demand, callback, future, priority)
+        pending = Pending(identity, owner, demand, callback, future, priority, monotonic())
         self.queues[priority].push(owner, pending)
         self.wake.set()
         try:
@@ -89,31 +202,25 @@ class Dispatcher:
             if operation:
                 operation.cancel()
                 await asyncio.gather(operation, return_exceptions=True)
+            self.pool.forget(identity)
+            self._refresh_protection()
+            self.wake.set()
             raise
 
     async def _loop(self) -> None:
         while True:
+            self._refresh_protection()
             item = None
             for offset in range(len(self._schedule)):
                 index = (self._turn + offset) % len(self._schedule)
-                candidate = self.queues[self._schedule[index]].pop(
-                    lambda pending: (
-                        pending.future.cancelled()
-                        or (
-                            pending.identity not in self.active
-                            and (
-                                pending.identity in self.pool.allocations
-                                or pending.demand.fits(self.pool.available)
-                            )
-                        )
-                    )
-                )
+                candidate = self.queues[self._schedule[index]].pop(self._eligible)
                 if candidate is not None:
                     item = candidate
                     self._turn = (index + 1) % len(self._schedule)
                     break
             if item is not None:
                 if item.future.cancelled():
+                    self.pool.forget(item.identity)
                     continue
                 try:
                     if not self.pool.reserve(item.identity, item.demand):
@@ -122,12 +229,60 @@ class Dispatcher:
                 except Exception as error:
                     if not item.future.done():
                         item.future.set_exception(error)
+                    self.pool.forget(item.identity)
                     continue
+                for waiting in self._waiting():
+                    if any(
+                        a and b
+                        for a, b in zip(
+                            (
+                                item.demand.slots,
+                                item.demand.memory_bytes,
+                                item.demand.artifact_bytes,
+                            ),
+                            (
+                                waiting.demand.slots,
+                                waiting.demand.memory_bytes,
+                                waiting.demand.artifact_bytes,
+                            ),
+                            strict=True,
+                        )
+                    ):
+                        waiting.bypasses += 1
                 self.quarantined.discard(item.identity)
-                self.active[item.identity] = asyncio.create_task(self._run(item))
+                operation = asyncio.create_task(self._run(item))
+                self.active[item.identity] = operation
+                operation.add_done_callback(partial(self._done, item))
                 continue
             self.wake.clear()
-            await self.wake.wait()
+            deadlines = (
+                [
+                    pending.enqueued_at + self.protection_seconds
+                    for pending in self._waiting()
+                    if pending.identity not in self.pool.allocations and not pending.future.done()
+                ]
+                if self.protect_large and self.protected is None
+                else []
+            )
+            if deadlines:
+                try:
+                    await asyncio.wait_for(
+                        self.wake.wait(), max(0.001, min(deadlines) - monotonic())
+                    )
+                except TimeoutError:
+                    pass
+            else:
+                await self.wake.wait()
+
+    def _done(self, item: Pending[Any], operation: asyncio.Task[None]) -> None:
+        # A task cancelled before its first tick never reaches _run's finally.
+        if self.active.get(item.identity) is operation:
+            self.active.pop(item.identity)
+            if item.identity not in self.quarantined:
+                self.pool.release(item.identity)
+        if operation.cancelled() and not item.future.done():
+            item.future.cancel()
+        self.wake.set()
 
     async def _run(self, item: Pending[Any]) -> None:
         release = True
@@ -158,6 +313,7 @@ class Dispatcher:
         for queue in self.queues.values():
             for item in queue.remove(lambda _: True):
                 item.future.cancel()
+                self.pool.forget(item.identity)
         operations = list(self.active.values())
         for task in operations:
             task.cancel()

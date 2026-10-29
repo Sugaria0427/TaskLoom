@@ -49,3 +49,7 @@ class FairQueue[T]:
 
     def __len__(self) -> int:
         return sum(len(items) for items in self._items.values())
+
+    def items(self) -> list[T]:
+        """Observe candidates without changing owner turns or FIFO positions."""
+        return [item for owner in self._owners for item in self._items[owner]]

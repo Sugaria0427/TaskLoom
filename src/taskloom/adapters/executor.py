@@ -14,7 +14,7 @@ from taskloom.adapters.linux import (
     process_ticks,
     stop_group,
 )
-from taskloom.contracts.models import ToolRun, ToolState, digest
+from taskloom.contracts.models import ToolPhase, ToolRun, ToolState, digest
 from taskloom.domain.model import DomainError, Outcome
 
 
@@ -148,6 +148,10 @@ class ProcessExecutor:
                 "cgroup_path": state.cgroup_path,
                 "tool_name": request.tool_name,
                 "arguments": request.arguments,
+                "attempt_id": request.attempt_id,
+                "generation": request.generation,
+                "resource_protocol": request.resource_protocol,
+                "timeout_seconds": request.timeout_seconds,
                 "workspace_root": str(self.workspace_root),
                 "tasks_root": str((self.directory / "tasks").resolve()),
                 "approved_external_path": request.approved_external_path,
@@ -293,7 +297,77 @@ class ProcessExecutor:
 
     async def get(self, attempt_id: str) -> ToolState | None:
         state = self.states.get(attempt_id)
+        if state and not state.quiescent and state.request.resource_protocol == "phase-v1":
+            path = self._phase_directory(state) / "phase-request.json"
+            if path.exists():
+                phase = ToolPhase.model_validate_json(path.read_text())
+                self._check_phase(state, phase)
+                state.pending_phase = phase if phase.version > len(state.phase_grants) else None
+        if state and state.quiescent:
+            state.pending_phase = None
         return state.model_copy(deep=True) if state else None
+
+    def _phase_directory(self, state: ToolState) -> Path:
+        return (
+            self.directory
+            / "tasks"
+            / state.request.root_task_id
+            / "attempts"
+            / state.request.attempt_id
+        )
+
+    @staticmethod
+    def _check_phase(state: ToolState, phase: ToolPhase) -> None:
+        request = state.request
+        if (
+            request.resource_protocol != "phase-v1"
+            or phase.attempt_id != request.attempt_id
+            or phase.generation != request.generation
+            or phase.memory_bytes != (128 + phase.version * 128) * 1048576
+            or phase.memory_bytes > (request.maximum_memory_bytes or 0)
+        ):
+            raise DomainError("RESOURCE_PHASE_CONFLICT", "Phase differs from the registered claim")
+
+    async def grant_phase(self, grant: ToolPhase) -> ToolState:
+        async with self.lock:
+            state = self.states.get(grant.attempt_id)
+            if state is None:
+                raise DomainError("NOT_FOUND", "Tool attempt not found")
+            self._check_phase(state, grant)
+            if (
+                self.cancelled.get(grant.attempt_id, -1) >= grant.generation
+                or state.quiescent
+                or state.outcome != Outcome.PENDING
+            ):
+                raise DomainError("RESOURCE_PHASE_CONFLICT", "Attempt is cancelled or stopped")
+            if grant.version <= len(state.phase_grants):
+                if state.phase_grants[grant.version - 1] != grant:
+                    raise DomainError("RESOURCE_PHASE_CONFLICT", "Phase identity was reused")
+                self._save(state)
+                atomic_json(
+                    self._phase_directory(state) / "phase-grant.json",
+                    state.phase_grants[-1].model_dump(),
+                )
+                return state.model_copy(deep=True)
+            if grant.version != len(state.phase_grants) + 1:
+                raise DomainError("RESOURCE_PHASE_CONFLICT", "Phase skipped a predecessor")
+            pending_path = self._phase_directory(state) / "phase-request.json"
+            if (
+                not pending_path.exists()
+                or ToolPhase.model_validate_json(pending_path.read_text()) != grant
+            ):
+                raise DomainError("RESOURCE_PHASE_CONFLICT", "Worker did not request this phase")
+            if state.cgroup_path:
+                group = Path(state.cgroup_path)
+                if group.name != "tl-" + grant.attempt_id or group.parent != self.cgroups.root:
+                    raise DomainError("RESOURCE_PHASE_CONFLICT", "Phase cgroup identity differs")
+                (group / "memory.max").write_text(str(grant.memory_bytes))
+            state.phase_grants.append(grant)
+            state.pending_phase = None
+            # Persist the applied entitlement before unblocking the owned worker.
+            self._save(state)
+            atomic_json(self._phase_directory(state) / "phase-grant.json", grant.model_dump())
+            return state.model_copy(deep=True)
 
     async def cancel(self, attempt_id: str, generation: int) -> bool:
         async with self.lock:

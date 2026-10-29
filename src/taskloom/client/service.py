@@ -69,8 +69,8 @@ class ClientService:
         self.attempts: dict[str, AttemptState] = {}
         self.runners: dict[str, asyncio.Task[None]] = {}
         self.lock = asyncio.Lock()
-        self.registry: ToolRegistry = default_registry()
-        self.chat_registry = agent_registry()
+        self.registry: ToolRegistry = default_registry(staged=config.staged_tools)
+        self.chat_registry = agent_registry(staged=config.staged_tools)
         self.workspace_root = (
             Path(config.workspace_root).resolve()
             if config.workspace_root
@@ -95,7 +95,11 @@ class ClientService:
                 slots=config.tool_slots,
                 memory_bytes=config.memory_budget_mib * 1048576,
                 artifact_bytes=config.artifact_budget_mib * 1048576,
-            )
+            ),
+            check_safe=config.phase_banker,
+            protect_large=config.large_tool_protection,
+            protection_seconds=config.protection_seconds,
+            bypass_limit=config.protection_bypasses,
         )
         self.reconciler: asyncio.Task[None] | None = None
         self.ready = False
@@ -146,7 +150,6 @@ class ClientService:
                 held.error = error.code + ": " + str(error)
                 await self._save_task(held, await self._checkpoint_backup(original))
         await self.models.start()
-        await self.tools.start()
         try:
             await self.refresh_platform()
         except Exception as error:
@@ -161,11 +164,13 @@ class ClientService:
                         receipt = None
                     if receipt is not None and self._tool_receipt_matches(attempt, receipt):
                         attempt.request_payload = receipt.request.model_dump(mode="json")
-                demand, _ = self._prepare_tool(attempt)
+                demand, request = self._prepare_tool(attempt)
                 await self._save_attempt(attempt)
-                if not self.tools.pool.reserve(attempt.attempt_id, demand):
-                    raise RuntimeError("Unresolved tool occupancy exceeds the configured capacity")
+                self.tools.pool.restore(
+                    attempt.attempt_id, demand, self._tool_maximum(demand, request)
+                )
                 self.tools.quarantined.add(attempt.attempt_id)
+        await self.tools.start()
         for task in list(self.tasks.values()):
             if task.outcome == Outcome.PENDING and not task.cancel_requested:
                 task.state = WorkState.RECONCILING
@@ -279,6 +284,10 @@ class ClientService:
                 "generation": attempt.generation,
                 "type": attempt.kind + "." + attempt.state.lower(),
                 "outcome": attempt.outcome,
+                "resource_phase": attempt.phase_version,
+                "resource_allocation": attempt.phase_allocation.model_dump(mode="json")
+                if attempt.phase_allocation
+                else None,
                 "occurred_at": utc_now(),
             },
         )
@@ -885,6 +894,8 @@ class ClientService:
                 work_iterations=task.specification.work_iterations,
                 emit_bytes=task.specification.emit_bytes,
                 memory_bytes=profile.demand.memory_bytes,
+                resource_protocol="phase-v1" if profile.maximum else "one-shot",
+                maximum_memory_bytes=profile.maximum.memory_bytes if profile.maximum else None,
                 cpu_quota=profile.cpu_quota,
                 cpu_period=profile.cpu_period,
                 arguments=call.arguments,
@@ -914,10 +925,75 @@ class ClientService:
         claim = attempt.tool_claim
         if claim.memory_bytes != request.memory_bytes:
             raise DomainError("TOOL_CLAIM_CONFLICT", "Saved claim differs from executor request")
+        if attempt.phase_version:
+            allocation = attempt.phase_allocation
+            if (
+                request.resource_protocol != "phase-v1"
+                or allocation is None
+                or allocation.memory_bytes != (128 + attempt.phase_version * 128) * 1048576
+                or allocation.slots != claim.slots
+                or allocation.artifact_bytes != claim.artifact_bytes
+            ):
+                raise DomainError("TOOL_CLAIM_CONFLICT", "Saved phase allocation differs")
+            claim = allocation
         return Resources(claim.slots, claim.memory_bytes, claim.artifact_bytes), request
+
+    @staticmethod
+    def _tool_maximum(demand: Resources, request: ToolRun) -> Resources:
+        return Resources(
+            demand.slots, request.maximum_memory_bytes or demand.memory_bytes, demand.artifact_bytes
+        )
+
+    async def _advance_tool_phase(
+        self, attempt: AttemptState, state: ToolState, generation: int
+    ) -> None:
+        phase = state.pending_phase
+        if phase is None or state.quiescent:
+            return
+        if not self._tool_receipt_matches(attempt, state) or (
+            state.request.resource_protocol != "phase-v1"
+            or phase.attempt_id != attempt.attempt_id
+            or phase.generation != attempt.generation
+            or phase.memory_bytes != (128 + phase.version * 128) * 1048576
+        ):
+            raise QuarantinedExecution("Phase request differs from the saved tool identity")
+        async with self.lock:
+            current = self.attempts[attempt.attempt_id]
+            task = self.get(attempt.root_task_id)
+            if task.cancel_requested or task.cancel_generation != generation:
+                raise asyncio.CancelledError
+            if current.settled:
+                return
+            attempt.phase_version = current.phase_version
+            attempt.phase_allocation = current.phase_allocation
+            if phase.version > current.phase_version + 1:
+                raise QuarantinedExecution("Phase request skipped a predecessor")
+            if phase.version < current.phase_version:
+                return
+            demand, request = self._prepare_tool(attempt)
+            target = Resources(demand.slots, phase.memory_bytes, demand.artifact_bytes)
+            if not target.fits(self._tool_maximum(demand, request)):
+                raise QuarantinedExecution("Phase exceeds the persisted maximum")
+            if not self.tools.pool.grant(attempt.attempt_id, target):
+                return
+            if phase.version > current.phase_version:
+                attempt.phase_version = phase.version
+                attempt.phase_allocation = ToolClaim(
+                    profile_version="phase-v1",
+                    slots=target.slots,
+                    memory_bytes=target.memory_bytes,
+                    artifact_bytes=target.artifact_bytes,
+                )
+                # Commit before sending. Lost replies retain the entitlement and
+                # retry the same version, never a second incremental debit.
+                await self._save_attempt(attempt, locked=True)
+        applied = await self.executor.grant_phase(phase)
+        if not self._tool_receipt_matches(attempt, applied) or phase not in applied.phase_grants:
+            raise QuarantinedExecution("Executor did not confirm the granted phase")
 
     async def tool(self, task_id: str, call: ToolCall, model_round: int) -> JsonObject:
         task = self.get(task_id)
+        generation = task.cancel_generation
         spec = (self.chat_registry if task.specification.mode == "chat" else self.registry).require(
             call.name
         )
@@ -962,8 +1038,8 @@ class ClientService:
                 raise DomainError("ARTIFACT_BUDGET", "Retained artifacts fill the local budget")
             attempt.state = WorkState.RUNNING
             attempt.quiescent = False
-            await self._save_attempt(attempt)
             try:
+                await self._save_attempt(attempt)
                 if recovering:
                     state = await self.executor.query(attempt.attempt_id)
                     if state is None:
@@ -979,6 +1055,7 @@ class ClientService:
                 }
                 await self._save_attempt(attempt)
                 while not state.quiescent and state.outcome == Outcome.PENDING:
+                    await self._advance_tool_phase(attempt, state, generation)
                     await asyncio.sleep(0.05)
                     found = await self.executor.query(attempt.attempt_id)
                     if found is None:
@@ -1024,7 +1101,13 @@ class ClientService:
             except QuarantinedExecution:
                 raise
             except DomainError as error:
-                if error.code in ("EXECUTOR_FULL", "INPUT_VERSION_MISMATCH", "ATTEMPT_CONFLICT"):
+                if error.code in (
+                    "EXECUTOR_FULL",
+                    "INPUT_VERSION_MISMATCH",
+                    "ATTEMPT_CONFLICT",
+                    "RESOURCE_PROTOCOL_UNSUPPORTED",
+                    "EXECUTOR_NOT_READY",
+                ):
                     attempt.quiescent = True
                     attempt.outcome = Outcome.FAILED
                     attempt.error = error.code
@@ -1038,13 +1121,35 @@ class ClientService:
                 await self._save_attempt(attempt)
                 raise QuarantinedExecution("Executor transport failed") from error
 
-        return await self.tools.submit(
-            attempt.attempt_id,
-            task_id,
-            demand,
-            execute,
-            priority=self.get(task_id).specification.priority,
-        )
+        remaining = (
+            datetime.fromisoformat(self.get(task_id).deadline_at) - datetime.now(UTC)
+        ).total_seconds()
+        try:
+            if not self._tool_maximum(demand, request).fits(self.tools.pool.capacity):
+                raise DomainError("RESOURCE_TOO_LARGE", "Tool maximum exceeds total local capacity")
+            async with asyncio.timeout(max(0, remaining)):
+                return await self.tools.submit(
+                    attempt.attempt_id,
+                    task_id,
+                    demand,
+                    execute,
+                    priority=self.get(task_id).specification.priority,
+                    maximum=self._tool_maximum(demand, request),
+                )
+        except (TimeoutError, DomainError) as error:
+            code = error.code if isinstance(error, DomainError) else "DEADLINE_EXPIRED"
+            current = self.attempts[attempt.attempt_id].model_copy(deep=True)
+            if current.quiescent and not current.settled and code != "RESERVATION_CONFLICT":
+                current.outcome = Outcome.FAILED
+                current.state = WorkState.FINISHED
+                current.settled = True
+                current.error = code
+                await self._save_attempt(current)
+            if isinstance(error, DomainError):
+                raise
+            raise DomainError(
+                "DEADLINE_EXPIRED", "Tool resource wait or execution exceeded task deadline"
+            ) from None
 
     def _chat_history(self, task: TaskState) -> list[JsonObject]:
         if task.specification.mode != "chat":
@@ -1340,6 +1445,8 @@ class ClientService:
             "capacity": asdict(self.tools.pool.capacity),
             "available": asdict(self.tools.pool.available),
             "queued_tools": len(self.tools.queue),
+            "banker": self.tools.pool.snapshot(),
+            "tool_protection": self.tools.snapshot(),
             "queued_models": self.models.pending,
             "quarantined": list(self.tools.quarantined),
             "artifact_bytes": self.artifact_size(),

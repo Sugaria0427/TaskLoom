@@ -247,6 +247,7 @@ def main() -> None:
             "stop-client",
             "stop",
             "format",
+            "resources-demo",
         ],
     )
     parser.add_argument("extra", nargs=argparse.REMAINDER)
@@ -265,6 +266,8 @@ def main() -> None:
     elif args.action == "format":
         run("ruff", "format", "src", "tests", "tools")
         run("ruff", "check", "--fix", "src", "tests", "tools")
+    elif args.action == "resources-demo":
+        run("python", str(ROOT / "tools/resources_demo.py"), *args.extra)
     elif args.action == "test":
         paths = [str(ROOT / "tests" / name) for name in args.extra] or [
             "tests/unit",
