@@ -15,7 +15,6 @@ from taskloom.client.ports import ExecutorPort, GatewayPort
 from taskloom.contracts.models import (
     AttemptState,
     BranchState,
-    BranchSpec,
     Checkpoint,
     ClientConfig,
     ConversationState,

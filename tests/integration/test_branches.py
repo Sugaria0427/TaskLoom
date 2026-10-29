@@ -14,7 +14,6 @@ import time
 import pytest
 
 from taskloom.adapters.sqlite import SQLiteRepository
-from taskloom.client.ports import GatewayPort
 from taskloom.client.service import ClientService
 from taskloom.contracts.models import (
     BranchSpec,
@@ -151,11 +150,11 @@ class FakeExecutor:
         pass
 
 
-async def runner_finishes(service: ClientService, task_id: str, timeout: float = 15):
+async def runner_finishes(service: ClientService, task_id: str, wait_seconds: float = 15):
     runner = service.runners.get(task_id)
     if runner is None:
         raise AssertionError("No runner for task")
-    await asyncio.wait_for(asyncio.shield(runner), timeout)
+    await asyncio.wait_for(asyncio.shield(runner), wait_seconds)
 
 
 def two_branch_spec() -> TaskCreate:
@@ -216,7 +215,8 @@ async def test_two_branches_run_in_parallel_and_parent_conflates(
             # Parallel is faster than the sequential sum: both 0.3s tools overlap.
             total_span = max(executor.finished_at) - min(executor.started_at)
             sequential_sum = sum(
-                end - start for start, end in zip(executor.started_at, executor.finished_at)
+                end - start
+                for start, end in zip(executor.started_at, executor.finished_at, strict=False)
             )
             assert total_span < sequential_sum
         # Every model request stayed on the root task: branches add no budget or share.
@@ -322,7 +322,7 @@ async def test_cancel_parent_cascades_to_branches(tmp_path, platform_feedback) -
     try:
         task = await service.create(two_branch_spec())
         deadline = time.monotonic() + 5
-        while len(executor.runs) < 2 and time.monotonic() < deadline:
+        while len(executor.runs) < 2 and time.monotonic() < deadline:  # noqa: ASYNC110
             await asyncio.sleep(0.005)
         assert len(executor.runs) >= 2
         cancelled = await service.cancel(task.task_id)
