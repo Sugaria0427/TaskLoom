@@ -36,6 +36,27 @@ class ToolCall(Contract):
     arguments: JsonObject = Field(default_factory=dict)
 
 
+class BranchSpec(Contract):
+    """One controlled parallel sub-agent of a root task.
+
+    The root task is the owner of budget and service share; a branch adds
+    concurrency without adding budget or fairness. ``depends_on`` names other
+    branch ``agent_id``s that must SUCCEED before this branch starts.
+    """
+
+    agent_id: str = Field(pattern=r"^[a-zA-Z0-9_-]{1,96}$")
+    instruction: str = Field(min_length=1, max_length=4000)
+    required: bool = True
+    depends_on: list[str] = Field(default_factory=list, max_length=8)
+
+    @field_validator("depends_on")
+    @classmethod
+    def unique_dependencies(cls, value: list[str]) -> list[str]:
+        if len(set(value)) != len(value):
+            raise ValueError("Branch dependencies must be unique")
+        return value
+
+
 class Usage(Contract):
     input_tokens: int = Field(ge=0)
     output_tokens: int = Field(ge=0)
@@ -204,6 +225,10 @@ class TaskCreate(Contract):
             raise ValueError("Attachments exceed 512 KiB")
         return self
 
+    # Controlled parallel sub-agents; each branch shares this root's budget and
+    # service share and adds no extra quota. Empty keeps the plain single-agent loop.
+    branches: list[BranchSpec] = Field(default_factory=list, max_length=8)
+
     @field_validator("documents")
     @classmethod
     def valid_documents(cls, value: dict[str, str]) -> dict[str, str]:
@@ -213,6 +238,20 @@ class TaskCreate(Contract):
             if not re.fullmatch(r"[^/\\\x00-\x1f]{1,80}", name) or name in {".", ".."}:
                 raise ValueError("Use simple document filenames")
         return value
+
+    @model_validator(mode="after")
+    def consistent_branches(self) -> "TaskCreate":
+        ids = [b.agent_id for b in self.branches]
+        if len(set(ids)) != len(ids):
+            raise ValueError("Branch agent ids must be unique")
+        known = set(ids)
+        for branch in self.branches:
+            for dependency in branch.depends_on:
+                if dependency == branch.agent_id:
+                    raise ValueError("A branch cannot depend on itself")
+                if dependency not in known:
+                    raise ValueError(f"Branch depends on unknown branch {dependency!r}")
+        return self
 
 
 class PriorityUpdate(Contract):
@@ -225,6 +264,28 @@ class Checkpoint(Contract):
     completed_tools: dict[str, JsonObject] = Field(default_factory=dict)
     completed_tool_calls: dict[str, ToolCall] = Field(default_factory=dict)
     model_round: int = 0
+
+
+class BranchState(Contract):
+    """Durable runtime state of one branch; persisted inside TaskState.branches."""
+
+    agent_id: str
+    root_task_id: str
+    parent_agent_id: str
+    instruction: str
+    required: bool = True
+    depends_on: list[str] = Field(default_factory=list)
+    state: WorkState = WorkState.READY
+    outcome: Outcome = Outcome.PENDING
+    checkpoint: Checkpoint = Field(default_factory=Checkpoint)
+    cancel_generation: int = 0
+    quiescent: bool = True
+    consumed_units: int = 0
+    reserved_units: int = 0
+    result: JsonObject | None = None
+    error: str | None = None
+    created_at: str = Field(default_factory=utc_now)
+    completed_at: str | None = None
 
 
 class TaskState(Contract):
@@ -250,6 +311,8 @@ class TaskState(Contract):
     created_at: str = Field(default_factory=utc_now)
     deadline_at: str
     completed_at: str | None = None
+    # Controlled parallel sub-agents keyed by agent_id; durable across restarts.
+    branches: dict[str, BranchState] = Field(default_factory=dict)
 
 
 class ConversationCreate(Contract):

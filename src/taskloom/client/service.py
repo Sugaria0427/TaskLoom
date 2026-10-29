@@ -14,6 +14,8 @@ from taskloom.client.model_scheduler import ModelScheduler
 from taskloom.client.ports import ExecutorPort, GatewayPort
 from taskloom.contracts.models import (
     AttemptState,
+    BranchState,
+    BranchSpec,
     Checkpoint,
     ClientConfig,
     ConversationState,
@@ -68,6 +70,7 @@ class ClientService:
         self.conversations: dict[str, ConversationState] = {}
         self.attempts: dict[str, AttemptState] = {}
         self.runners: dict[str, asyncio.Task[None]] = {}
+        self.branch_runners: dict[tuple[str, str], asyncio.Task[None]] = {}
         self.lock = asyncio.Lock()
         self.registry: ToolRegistry = default_registry()
         self.chat_registry = agent_registry()
@@ -445,9 +448,12 @@ class ClientService:
         kind: Literal["model", "tool"],
         request_payload: JsonObject | None = None,
         model_round: int | None = None,
+        agent_id: str | None = None,
     ) -> AttemptState:
         async with self.lock:
             task = self.get(task_id)
+            identity_agent = agent_id or task.agent_id
+            prefix = agent_id or task_id
             old_id = task.step_attempts.get(step)
             if old_id:
                 old = self.attempts[old_id]
@@ -474,7 +480,7 @@ class ClientService:
             attempt = AttemptState(
                 attempt_id=identity(),
                 root_task_id=task_id,
-                agent_id=task.agent_id,
+                agent_id=identity_agent,
                 step_id=step,
                 tenant_id=task.tenant_id,
                 kind=kind,
@@ -483,14 +489,19 @@ class ClientService:
             )
             task.step_attempts[step] = attempt.attempt_id
             tool_model_round = (
-                model_round if model_round is not None else task.checkpoint.model_round - 1
-            )
-            predecessors = (
-                tuple(
-                    task.tool_step_aliases.get(key, key) for key in task.checkpoint.completed_tools
+                model_round
+                if model_round is not None
+                else (
+                    task.branches[agent_id].checkpoint.model_round - 1
+                    if agent_id
+                    else task.checkpoint.model_round - 1
                 )
+            )
+            checkpoint = task.branches[agent_id].checkpoint if agent_id else task.checkpoint
+            predecessors = (
+                tuple(task.tool_step_aliases.get(key, key) for key in checkpoint.completed_tools)
                 if kind == "model"
-                else (f"{task_id}-model-{tool_model_round}",)
+                else (f"{prefix}-model-{tool_model_round}",)
             )
             for predecessor in predecessors:
                 prior = task.step_attempts.get(predecessor)
@@ -514,7 +525,7 @@ class ClientService:
             step_record = Step(
                 step_id=step,
                 root_task_id=task_id,
-                agent_id=task.agent_id,
+                agent_id=identity_agent,
                 kind=kind,
                 input_version=task.input_version,
                 predecessors=predecessors,
@@ -547,28 +558,32 @@ class ClientService:
             await self.gateway.register(
                 RootRegistration(root_task_id=task_id, budget_units=task.specification.budget_units)
             )
-            result = await run_agent(
-                TaskHost(self, task_id, generation),
-                task_id,
-                task.specification,
-                task.checkpoint,
-                self.config.max_steps,
-                self.chat_registry if task.specification.mode == "chat" else self.registry,
-                history=self._chat_history(task),
-                workspace=str(self.workspace_root),
-                attachments={
-                    **{
-                        name: str(self.directory / "tasks" / task_id / "inputs" / name)
-                        for name in task.specification.documents
+            task = self.get(task_id)
+            if task.specification.branches:
+                result = await self._run_with_branches(task_id, generation)
+            else:
+                result = await run_agent(
+                    TaskHost(self, task_id, generation),
+                    task_id,
+                    task.specification,
+                    task.checkpoint,
+                    self.config.max_steps,
+                    self.chat_registry if task.specification.mode == "chat" else self.registry,
+                    history=self._chat_history(task),
+                    workspace=str(self.workspace_root),
+                    attachments={
+                        **{
+                            name: str(self.directory / "tasks" / task_id / "inputs" / name)
+                            for name in task.specification.documents
+                        },
+                        **{
+                            image.name: str(
+                                self.directory / "tasks" / task_id / "attachments" / image.name
+                            )
+                            for image in task.specification.images
+                        },
                     },
-                    **{
-                        image.name: str(
-                            self.directory / "tasks" / task_id / "attachments" / image.name
-                        )
-                        for image in task.specification.images
-                    },
-                },
-            )
+                )
             async with self.lock:
                 current = self.get(task_id)
                 if current.cancel_generation != generation or current.cancel_requested:
@@ -611,6 +626,201 @@ class ClientService:
                 Outcome.CANCELLED,
             ):
                 self.models.forget_root(task.task_id)
+
+    async def _run_with_branches(self, task_id: str, generation: int) -> JsonObject:
+        """Run controlled parallel sub-agents, wait for confluence, then let the
+        parent agent produce the final summary.
+
+        While the parent waits it holds no model or tool request, so its
+        execution permit is safely yielded to the branches. Every branch
+        request keeps ``root_task_id=task_id``: no matter how many branches run,
+        budget and L3/L4 fair share stay on the root task.
+        """
+        async with self.lock:
+            task = self.get(task_id)
+            changed = False
+            agent_records: list[StoredRecord] = []
+            for spec in task.specification.branches:
+                if spec.agent_id not in task.branches:
+                    task.branches[spec.agent_id] = BranchState(
+                        agent_id=spec.agent_id,
+                        root_task_id=task_id,
+                        parent_agent_id=task.agent_id,
+                        instruction=spec.instruction,
+                        required=spec.required,
+                        depends_on=list(spec.depends_on),
+                    )
+                    agent_records.append(
+                        StoredRecord(
+                            "agent",
+                            spec.agent_id,
+                            task.tenant_id,
+                            asdict(
+                                Agent(
+                                    agent_id=spec.agent_id,
+                                    root_task_id=task_id,
+                                    parent_agent_id=task.agent_id,
+                                )
+                            ),
+                        )
+                    )
+                    changed = True
+            if changed:
+                await self._save_task(task, agent_records)
+            task.state = WorkState.WAIT_DEPENDENCY
+            await self._save_task(task)
+        pending = {
+            agent_id
+            for agent_id, branch in self.get(task_id).branches.items()
+            if branch.outcome != Outcome.SUCCEEDED
+        }
+        runners: dict[str, asyncio.Task[None]] = {}
+        try:
+            while pending:
+                async with self.lock:
+                    task = self.get(task_id)
+                    if task.cancel_generation != generation or task.cancel_requested:
+                        raise asyncio.CancelledError
+                    for agent_id in list(runners):
+                        if runners[agent_id].done():
+                            runners.pop(agent_id)
+                            pending.discard(agent_id)
+                    # Deadlock: a pending branch whose dependencies are all
+                    # terminal but not SUCCEEDED can never start.
+                    for agent_id in list(pending):
+                        if agent_id in runners or not task.branches[agent_id].depends_on:
+                            continue
+                        branch = task.branches[agent_id]
+                        outcomes = [task.branches[dep].outcome for dep in branch.depends_on]
+                        if not all(o == Outcome.SUCCEEDED for o in outcomes) and all(
+                            o in (Outcome.SUCCEEDED, Outcome.FAILED, Outcome.CANCELLED)
+                            for o in outcomes
+                        ):
+                            failed = next(
+                                dep
+                                for dep in branch.depends_on
+                                if task.branches[dep].outcome != Outcome.SUCCEEDED
+                            )
+                            if branch.required:
+                                raise DomainError(
+                                    "BRANCH_DEPENDENCY_FAILED",
+                                    f"Branch {agent_id} waits on failed branch {failed}",
+                                )
+                            branch.outcome = Outcome.FAILED
+                            branch.state = WorkState.FINISHED
+                            branch.error = f"dependency {failed} did not succeed"
+                            branch.completed_at = utc_now()
+                            pending.discard(agent_id)
+                            await self._save_task(task)
+                    startable = [
+                        agent_id
+                        for agent_id in pending
+                        if agent_id not in runners
+                        and all(
+                            task.branches[dep].outcome == Outcome.SUCCEEDED
+                            for dep in task.branches[agent_id].depends_on
+                        )
+                    ]
+                for agent_id in startable:
+                    runners[agent_id] = asyncio.create_task(
+                        self._run_branch(task_id, agent_id, generation)
+                    )
+                    self.branch_runners[(task_id, agent_id)] = runners[agent_id]
+                if not runners:
+                    continue
+                await asyncio.wait(runners.values(), return_when=asyncio.FIRST_COMPLETED)
+            async with self.lock:
+                task = self.get(task_id)
+                if task.cancel_generation != generation or task.cancel_requested:
+                    raise asyncio.CancelledError
+                task.state = WorkState.RUNNING
+                await self._save_task(task)
+                failed_branches = [
+                    agent_id
+                    for agent_id, branch in task.branches.items()
+                    if branch.required and branch.outcome in (Outcome.FAILED, Outcome.CANCELLED)
+                ]
+                if failed_branches:
+                    branch = task.branches[failed_branches[0]]
+                    raise DomainError(
+                        "BRANCH_FAILED",
+                        f"Required branch {failed_branches[0]} failed: {branch.error or branch.outcome}",
+                    )
+                branches = {
+                    agent_id: branch.result
+                    for agent_id, branch in task.branches.items()
+                    if branch.outcome == Outcome.SUCCEEDED and branch.result is not None
+                }
+                task.checkpoint.messages.append(
+                    {
+                        "role": "user",
+                        "content": json.dumps({"branch_results": branches}, ensure_ascii=False),
+                    }
+                )
+                await self._save_task(task)
+            return await run_agent(
+                TaskHost(self, task_id, generation),
+                task_id,
+                task.specification,
+                task.checkpoint,
+                self.config.max_steps,
+                self.registry,
+            )
+        finally:
+            for runner in runners.values():
+                runner.cancel()
+            if runners:
+                await asyncio.gather(*runners.values(), return_exceptions=True)
+            for key in list(self.branch_runners):
+                if key[0] == task_id:
+                    self.branch_runners.pop(key, None)
+
+    async def _run_branch(self, task_id: str, agent_id: str, generation: int) -> None:
+        """Execute one controlled sub-agent to its own bounded loop and record
+        its durable outcome inside TaskState.branches."""
+        try:
+            async with self.lock:
+                task = self.get(task_id)
+                branch = task.branches[agent_id]
+                branch.state = WorkState.RUNNING
+                await self._save_task(task)
+            result = await run_agent(
+                BranchHost(self, task_id, agent_id, generation),
+                task_id,
+                task.specification,
+                branch.checkpoint,
+                self.config.max_steps,
+                self.registry,
+                agent_id=agent_id,
+                instruction=branch.instruction,
+            )
+            async with self.lock:
+                task = self.get(task_id)
+                branch = task.branches[agent_id]
+                if task.cancel_generation != generation or task.cancel_requested:
+                    return
+                branch.result = result
+                branch.completed_at = utc_now()
+                branch.outcome = Outcome.SUCCEEDED
+                branch.state = WorkState.FINISHED
+                await self._save_task(task)
+        except asyncio.CancelledError:
+            async with self.lock:
+                task = self.get(task_id)
+                branch = task.branches[agent_id]
+                branch.outcome = Outcome.CANCELLED if task.cancel_requested else Outcome.UNKNOWN
+                branch.completed_at = utc_now()
+                branch.state = WorkState.FINISHED if branch.quiescent else WorkState.RECONCILING
+                await self._save_task(task)
+        except Exception as error:
+            async with self.lock:
+                task = self.get(task_id)
+                branch = task.branches[agent_id]
+                branch.outcome = Outcome.FAILED if branch.quiescent else Outcome.UNKNOWN
+                branch.completed_at = utc_now()
+                branch.state = WorkState.FINISHED if branch.quiescent else WorkState.RECONCILING
+                branch.error = getattr(error, "code", type(error).__name__) + ": " + str(error)
+                await self._save_task(task)
 
     async def cancel(self, task_id: str) -> TaskState:
         async with self.lock:
@@ -750,8 +960,17 @@ class ClientService:
                 self.models.settle(attempt.root_task_id, reserved, record.consumed_units)
             return record
 
-    async def model(self, task_id: str, messages: list[JsonObject], round_index: int) -> ModelReply:
-        attempt = await self._attempt(task_id, f"{task_id}-model-{round_index}", "model")
+    async def model(
+        self,
+        task_id: str,
+        messages: list[JsonObject],
+        round_index: int,
+        agent_id: str | None = None,
+    ) -> ModelReply:
+        prefix = agent_id or task_id
+        attempt = await self._attempt(
+            task_id, f"{prefix}-model-{round_index}", "model", agent_id=agent_id
+        )
         if attempt.result is not None and attempt.outcome == Outcome.SUCCEEDED:
             return ModelReply.model_validate(attempt.result)
         task = self.get(task_id)
@@ -759,7 +978,7 @@ class ClientService:
             request = ModelRequest(
                 request_id=attempt.attempt_id,
                 root_task_id=task_id,
-                agent_id=task.agent_id,
+                agent_id=attempt.agent_id,
                 step_id=attempt.step_id,
                 attempt_id=attempt.attempt_id,
                 cancel_generation=attempt.generation,
@@ -916,16 +1135,21 @@ class ClientService:
             raise DomainError("TOOL_CLAIM_CONFLICT", "Saved claim differs from executor request")
         return Resources(claim.slots, claim.memory_bytes, claim.artifact_bytes), request
 
-    async def tool(self, task_id: str, call: ToolCall, model_round: int) -> JsonObject:
+    async def tool(
+        self, task_id: str, call: ToolCall, model_round: int, agent_id: str | None = None
+    ) -> JsonObject:
         task = self.get(task_id)
         spec = (self.chat_registry if task.specification.mode == "chat" else self.registry).require(
             call.name
         )
         spec.check(call)
-        canonical = tool_step_id(task_id, model_round, call.call_id)
+        prefix = agent_id or task_id
+        canonical = tool_step_id(prefix, model_round, call.call_id)
         step_id = self.get(task_id).tool_step_aliases.get(canonical, canonical)
         request_payload = {"tool_name": call.name, "arguments": call.arguments}
-        attempt = await self._attempt(task_id, step_id, "tool", request_payload, model_round)
+        attempt = await self._attempt(
+            task_id, step_id, "tool", request_payload, model_round, agent_id=agent_id
+        )
         if attempt.outcome == Outcome.SUCCEEDED and attempt.result is not None:
             return attempt.result
         recovering = attempt.outcome == Outcome.UNKNOWN or not attempt.quiescent
@@ -1407,4 +1631,35 @@ class TaskHost:
             if task.cancel_generation != self.generation or task.cancel_requested:
                 raise asyncio.CancelledError
             task.checkpoint = checkpoint.model_copy(deep=True)
+            await self.service._save_task(task)
+
+
+class BranchHost:
+    """AgentHost adapter for one controlled sub-agent.
+
+    Steps and the checkpoint are scoped to the branch ``agent_id`` while every
+    model request keeps ``root_task_id`` on the root task, so budget and
+    service share never grow with the branch count.
+    """
+
+    def __init__(
+        self, service: ClientService, task_id: str, agent_id: str, generation: int
+    ) -> None:
+        self.service = service
+        self.task_id = task_id
+        self.agent_id = agent_id
+        self.generation = generation
+
+    async def model(self, messages: list[JsonObject], round_index: int) -> ModelReply:
+        return await self.service.model(self.task_id, messages, round_index, agent_id=self.agent_id)
+
+    async def tool(self, call: ToolCall, model_round: int) -> JsonObject:
+        return await self.service.tool(self.task_id, call, model_round, agent_id=self.agent_id)
+
+    async def checkpoint(self, checkpoint: Checkpoint) -> None:
+        async with self.service.lock:
+            task = self.service.get(self.task_id)
+            if task.cancel_generation != self.generation or task.cancel_requested:
+                raise asyncio.CancelledError
+            task.branches[self.agent_id].checkpoint = checkpoint.model_copy(deep=True)
             await self.service._save_task(task)

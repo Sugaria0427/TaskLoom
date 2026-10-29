@@ -18,9 +18,20 @@ async def run_agent(
     history: list[JsonObject] | None = None,
     workspace: str = ".",
     attachments: dict[str, str] | None = None,
+    agent_id: str | None = None,
+    instruction: str | None = None,
 ) -> JsonObject:
+    """Run one bounded model-tool loop for a single agent identity.
+
+    ``task_id`` stays the root task; ``agent_id`` (defaults to ``task_id`` for
+    backward compatibility) is the identity that scopes step ids, attempts and
+    the checkpoint. Controlled sub-agents pass their own ``agent_id`` and
+    ``instruction`` so their steps and prompts stay independent while their
+    budget and service share remain on the root task.
+    """
     if registry is None:
         registry = default_registry()
+    identity_for_steps = agent_id or task_id
     state = checkpoint.model_copy(deep=True)
     if not state.messages:
         if specification.mode == "chat":
@@ -52,7 +63,9 @@ async def run_agent(
                 {"role": "user", "content": content},
             ]
         else:
-            # Existing recorded statistics workflows keep their bounded verification contract.
+            # Existing recorded statistics workflows keep their bounded verification
+            # contract; controlled sub-agents pass their own instruction.
+            prompt = instruction if instruction is not None else specification.instruction
             state.messages = [
                 {
                     "role": "system",
@@ -63,7 +76,7 @@ async def run_agent(
                     "content": json.dumps(
                         {
                             "title": specification.title,
-                            "instruction": specification.instruction,
+                            "instruction": prompt,
                             "files": list(specification.documents),
                         },
                         ensure_ascii=False,
@@ -77,7 +90,7 @@ async def run_agent(
             spec = registry.require(call.name)
             spec.check(call)
             model_round = state.model_round - 1
-            step_id = tool_step_id(task_id, model_round, call.call_id)
+            step_id = tool_step_id(identity_for_steps, model_round, call.call_id)
             result = await host.tool(call, model_round)
             state.completed_tools[step_id] = result
             state.completed_tool_calls[step_id] = call
