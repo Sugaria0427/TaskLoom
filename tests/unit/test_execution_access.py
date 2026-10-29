@@ -251,3 +251,44 @@ def test_ledger_records_who_carried_the_shared_preparation(tmp_path: Path) -> No
     assert rows[-1]["owner"] == "attempt-1"
     assert rows[-1]["users"] == 2
     assert json.loads(json.dumps(rows[-1])) == rows[-1]
+
+
+async def test_await_outcome_after_publish_is_served_immediately(tmp_path: Path) -> None:
+    """A waiter admitted before the publish must be served after it, not hang.
+
+    Regression for IKR9K3 review defect 1: ``publish`` used to leave a fresh
+    unresolved future behind, so an ``await_outcome`` that lost the scheduling
+    race waited on it forever.
+    """
+    coordinator = AccessCoordinator(tmp_path / "access")
+    key = ResourceKey.of(request())
+    assert coordinator.claim(key, "attempt-1") is True
+    assert coordinator.claim(key, "attempt-2") is False
+    published = await coordinator.publish(key, {"files": 1, "words": 3}, "attempt-1")
+
+    outcome = await asyncio.wait_for(coordinator.await_outcome(key), timeout=1.0)
+
+    assert outcome.version == published.version
+    assert outcome.payload == {"files": 1, "words": 3}
+    assert outcome.owner == "attempt-1"
+
+
+async def test_await_outcome_after_fail_raises_immediately(tmp_path: Path) -> None:
+    """A waiter arriving after the failure gets it at once; the key stays free.
+
+    Regression for IKR9K3 review defect 1: ``fail`` used to leave a fresh
+    unresolved future behind, so a late ``await_outcome`` hung instead of
+    reporting the failure.
+    """
+    coordinator = AccessCoordinator(tmp_path / "access")
+    key = ResourceKey.of(request())
+    assert coordinator.claim(key, "attempt-1") is True
+    await coordinator.fail(key, "tool exited with 1")
+
+    with pytest.raises(RuntimeError, match="tool exited with 1"):
+        await asyncio.wait_for(coordinator.await_outcome(key), timeout=1.0)
+
+    assert coordinator.claim(key, "attempt-2") is True
+    published = await coordinator.publish(key, {"files": 2, "words": 7}, "attempt-2")
+    outcome = await asyncio.wait_for(coordinator.await_outcome(key), timeout=1.0)
+    assert outcome.version == published.version

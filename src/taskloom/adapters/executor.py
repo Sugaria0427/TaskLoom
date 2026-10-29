@@ -129,6 +129,7 @@ class ProcessExecutor:
             if sum(not item.quiescent for item in self.states.values()) >= self.slots:
                 raise DomainError("EXECUTOR_FULL", "Executor capacity exhausted", True)
             self.states[request.attempt_id] = state
+        claimed = False
         try:
             workspace = self._staged_workspace(request)
             output_dir = workspace / "attempts" / request.attempt_id
@@ -142,9 +143,16 @@ class ProcessExecutor:
                     self._wait_for_shared(state, request, output_dir, key)
                 )
                 return state.model_copy(deep=True)
+            claimed = True
             return await self._launch(state, request, workspace, output_dir, key)
-        except BaseException:
+        except BaseException as error:
             self._forget_unlaunched(request.attempt_id)
+            if claimed:
+                # Release the claim so the next attempt for this key can own it
+                # again. _launch's Popen branch reports its own failure without
+                # raising; fail() is idempotent, so no path fails the key twice
+                # with a stale future left behind.
+                await self.access.fail(key, f"{type(error).__name__}: {error}")
             raise
 
     def _forget_unlaunched(self, attempt_id: str) -> None:
@@ -387,6 +395,7 @@ class ProcessExecutor:
         readers: list[Thread],
         output: Path,
     ) -> None:
+        quiescent = False
         try:
             try:
                 code = await asyncio.wait_for(
@@ -412,7 +421,6 @@ class ProcessExecutor:
             )
             if state.cgroup_path:
                 quiescent = await asyncio.to_thread(self.cgroups.cleanup, state.cgroup_path)
-            state.quiescent = quiescent
             if not quiescent:
                 state.outcome = Outcome.UNKNOWN
                 state.error = "Owned descendants remain"
@@ -445,9 +453,14 @@ class ProcessExecutor:
                 result["artifact_sha256"] = digest(result)
                 state.result = result
                 state.outcome = Outcome.SUCCEEDED
+            # Publish the settled state in one step: a poller (the client
+            # service) must never observe quiescent=True while the outcome is
+            # still PENDING, even though publishing above really awaits.
+            state.quiescent = quiescent
         except Exception as error:
-            state.outcome = Outcome.FAILED if state.quiescent else Outcome.UNKNOWN
+            state.outcome = Outcome.FAILED if quiescent else Outcome.UNKNOWN
             state.error = type(error).__name__ + ": " + str(error)
+            state.quiescent = quiescent
         finally:
             if state.outcome != Outcome.SUCCEEDED:
                 await self.access.fail(

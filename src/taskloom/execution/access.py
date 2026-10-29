@@ -258,6 +258,7 @@ class AccessCoordinator:
         self._inflight: dict[str, str] = {}
         self._ready: dict[str, asyncio.Future[PublishedOutcome]] = {}
         self._published: dict[str, PublishedOutcome] = {}
+        self._failed: dict[str, str] = {}
         self._users: dict[str, set[str]] = defaultdict(set)
 
     # ------------------------------------------------------------------ permits
@@ -340,7 +341,7 @@ class AccessCoordinator:
         if key.value in self._inflight:
             return False
         self._inflight[key.value] = holder
-        self._ready.setdefault(key.value, asyncio.get_running_loop().create_future())
+        self._failed.pop(key.value, None)
         return True
 
     def release(self, key: ResourceKey) -> None:
@@ -358,7 +359,18 @@ class AccessCoordinator:
         """
 
         async def wait() -> PublishedOutcome:
-            future = self._ready.setdefault(key.value, asyncio.get_running_loop().create_future())
+            published = await self.lookup(key)
+            if published is not None:
+                return published
+            failed = self._failed.get(key.value)
+            if failed is not None:
+                raise RuntimeError(failed)
+            # Registering the future runs without an await after the checks, so
+            # a publish/fail that happens next always finds this future.
+            future = self._ready.get(key.value)
+            if future is None:
+                future = asyncio.get_running_loop().create_future()
+                self._ready[key.value] = future
             return await asyncio.shield(future)
 
         return await self._flight.run(key.value, wait)
@@ -385,12 +397,12 @@ class AccessCoordinator:
         )
         async with self.resources([self.shared_name(key)], "write"):
             self._published[key.value] = outcome
+            self._failed.pop(key.value, None)
             self._write_shared(key, outcome)
             self._inflight.pop(key.value, None)
             future = self._ready.pop(key.value, None)
             if future is not None and not future.done():
                 future.set_result(outcome)
-            self._ready.setdefault(key.value, asyncio.get_running_loop().create_future())
         self.record(
             "shared_published",
             resource=key.value,
@@ -409,10 +421,10 @@ class AccessCoordinator:
         """
         async with self.resources([self.shared_name(key)], "write"):
             self._inflight.pop(key.value, None)
+            self._failed[key.value] = error
             future = self._ready.pop(key.value, None)
             if future is not None and not future.done():
                 future.set_exception(RuntimeError(error))
-            self._ready.setdefault(key.value, asyncio.get_running_loop().create_future())
         self.record("shared_failed", resource=key.value, error=error)
 
     async def lookup(self, key: ResourceKey) -> PublishedOutcome | None:

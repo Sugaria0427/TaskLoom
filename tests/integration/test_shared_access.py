@@ -4,10 +4,13 @@ import asyncio
 import json
 from pathlib import Path
 
+import pytest
+
 from taskloom.adapters.executor import ProcessExecutor
 from taskloom.adapters.linux import CgroupDomain
-from taskloom.contracts.models import ToolRun, ToolState, digest
+from taskloom.contracts.models import JsonObject, ToolRun, ToolState, digest
 from taskloom.domain.model import Outcome
+from taskloom.execution.access import AccessCoordinator, PublishedOutcome, ResourceKey
 
 DOCUMENTS = {"notes.txt": "one two three", "log.txt": "four five"}
 WORK = 200_000
@@ -156,5 +159,85 @@ async def test_a_changed_workspace_is_not_served_by_the_shared_result(tmp_path: 
         assert changed.outcome == Outcome.FAILED
         assert changed.error is not None and "INPUT_VERSION_MISMATCH" in changed.error
         assert changed.result is None
+    finally:
+        await executor.close()
+
+
+class SlowPublish(AccessCoordinator):
+    """Widen the real publish window (write lock + atomic write) for observers."""
+
+    async def publish(self, key: ResourceKey, payload: JsonObject, owner: str) -> PublishedOutcome:
+        await asyncio.sleep(0.3)
+        return await super().publish(key, payload, owner)
+
+
+async def test_settling_never_shows_quiescent_pending_to_a_poller(tmp_path: Path) -> None:
+    """The watcher must settle every terminal field before quiescent flips.
+
+    Regression for IKR9K3 review defect 2: quiescent used to be set before the
+    awaited publish, so a service-style poller (service.py:872) saw
+    quiescent=True with outcome=PENDING and reported TOOL_PENDING for a
+    preparation that actually succeeded.
+    """
+    profile = tmp_path / "alice"
+    version = stage(profile, "task-a", DOCUMENTS)
+    executor = ProcessExecutor(profile, CgroupDomain(None), access=SlowPublish(profile / "access"))
+    await executor.start()
+    try:
+        state = await executor.run(request("a1", "task-a", version, work=50_000))
+        dirty = False
+        async with asyncio.timeout(30):
+            while not state.quiescent and state.outcome == Outcome.PENDING:
+                await asyncio.sleep(0.05)
+                found = await executor.get("a1")
+                assert found is not None
+                state = found
+                if state.quiescent and state.outcome == Outcome.PENDING:
+                    dirty = True
+
+        assert not dirty
+        assert state.outcome == Outcome.SUCCEEDED
+        assert state.result is not None
+        assert state.result["access"]["role"] == "owner"
+    finally:
+        await executor.close()
+
+
+async def test_launch_failure_frees_the_claim_for_the_next_attempt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A launch that explodes after the claim must fail the key, not leak it.
+
+    Regression for IKR9K3 review defect 3: the claim used to stay in flight
+    forever when _launch raised outside its Popen error branch, so every later
+    attempt for the same key became a waiter and hung.
+    """
+    profile = tmp_path / "alice"
+    version = stage(profile, "task-a", DOCUMENTS)
+    executor = ProcessExecutor(profile, CgroupDomain(None))
+    await executor.start()
+    try:
+        original = executor.cgroups.create
+
+        def broken_create(
+            identity: str, memory: int, cpu_quota: int = 100000, cpu_period: int = 100000
+        ) -> Path | None:
+            raise RuntimeError("cgroup create exploded")
+
+        monkeypatch.setattr(executor.cgroups, "create", broken_create)
+        with pytest.raises(RuntimeError, match="cgroup create exploded"):
+            await executor.run(request("a1", "task-a", version))
+        monkeypatch.setattr(executor.cgroups, "create", original)
+
+        failures = [row for row in executor.access.ledger() if row["event"] == "shared_failed"]
+        assert len(failures) == 1
+        assert failures[0]["error"] == "RuntimeError: cgroup create exploded"
+
+        retry = await executor.run(request("a2", "task-a", version))
+        assert retry.pid is not None  # owner path, not a hanging waiter
+        final = await finished(executor, "a2")
+        assert final.outcome == Outcome.SUCCEEDED
+        assert final.result is not None
+        assert final.result["access"]["role"] == "owner"
     finally:
         await executor.close()
