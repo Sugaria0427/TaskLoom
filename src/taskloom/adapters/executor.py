@@ -262,13 +262,13 @@ class ProcessExecutor:
                 state.outcome = Outcome.FAILED
                 state.error = "TOOL_OOM"
             elif code != 0 or state.error:
-                state.outcome = Outcome.FAILED
                 if not state.error and state.request.tool_name in ("read_file", "run_command"):
                     diagnostic = await asyncio.to_thread(
                         lambda: (output / "stderr.log").read_text(errors="replace")[-2000:]
                     )
                     state.error = f"Tool exited with {code}: " + diagnostic
                 state.error = state.error or f"Tool exited with {code}"
+                state.outcome = Outcome.FAILED
             else:
                 result_path = output / "result.json"
                 if result_path.stat().st_size > 1048576:
