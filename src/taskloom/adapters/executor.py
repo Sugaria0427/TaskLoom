@@ -227,6 +227,7 @@ class ProcessExecutor:
         readers: list[Thread],
         output: Path,
     ) -> None:
+        quiescent = False
         try:
             try:
                 code = await asyncio.wait_for(
@@ -252,7 +253,6 @@ class ProcessExecutor:
             )
             if state.cgroup_path:
                 quiescent = await asyncio.to_thread(self.cgroups.cleanup, state.cgroup_path)
-            state.quiescent = quiescent
             if not quiescent:
                 state.outcome = Outcome.UNKNOWN
                 state.error = "Owned descendants remain"
@@ -280,9 +280,13 @@ class ProcessExecutor:
                 result["artifact_sha256"] = digest(result)
                 state.result = result
                 state.outcome = Outcome.SUCCEEDED
+            # quiescent 必须最后设置：结算完成前保持 False，服务端轮询才不会
+            # 读到 outcome 已变而 error/result 尚未填充的中间态。
+            state.quiescent = quiescent
         except Exception as error:
-            state.outcome = Outcome.FAILED if state.quiescent else Outcome.UNKNOWN
+            state.outcome = Outcome.FAILED if quiescent else Outcome.UNKNOWN
             state.error = type(error).__name__ + ": " + str(error)
+            state.quiescent = quiescent
         finally:
             state.artifact_bytes = await asyncio.to_thread(
                 lambda: sum(path.stat().st_size for path in output.rglob("*") if path.is_file())
