@@ -309,7 +309,20 @@ h1 { font-size: 14px; font-weight: 600; overflow: hidden; white-space: nowrap; t
 .empty-small { font-size: 12px; line-height: 1.8; color: #636962; }
 dialog { border: 1px solid #e2e7e1; border-radius: 17px; padding: 29px; color: var(--ink); background: #fdfefd; box-shadow: 0 18px 80px #17241b30; max-height: calc(100dvh - 40px); overflow-y: auto; }
 dialog::backdrop { background: #1d302b45; backdrop-filter: blur(4px); }
-.settings-dialog { width: 490px; max-width: calc(100vw - 28px); }
+.settings-dialog { width: 760px; max-width: calc(100vw - 32px); }
+.resource-settings { border-top: 1px solid #e6ece3; margin-top: 24px; padding-top: 20px; }
+.resource-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.resource-heading h3 { font-size: 16px; font-weight: 550; color: #36483c; margin: 4px 0 0; }
+.resource-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 14px 0; }
+.resource-grid code { font-size: 11px; background: #eaf0e7; padding: 2px 5px; border-radius: 4px; color: #435b44; }
+.resource-grid .field-hint { display: block; font-size: 11px; color: #62695f; line-height: 1.5; margin-top: 4px; }
+.resource-switches { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; background: #f6faf4; border: 1px solid #e3ede0; border-radius: 8px; padding: 14px 16px; }
+.resource-switches label { margin: 0; font-size: 12px; color: #445946; display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.resource-switches input[type="checkbox"] { width: auto; margin: 0; accent-color: var(--green-deep); }
+.protection-seconds-field { display: flex; align-items: center; gap: 12px; margin-top: 4px; }
+.protection-seconds-field label { margin: 0; white-space: nowrap; }
+.protection-seconds-field input { width: 100px; padding: 6px 10px; }
+#resource-status { font-size: 12px; margin-top: 10px; color: #2e6245; }
 .rename-dialog { width: 390px; max-width: calc(100vw - 28px); }
 .dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
 .dialog-heading h2 { font-size: 20px; margin-top: 8px; font-weight: 550; }

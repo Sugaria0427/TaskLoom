@@ -18,6 +18,7 @@ from taskloom.contracts.models import (
     BranchState,
     Checkpoint,
     ClientConfig,
+    ClientResourceSettings,
     ConversationState,
     ConversationUpdate,
     DemoSettings,
@@ -118,6 +119,9 @@ class ClientService:
         saved_demo = await self.store.get("settings", "demo-timing")
         if saved_demo:
             self.demo_settings = DemoSettings.model_validate(saved_demo)
+        saved_resources = await self.store.get("settings", "resource-limits")
+        if saved_resources:
+            self._apply_resource_settings(ClientResourceSettings.model_validate(saved_resources))
         binding = await self.store.get("profile", "platform-account")
         if binding is not None:
             self.config.tenant_id = binding["account_id"]
@@ -1497,6 +1501,63 @@ class ClientService:
             )
             self.demo_settings = settings.model_copy(deep=True)
         return self.demo_settings.model_copy(deep=True)
+
+    def _apply_resource_settings(self, settings: ClientResourceSettings) -> None:
+        self.config.tool_slots = settings.tool_slots
+        self.config.memory_budget_mib = settings.memory_budget_mib
+        self.config.max_inflight = settings.max_inflight
+        self.config.artifact_budget_mib = settings.artifact_budget_mib
+        self.config.phase_banker = settings.phase_banker
+        self.config.staged_tools = settings.staged_tools
+        self.registry = default_registry(staged=settings.staged_tools)
+        self.chat_registry = agent_registry(staged=settings.staged_tools)
+        self.config.large_tool_protection = settings.large_tool_protection
+        self.config.protection_seconds = settings.protection_seconds
+        self.tools.pool.capacity = Resources(
+            slots=settings.tool_slots,
+            memory_bytes=settings.memory_budget_mib * 1048576,
+            artifact_bytes=settings.artifact_budget_mib * 1048576,
+        )
+        self.tools.pool.check_safe = settings.phase_banker
+        self.tools.protect_large = settings.large_tool_protection
+        self.tools.protection_seconds = settings.protection_seconds
+        self.models.max_inflight = settings.max_inflight
+        self.tools.wake.set()
+
+    def resource_settings(self) -> ClientResourceSettings:
+        return ClientResourceSettings(
+            tool_slots=self.config.tool_slots,
+            memory_budget_mib=self.config.memory_budget_mib,
+            max_inflight=self.config.max_inflight,
+            artifact_budget_mib=self.config.artifact_budget_mib,
+            phase_banker=self.config.phase_banker,
+            staged_tools=self.config.staged_tools,
+            large_tool_protection=self.config.large_tool_protection,
+            protection_seconds=self.config.protection_seconds,
+        )
+
+    async def set_resource_settings(
+        self, settings: ClientResourceSettings
+    ) -> ClientResourceSettings:
+        async with self.lock:
+            if settings.staged_tools != self.config.staged_tools and any(
+                task.outcome == Outcome.PENDING for task in self.tasks.values()
+            ):
+                raise DomainError(
+                    "SETTINGS_BUSY", "请在当前任务结束后切换阶段工具，保证已公布工具契约一致"
+                )
+            await self.store.apply(
+                [
+                    StoredRecord(
+                        "settings",
+                        "resource-limits",
+                        self.config.tenant_id,
+                        settings.model_dump(mode="json"),
+                    )
+                ]
+            )
+            self._apply_resource_settings(settings)
+        return self.resource_settings()
 
     def _chat_history(self, task: TaskState) -> list[JsonObject]:
         if task.specification.mode != "chat":

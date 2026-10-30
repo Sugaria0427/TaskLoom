@@ -817,7 +817,56 @@ for (const tab of ["resources", "tree"]) {
 }
 $("toggle-sidebar").onclick = () => { const show = !shell.classList.contains("sidebar-open"); closeDrawers(); shell.classList.toggle("sidebar-open", show); $("mobile-backdrop").hidden = !show; };
 $("mobile-backdrop").onclick = closeDrawers;
-$("open-settings").onclick = () => { closeDrawers(); $("settings-dialog").showModal(); };
+async function loadResourceSettings() {
+  try {
+    const res = await api("/api/v1/settings/resources");
+    if (!res) return;
+    if ($("res-tool-slots")) $("res-tool-slots").value = res.tool_slots;
+    if ($("res-memory-budget")) $("res-memory-budget").value = res.memory_budget_mib;
+    if ($("res-max-inflight")) $("res-max-inflight").value = res.max_inflight;
+    if ($("res-artifact-budget")) $("res-artifact-budget").value = res.artifact_budget_mib;
+    if ($("res-phase-banker")) $("res-phase-banker").checked = !!res.phase_banker;
+    if ($("res-staged-tools")) $("res-staged-tools").checked = !!res.staged_tools;
+    if ($("res-large-protection")) $("res-large-protection").checked = !!res.large_tool_protection;
+    if ($("res-protection-seconds")) $("res-protection-seconds").value = res.protection_seconds;
+  } catch (err) {
+    console.error("Failed to load resource settings", err);
+  }
+}
+
+if ($("resource-form")) {
+  $("resource-form").onsubmit = async (event) => {
+    event.preventDefault();
+    const saveBtn = $("save-resources");
+    saveBtn.disabled = true;
+    setText("resource-status", "正在保存...");
+    try {
+      const payload = {
+        tool_slots: Number($("res-tool-slots").value),
+        memory_budget_mib: Number($("res-memory-budget").value),
+        max_inflight: Number($("res-max-inflight").value),
+        artifact_budget_mib: Number($("res-artifact-budget").value),
+        phase_banker: $("res-phase-banker").checked,
+        staged_tools: $("res-staged-tools").checked,
+        large_tool_protection: $("res-large-protection").checked,
+        protection_seconds: Number($("res-protection-seconds").value),
+      };
+      await api("/api/v1/settings/resources", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      setText("resource-status", "本地执行与工具限额已更新并生效。");
+      toast("本地执行与工具限额已更新。");
+      await refresh();
+    } catch (err) {
+      setText("resource-status", `保存失败：${err.message}`);
+    } finally {
+      saveBtn.disabled = false;
+    }
+  };
+}
+
+$("open-settings").onclick = () => { closeDrawers(); loadResourceSettings(); $("settings-dialog").showModal(); };
 document.querySelectorAll("[data-close-dialog]").forEach((button) => button.onclick = () => $(button.dataset.closeDialog).close());
 document.querySelectorAll("dialog").forEach((dialog) => dialog.addEventListener("click", (event) => { if (event.target === dialog) { const rect = dialog.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dialog.close(); } }));
 $("login").onclick = () => connectAccount("login");
@@ -874,4 +923,5 @@ api("/api/v1/agent").then((data) => {
   $("agent-workspace").textContent = `工作目录：${data.workspace}。命令在本机 WSL 中执行，可读写文件并访问网络；每条命令须确认。`;
 }).catch((error) => toast(error.message));
 refresh();
+loadResourceSettings();
 setInterval(refresh, 1000);

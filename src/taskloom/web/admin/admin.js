@@ -800,6 +800,10 @@ function renderSettings(s) {
   if (!state.formDirty) {
     for (const input of options.querySelectorAll("input[name=policy]")) input.checked = Boolean(s) && input.value === s.policy;
     cache.value = s ? String(num(s.cache_wait_seconds)) : "";
+    if ($("pool-capacity")) $("pool-capacity").value = s ? String(num(s.pool?.capacity)) : "";
+    if ($("account-max-inflight")) $("account-max-inflight").value = s ? String(num(s.account_max_inflight ?? 1)) : "";
+    if ($("tokens-per-window")) $("tokens-per-window").value = s ? String(num(s.shared?.tokens_per_window)) : "";
+    if ($("account-tokens-per-window")) $("account-tokens-per-window").value = s ? String(num(s.account_tokens_per_window ?? 50000)) : "";
   }
   for (const card of options.querySelectorAll(".policy-card")) {
     const input = card.querySelector("input");
@@ -990,6 +994,38 @@ function collectSettings() {
     }
     if (value !== num(s.cache_wait_seconds)) body.cache_wait_seconds = value;
   }
+  const poolCap = $("pool-capacity");
+  if (poolCap && poolCap.value !== "") {
+    const val = Number(poolCap.value);
+    if (!Number.isInteger(val) || val < 1 || val > 64) {
+      throw Object.assign(new Error("pool_capacity 需在 1–64 之间的整数。"), {code: "INVALID_INPUT"});
+    }
+    if (val !== num(s.pool?.capacity)) body.pool_capacity = val;
+  }
+  const accInf = $("account-max-inflight");
+  if (accInf && accInf.value !== "") {
+    const val = Number(accInf.value);
+    if (!Number.isInteger(val) || val < 1 || val > 64) {
+      throw Object.assign(new Error("account_max_inflight 需在 1–64 之间的整数。"), {code: "INVALID_INPUT"});
+    }
+    if (val !== num(s.account_max_inflight ?? 1)) body.account_max_inflight = val;
+  }
+  const winTokens = $("tokens-per-window");
+  if (winTokens && winTokens.value !== "") {
+    const val = Number(winTokens.value);
+    if (!Number.isInteger(val) || val < 1000 || val > 10000000) {
+      throw Object.assign(new Error("tokens_per_window 需在 1,000–10,000,000 之间。"), {code: "INVALID_INPUT"});
+    }
+    if (val !== num(s.shared?.tokens_per_window)) body.tokens_per_window = val;
+  }
+  const accTokens = $("account-tokens-per-window");
+  if (accTokens && accTokens.value !== "") {
+    const val = Number(accTokens.value);
+    if (!Number.isInteger(val) || val < 1000 || val > 10000000) {
+      throw Object.assign(new Error("account_tokens_per_window 需在 1,000–10,000,000 之间。"), {code: "INVALID_INPUT"});
+    }
+    if (val !== num(s.account_tokens_per_window ?? 50000)) body.account_tokens_per_window = val;
+  }
   return body;
 }
 
@@ -1012,15 +1048,20 @@ async function onSettingsSubmit(event) {
     toast("配置没有变化。", "info");
     return;
   }
-  if (body.policy) {
-    const lines = [
-      {text: "排队中的请求会按原顺序迁移到新策略，不丢失、不重复；在途请求不受影响。"},
-      {text: `${policyLabel(state.snapshot.policy)}  →  ${policyLabel(body.policy)}`, highlight: true},
-    ];
-    if (body.cache_wait_seconds !== undefined) lines.push({text: `同时修改 cache_wait_seconds 为 ${body.cache_wait_seconds} 秒。`});
+  if (body.policy || body.pool_capacity !== undefined || body.account_max_inflight !== undefined || body.tokens_per_window !== undefined || body.account_tokens_per_window !== undefined) {
+    const lines = [];
+    if (body.policy) {
+      lines.push({text: "排队中的请求会按原顺序迁移到新策略，不丢失、不重复；在途请求不受影响。"});
+      lines.push({text: `${policyLabel(state.snapshot.policy)}  →  ${policyLabel(body.policy)}`, highlight: true});
+    }
+    if (body.cache_wait_seconds !== undefined) lines.push({text: `修改 cache_wait_seconds 为 ${body.cache_wait_seconds} 秒。`});
+    if (body.pool_capacity !== undefined) lines.push({text: `修改 pool_capacity 全局并发容量为 ${body.pool_capacity} 槽。`});
+    if (body.account_max_inflight !== undefined) lines.push({text: `修改 account_max_inflight 单租户并发上限为 ${body.account_max_inflight}。`});
+    if (body.tokens_per_window !== undefined) lines.push({text: `修改平台 60s 速率为 ${body.tokens_per_window} Tokens。`});
+    if (body.account_tokens_per_window !== undefined) lines.push({text: `修改单租户 60s 速率为 ${body.account_tokens_per_window} Tokens。`});
     lines.push({text: "修改会持久化，并写入一条配置变更事件。"});
     const ok = await confirmDialog({
-      title: "切换调度策略", description: "热切换 L4 调度策略", lines, confirmText: "确认切换",
+      title: "更新平台调度配置", description: "应用 L4 调度与配额参数变更", lines, confirmText: "确认应用",
     });
     if (!ok || !state.snapshot) return;
   }
@@ -1040,6 +1081,10 @@ async function onSettingsSubmit(event) {
     const parts = [];
     if (body.policy) parts.push(`策略已切换为 ${data.policy}`);
     if (body.cache_wait_seconds !== undefined) parts.push(`cache_wait_seconds = ${num(data.cache_wait_seconds)}`);
+    if (body.pool_capacity !== undefined) parts.push(`pool_capacity = ${num(body.pool_capacity)}`);
+    if (body.account_max_inflight !== undefined) parts.push(`account_max_inflight = ${num(body.account_max_inflight)}`);
+    if (body.tokens_per_window !== undefined) parts.push(`tokens_per_window = ${num(body.tokens_per_window)}`);
+    if (body.account_tokens_per_window !== undefined) parts.push(`account_tokens_per_window = ${num(body.account_tokens_per_window)}`);
     toast(`${parts.join("，")}。`, "success", "配置已应用");
   } catch (error) {
     if (generation !== state.generation) return;
@@ -1195,6 +1240,10 @@ function init() {
   $("settings-reset").addEventListener("click", onSettingsReset);
   $("policy-options").addEventListener("change", markDirty);
   $("cache-wait").addEventListener("input", markDirty);
+  if ($("pool-capacity")) $("pool-capacity").addEventListener("input", markDirty);
+  if ($("account-max-inflight")) $("account-max-inflight").addEventListener("input", markDirty);
+  if ($("tokens-per-window")) $("tokens-per-window").addEventListener("input", markDirty);
+  if ($("account-tokens-per-window")) $("account-tokens-per-window").addEventListener("input", markDirty);
   $("tenants-body").addEventListener("click", onTenantClick);
   $("menu-toggle").addEventListener("click", onMenuToggle);
   document.addEventListener("click", onNavClick);

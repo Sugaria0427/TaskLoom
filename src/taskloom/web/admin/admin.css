@@ -1000,6 +1000,9 @@ tr.roots-row > td { padding: 16px 24px !important; border-top: 1px solid color-m
   color: var(--muted-foreground);
 }
 .settings-form { gap: 16px; }
+.grid-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.field-divider { border-top: 1px solid var(--border); margin: 8px 0 2px; padding-top: 8px; }
+.field-divider span { font-size: 11px; color: var(--muted-foreground); font-weight: 600; }
 .form-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding-top: 4px; }
 
 /* 上游与待核对 */

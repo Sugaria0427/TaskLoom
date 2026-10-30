@@ -25,6 +25,7 @@ from taskloom.contracts.models import (
     AccountCredential,
     AccountLogin,
     ClientConfig,
+    ClientResourceSettings,
     ConversationCreate,
     ConversationState,
     ConversationUpdate,
@@ -450,6 +451,14 @@ def client_app(base: Path, config: ClientConfig) -> FastAPI:
     @app.post("/api/v1/settings/demo")
     async def save_demo_settings(body: DemoSettings) -> DemoSettings:
         return await service.set_demo_settings(body)
+
+    @app.get("/api/v1/settings/resources")
+    async def get_resource_settings() -> ClientResourceSettings:
+        return service.resource_settings()
+
+    @app.post("/api/v1/settings/resources")
+    async def save_resource_settings(body: ClientResourceSettings) -> ClientResourceSettings:
+        return await service.set_resource_settings(body)
 
     @app.post("/api/v1/tasks/{task_id}/approvals/{approval_id}")
     async def approve(task_id: str, approval_id: str, body: ApprovalDecision) -> TaskState:

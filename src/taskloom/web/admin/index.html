@@ -306,6 +306,31 @@
                     </div>
                     <p class="field-note" id="cache-wait-note">仅多上游账号（placement）时可用。</p>
                   </div>
+                  <div class="field-divider"><span>平台容量与并发配额</span></div>
+                  <div class="grid-2col">
+                    <div class="field">
+                      <label class="field-label" for="pool-capacity">全局并发容量 <code>pool_capacity</code></label>
+                      <input id="pool-capacity" class="input sm" type="number" min="1" max="64" step="1">
+                      <p class="field-note">平台模型池并发槽位数（1–64）。</p>
+                    </div>
+                    <div class="field">
+                      <label class="field-label" for="account-max-inflight">单租户在途上限 <code>account_max_inflight</code></label>
+                      <input id="account-max-inflight" class="input sm" type="number" min="1" max="64" step="1">
+                      <p class="field-note">单个租户允许并发调用的模型槽位（1–64）。</p>
+                    </div>
+                  </div>
+                  <div class="grid-2col">
+                    <div class="field">
+                      <label class="field-label" for="tokens-per-window">平台 60s Token 速率 <code>tokens_per_window</code></label>
+                      <input id="tokens-per-window" class="input sm" type="number" min="1000" max="10000000" step="1000">
+                      <p class="field-note">平台级滑动窗口总吞吐限额。</p>
+                    </div>
+                    <div class="field">
+                      <label class="field-label" for="account-tokens-per-window">租户 60s Token 速率 <code>account_tokens_per_window</code></label>
+                      <input id="account-tokens-per-window" class="input sm" type="number" min="1000" max="10000000" step="1000">
+                      <p class="field-note">单租户滑动窗口速率限额。</p>
+                    </div>
+                  </div>
                   <div class="alert error" id="settings-error" role="alert" hidden><svg class="icon"><use href="#i-alert-circle"/></svg><span id="settings-error-text"></span></div>
                   <div class="form-actions">
                     <button type="button" class="btn outline sm" id="settings-reset" hidden>撤销修改</button>

@@ -115,7 +115,12 @@ class GatewayService:
         saved = await self.store.get("scheduler_settings", "current")
         if saved is not None:
             settings = SchedulerSettings(
-                policy=saved["policy"], cache_wait_seconds=saved["cache_wait_seconds"]
+                policy=saved.get("policy"),
+                cache_wait_seconds=saved.get("cache_wait_seconds"),
+                pool_capacity=saved.get("pool_capacity"),
+                account_max_inflight=saved.get("account_max_inflight"),
+                tokens_per_window=saved.get("tokens_per_window"),
+                account_tokens_per_window=saved.get("account_tokens_per_window"),
             )
             self._apply_settings(settings)
             self.policy_changed_at = saved.get("changed_at")
@@ -887,6 +892,32 @@ class GatewayService:
             changes.append(f"policy {policy} -> {settings.policy}")
         if settings.cache_wait_seconds is not None and settings.cache_wait_seconds != wait:
             changes.append(f"cache_wait {wait:g} -> {settings.cache_wait_seconds:g}")
+        if (
+            settings.pool_capacity is not None
+            and settings.pool_capacity != self.config.pool_capacity
+        ):
+            changes.append(f"pool_capacity {self.config.pool_capacity} -> {settings.pool_capacity}")
+        if (
+            settings.account_max_inflight is not None
+            and settings.account_max_inflight != self.config.account_max_inflight
+        ):
+            changes.append(
+                f"account_max_inflight {self.config.account_max_inflight} -> {settings.account_max_inflight}"
+            )
+        if (
+            settings.tokens_per_window is not None
+            and settings.tokens_per_window != self.config.tokens_per_window
+        ):
+            changes.append(
+                f"tokens_per_window {self.config.tokens_per_window} -> {settings.tokens_per_window}"
+            )
+        if (
+            settings.account_tokens_per_window is not None
+            and settings.account_tokens_per_window != self.config.account_tokens_per_window
+        ):
+            changes.append(
+                f"account_tokens_per_window {self.config.account_tokens_per_window} -> {settings.account_tokens_per_window}"
+            )
         return changes
 
     def _apply_settings(self, settings: SchedulerSettings) -> None:
@@ -899,10 +930,35 @@ class GatewayService:
             update["cache_wait_seconds"] = wait
             if self.placement is not None:
                 self.placement.wait_seconds = wait
+        if (
+            settings.pool_capacity is not None
+            and settings.pool_capacity != self.config.pool_capacity
+        ):
+            update["pool_capacity"] = settings.pool_capacity
+        if (
+            settings.account_max_inflight is not None
+            and settings.account_max_inflight != self.config.account_max_inflight
+        ):
+            update["account_max_inflight"] = settings.account_max_inflight
+            for acc in self.accounts.accounts.values():
+                acc.max_inflight = settings.account_max_inflight
+        if (
+            settings.tokens_per_window is not None
+            and settings.tokens_per_window != self.config.tokens_per_window
+        ):
+            update["tokens_per_window"] = settings.tokens_per_window
+        if (
+            settings.account_tokens_per_window is not None
+            and settings.account_tokens_per_window != self.config.account_tokens_per_window
+        ):
+            update["account_tokens_per_window"] = settings.account_tokens_per_window
+            for acc in self.accounts.accounts.values():
+                acc.tokens_per_window = settings.account_tokens_per_window
         if update:
             # The configuration object is shared with the app and the account service, so the
             # effective values are replaced here rather than changed in place.
             self.config = self.config.model_copy(update=update)
+            self.accounts.config = self.config
 
     async def update_settings(self, settings: SchedulerSettings) -> SchedulerSnapshot:
         async with self.lock:
@@ -928,6 +984,18 @@ class GatewayService:
                                 "cache_wait_seconds": self.config.cache_wait_seconds
                                 if wait is None
                                 else wait,
+                                "pool_capacity": self.config.pool_capacity
+                                if settings.pool_capacity is None
+                                else settings.pool_capacity,
+                                "account_max_inflight": self.config.account_max_inflight
+                                if settings.account_max_inflight is None
+                                else settings.account_max_inflight,
+                                "tokens_per_window": self.config.tokens_per_window
+                                if settings.tokens_per_window is None
+                                else settings.tokens_per_window,
+                                "account_tokens_per_window": self.config.account_tokens_per_window
+                                if settings.account_tokens_per_window is None
+                                else settings.account_tokens_per_window,
                                 "changed_at": changed_at,
                             },
                         )
@@ -1065,6 +1133,8 @@ class GatewayService:
                 for r in unknown
             ],
             events=list(reversed(self.events)),
+            account_max_inflight=self.config.account_max_inflight,
+            account_tokens_per_window=self.config.account_tokens_per_window,
         )
 
     async def feedback(self, tenant: str) -> PlatformFeedback:

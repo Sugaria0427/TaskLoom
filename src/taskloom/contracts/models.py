@@ -53,6 +53,17 @@ class DemoSettings(Contract):
     cap_seconds: float = Field(default=120, ge=1, le=120, allow_inf_nan=False)
 
 
+class ClientResourceSettings(Contract):
+    tool_slots: int = Field(default=2, ge=1, le=16)
+    memory_budget_mib: int = Field(default=512, ge=128, le=16384)
+    max_inflight: int = Field(default=2, ge=1, le=16)
+    artifact_budget_mib: int = Field(default=64, ge=1, le=1024)
+    phase_banker: bool = True
+    staged_tools: bool = False
+    large_tool_protection: bool = True
+    protection_seconds: float = Field(default=5.0, gt=0, le=3600, allow_inf_nan=False)
+
+
 class DemoTiming(Contract):
     kind: Literal["workload", "fixed"]
     amount: int = Field(ge=0)
@@ -732,11 +743,22 @@ class SchedulerSettings(Contract):
 
     policy: SchedulingPolicyName | None = None
     cache_wait_seconds: float | None = Field(default=None, ge=0, le=600)
+    pool_capacity: int | None = Field(default=None, ge=1, le=64)
+    account_max_inflight: int | None = Field(default=None, ge=1, le=64)
+    tokens_per_window: int | None = Field(default=None, ge=1, le=10000000)
+    account_tokens_per_window: int | None = Field(default=None, ge=1, le=10000000)
 
     @model_validator(mode="after")
     def some_change(self) -> "SchedulerSettings":
-        if self.policy is None and self.cache_wait_seconds is None:
-            raise ValueError("Provide policy or cache_wait_seconds")
+        if (
+            self.policy is None
+            and self.cache_wait_seconds is None
+            and self.pool_capacity is None
+            and self.account_max_inflight is None
+            and self.tokens_per_window is None
+            and self.account_tokens_per_window is None
+        ):
+            raise ValueError("Provide at least one setting to change")
         return self
 
 
@@ -845,3 +867,5 @@ class SchedulerSnapshot(Contract):
     upstream: list[SchedulerUpstream]
     unknown: list[SchedulerUnknown]
     events: list[SchedulerEvent]
+    account_max_inflight: int = 1
+    account_tokens_per_window: int = 50000

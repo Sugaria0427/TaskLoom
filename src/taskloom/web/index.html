@@ -111,6 +111,61 @@
   </div>
   <div class="mobile-backdrop" id="mobile-backdrop" hidden></div>
   <dialog id="settings-dialog" class="settings-dialog" aria-label="个人端设置"><div class="dialog-heading"><div><p class="eyebrow">PLATFORM CONNECTION</p><h2>个人端设置</h2></div><button class="icon-button" data-close-dialog="settings-dialog" aria-label="关闭设置"><svg class="icon"><use href="#i-close"/></svg></button></div><p class="dialog-description">个人端使用 TaskLoom 平台账号调用共享模型服务。</p><div class="settings-account" id="settings-account"></div><form id="platform-form"><label for="platform-url">TaskLoom 平台 API 地址</label><input id="platform-url" type="url" value="http://127.0.0.1:8796" required><div class="connection-grid"><div><label for="username">平台用户名</label><input id="username" autocomplete="username" pattern="[a-z][a-z0-9_-]{2,31}" placeholder="例如 charlie"></div><div><label for="password">账号密码</label><input id="password" type="password" autocomplete="current-password" minlength="10" maxlength="128" placeholder="至少 10 个字符"></div></div><div class="dialog-actions"><button type="button" id="login" class="primary-button">登录并连接</button><button type="button" id="register" class="secondary-button">注册并连接</button></div><details class="agent-config"><summary>Agent 提示词与工作目录</summary><p id="agent-workspace"></p><pre id="agent-prompt"></pre></details><div class="form-separator"><span>或使用已有凭证</span></div><label for="api-key">平台账号 API Key</label><input id="api-key" type="password" autocomplete="off" placeholder="粘贴平台注册账号下的 API Key"><button type="submit" id="connect" class="secondary-button full-width">使用 API Key 连接</button><p class="input-hint">凭证保存在本机当前 profile。更换平台或账号时，使用独立 profile 保存任务与账本。</p><p id="connection-error" class="form-error" role="alert"></p></form>
+    <section class="resource-settings" aria-label="本地资源与工具限额">
+      <form id="resource-form">
+        <div class="resource-heading">
+          <div>
+            <p class="eyebrow">LOCAL RESOURCE LIMITS</p>
+            <h3>本地执行与工具限额</h3>
+          </div>
+        </div>
+        <p class="dialog-description">配置当前个人端的本地工具并发槽位、内存预算与防饥饿/防死锁保护策略。配置立即应用于本地调度器。</p>
+        <div class="resource-grid">
+          <div>
+            <label for="res-tool-slots">工具并发槽位 <code>tool_slots</code></label>
+            <input id="res-tool-slots" type="number" min="1" max="16" value="2" required>
+            <span class="field-hint">允许同时执行的本地工具进程数（默认 2）</span>
+          </div>
+          <div>
+            <label for="res-memory-budget">内存总预算 / MiB <code>memory_budget_mib</code></label>
+            <input id="res-memory-budget" type="number" min="128" max="16384" step="64" value="512" required>
+            <span class="field-hint">工具进程 cgroup / 内存安全总额（默认 512）</span>
+          </div>
+          <div>
+            <label for="res-max-inflight">模型在途上限 <code>max_inflight</code></label>
+            <input id="res-max-inflight" type="number" min="1" max="16" value="2" required>
+            <span class="field-hint">个人端向平台同时请求的最大在途数（默认 2）</span>
+          </div>
+          <div>
+            <label for="res-artifact-budget">产物预算 / MiB <code>artifact_budget_mib</code></label>
+            <input id="res-artifact-budget" type="number" min="1" max="1024" step="16" value="64" required>
+            <span class="field-hint">任务输出结果与总结大小上限（默认 64）</span>
+          </div>
+        </div>
+        <div class="resource-switches">
+          <label>
+            <input id="res-staged-tools" type="checkbox">
+            <span>启用阶段工具 staged_top_words，演示内存扩容与银行家检查</span>
+          </label>
+          <label>
+            <input id="res-phase-banker" type="checkbox" checked>
+            <span>开启 Phase Banker 安全性检查（预防资源死锁）</span>
+          </label>
+          <label>
+            <input id="res-large-protection" type="checkbox" checked>
+            <span>开启大任务租约保护（防小任务绕行饥饿）</span>
+          </label>
+          <div class="protection-seconds-field">
+            <label for="res-protection-seconds">大任务保护等待 / 秒 <code>protection_seconds</code></label>
+            <input id="res-protection-seconds" type="number" min="0.5" max="300" step="0.5" value="5.0" required>
+          </div>
+        </div>
+        <div class="dialog-actions">
+          <button id="save-resources" type="submit" class="primary-button">保存资源设置</button>
+        </div>
+        <p id="resource-status" class="form-hint" role="status"></p>
+      </form>
+    </section>
     <section class="demo-settings" aria-label="调试模式与耗时映射">
       <form id="demo-form">
         <div class="demo-heading"><h3>调试模式 · 调度演示</h3><label class="demo-toggle"><input type="checkbox" name="enabled" role="switch">开启耗时映射</label></div>

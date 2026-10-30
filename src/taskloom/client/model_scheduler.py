@@ -141,6 +141,18 @@ class ModelScheduler:
         self._executions: dict[str, asyncio.Task[None]] = {}
 
     @property
+    def max_inflight(self) -> int:
+        """本地在途上限。"""
+        return self._max_inflight
+
+    @max_inflight.setter
+    def max_inflight(self, value: int) -> None:
+        if value < 1:
+            raise ValueError("max_inflight must be >= 1")
+        self._max_inflight = value
+        self._wake.set()
+
+    @property
     def in_flight(self) -> int:
         """当前正在派发的请求数。"""
         return len(self._in_flight)
