@@ -7,8 +7,14 @@
   <meta name="theme-color" content="#f7f8fa">
   <title>TaskLoom · 织序</title>
   <link rel="icon" href="/static/mark.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/static/style.css?v=workbench-1">
-  <script src="/static/api.js?v=workbench-1" defer></script>
+  <link rel="stylesheet" href="/static/style.css?v=inspector-resize-1">
+  <link rel="stylesheet" href="/static/scheduler-tree.css?v=session-inline-actions-2">
+  <script src="/static/workflow-model.js?v=session-inline-actions-2" defer></script>
+  <script src="/static/scheduler-tree.js?v=session-inline-actions-2" defer></script>
+  <script src="/static/api.js?v=session-management-1" defer></script>
+  <script src="/static/inspector-resize.js?v=1" defer></script>
+<link rel="stylesheet" href="/static/demo-settings.css?v=1">
+  <script src="/static/demo-settings.js?v=1" defer></script>
 </head>
 <body>
   <svg class="svg-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -59,7 +65,7 @@
       <header class="topbar">
         <button class="icon-button mobile-menu" id="toggle-sidebar" aria-label="打开导航"><svg class="icon"><use href="#i-menu"/></svg></button>
         <div class="page-heading"><span class="breadcrumb" id="breadcrumb">个人工作台</span><h1 id="page-title">新会话</h1></div>
-        <div class="header-actions"><span class="model-badge"><span class="live-dot"></span><span id="model-name">平台模型</span><span id="model-mode" class="mode-pill">连接中</span></span><button class="icon-button conversation-action" id="rename-chat" aria-label="重命名会话" title="重命名会话" hidden><svg class="icon"><use href="#i-edit"/></svg></button><button class="icon-button conversation-action" id="archive-chat" aria-label="归档会话" title="归档会话" hidden><svg class="icon"><use href="#i-archive"/></svg></button><span class="header-divider"></span><button class="icon-button" id="toggle-inspector" aria-label="显示执行面板" title="执行面板" aria-expanded="true"><svg class="icon"><use href="#i-panel"/></svg></button></div>
+        <div class="header-actions"><span class="model-badge"><span class="live-dot"></span><span id="model-name">平台模型</span><span id="demo-mode-badge" class="demo-tag" hidden></span><span id="model-mode" class="mode-pill">连接中</span></span><button class="icon-button conversation-action" id="rename-chat" aria-label="重命名会话" title="重命名会话" hidden><svg class="icon"><use href="#i-edit"/></svg></button><button class="icon-button conversation-action" id="archive-chat" aria-label="归档会话" title="归档会话" hidden><svg class="icon"><use href="#i-archive"/></svg></button><span class="header-divider"></span><button class="icon-button" id="toggle-inspector" aria-label="显示执行面板" title="执行面板" aria-expanded="true"><svg class="icon"><use href="#i-panel"/></svg></button></div>
       </header>
       <section class="chat-view" id="chat-view" aria-label="Agent 会话">
         <div class="chat-scroll" id="chat-scroll">
@@ -83,10 +89,52 @@
       </section>
       <footer class="statusbar"><span><span class="live-dot"></span><span id="runtime-status">本地执行环境正在连接</span></span><span id="statusbar-queue">工具与模型队列 —</span><span id="statusbar-feedback">平台反馈 —</span></footer>
     </main>
-    <aside class="inspector" id="inspector" aria-label="执行与资源面板"><div class="inspector-heading"><div><span class="live-dot"></span><h2>执行与资源</h2></div><button id="close-inspector" class="icon-button" aria-label="收起执行面板"><svg class="icon"><use href="#i-close"/></svg></button></div><div class="inspector-scroll"><section class="inspector-section"><div class="section-heading"><h3>当前会话</h3><span id="session-task-count">0 项任务</span></div><div class="session-stats" id="session-stats"></div><div id="current-execution"></div></section><section class="inspector-section"><div class="section-heading"><h3>本地资源</h3><span class="layer-label">L1 — L3</span></div><div id="local-resources"></div></section><section class="inspector-section"><div class="section-heading"><h3>平台模型服务</h3><span class="layer-label">L4</span></div><div id="platform-resources"></div><button class="inline-link" id="inspect-monitor">查看完整调度监控<svg class="icon"><use href="#i-arrow-right"/></svg></button></section><section class="inspector-section"><div class="section-heading"><h3>最近动态</h3><span>会话范围</span></div><div id="recent-events"></div></section><div class="data-provenance"><svg class="icon"><use href="#i-info"/></svg><p id="data-provenance">指标来自本地调度器与平台账本。</p></div></div></aside>
+    <aside class="inspector" id="inspector" aria-label="执行与资源面板"><div id="inspector-resizer" class="inspector-resizer" role="separator" aria-label="调整右侧栏宽度" aria-orientation="vertical" aria-controls="inspector" tabindex="0" title="拖动调整宽度；双击恢复默认宽度"></div><div class="inspector-heading"><div><span class="live-dot"></span><h2>执行与资源</h2></div><button id="close-inspector" class="icon-button" aria-label="收起执行面板"><svg class="icon"><use href="#i-close"/></svg></button></div><div class="inspector-tabs" role="tablist" aria-label="运行观测视图"><button id="inspector-tab-resources" role="tab" aria-selected="true" aria-controls="inspector-panel-resources">执行与资源</button><button id="inspector-tab-tree" role="tab" aria-selected="false" aria-controls="inspector-panel-tree" tabindex="-1">Workflows</button></div><div class="inspector-scroll" id="inspector-panel-resources" role="tabpanel" aria-labelledby="inspector-tab-resources"><section class="inspector-section"><div class="section-heading"><h3>当前会话</h3><span id="session-task-count">0 项任务</span></div><div class="session-stats" id="session-stats"></div><div id="current-execution"></div></section><section class="inspector-section"><div class="section-heading"><h3>本地资源</h3><span class="layer-label">L1 — L3</span></div><div id="local-resources"></div></section><section class="inspector-section"><div class="section-heading"><h3>平台模型服务</h3><span class="layer-label">L4</span></div><div id="platform-resources"></div><button class="inline-link" id="inspect-monitor">查看完整调度监控<svg class="icon"><use href="#i-arrow-right"/></svg></button></section><section class="inspector-section"><div class="section-heading"><h3>最近动态</h3><span>会话范围</span></div><div id="recent-events"></div></section><div class="data-provenance"><svg class="icon"><use href="#i-info"/></svg><p id="data-provenance">指标来自本地调度器与平台账本。</p></div></div>
+      <div class="schedule-panel" id="inspector-panel-tree" role="tabpanel" aria-labelledby="inspector-tab-tree" hidden>
+        <div class="workflow-header">
+          <div class="schedule-live" id="schedule-connection"><span class="live-dot"></span><span id="schedule-freshness">正在读取调度器状态</span></div>
+          <div class="workflow-heading"><h3>Workflows</h3><button id="workflow-expand" type="button" aria-expanded="false" title="在更大的区域查看同一画布">展开画布</button></div>
+          <p id="schedule-count">0 项活跃 · 0 条 workflow</p>
+          <div class="workflow-navigation"><details id="workflow-session-menu" class="workflow-session-menu"><summary id="workflow-picker" aria-label="选择会话并管理画布展示"><span id="workflow-picker-label">选择会话…</span><span class="workflow-picker-chevron" aria-hidden="true">⌄</span></summary><div id="workflow-session-list" class="workflow-session-list" role="group" aria-label="会话展示管理"></div></details><button id="workflow-focus" type="button">定位活跃</button></div>
+          <div class="workflow-session-actions" role="group" aria-label="当前选中会话的画布管理"><button id="workflow-locate-session" type="button" disabled>定位</button><button id="workflow-rename-session" type="button" disabled>重命名</button></div><p id="workflow-session-note" class="workflow-session-note">展开列表可直接加入或移出；选中后点击定位。</p>
+        </div>
+        <div class="workflow-canvas" id="workflow-canvas" tabindex="0" role="region" aria-label="任务工作流自由画布。拖动空白平移，滚轮缩放；方向键平移，加减键缩放，0 键适应全图。">
+          <div id="workflow-world" class="workflow-world"><div id="workflow-frames"></div><svg id="workflow-edges" class="workflow-edges" aria-hidden="true"></svg><div id="workflow-nodes"></div></div>
+          <div id="workflow-empty" class="workflow-empty"><strong>任务会在这里连接成流程。</strong><p>提交任务后，可在同一画布查看执行步骤、并行工具和调度候选。</p></div>
+        </div>
+        <div class="workflow-toolbar" role="group" aria-label="画布缩放与定位"><button id="workflow-zoom-out" type="button" aria-label="缩小画布">−</button><button id="workflow-zoom" type="button" title="恢复到 100%">100%</button><button id="workflow-zoom-in" type="button" aria-label="放大画布">＋</button><span></span><button id="workflow-fit" type="button">适应全图</button></div>
+        <div class="workflow-legend"><span><i class="running"></i>执行</span><span><i class="waiting"></i>等待</span><span><i class="done"></i>完成</span><span><i class="prediction"></i>调度候选</span></div>
+        <section id="workflow-details" class="workflow-details" aria-label="选中节点详情" hidden><div class="workflow-detail-heading"><h4 id="workflow-detail-title" tabindex="-1">节点详情</h4><button id="workflow-detail-close" type="button" aria-label="关闭节点详情">×</button></div><div id="workflow-detail-body" class="workflow-detail-body"></div></section>
+        <p class="workflow-footnote">拖动空白移动，滚轮缩放，点击节点查看详情。实线表示步骤依赖，虚线表示入口或调度候选。活跃任务全部保留，历史任务按最近结束时间补足 5 条。</p>
+      </div>
+    </aside>
   </div>
   <div class="mobile-backdrop" id="mobile-backdrop" hidden></div>
-  <dialog id="settings-dialog" class="settings-dialog" aria-label="平台账号与连接"><div class="dialog-heading"><div><p class="eyebrow">PLATFORM CONNECTION</p><h2>平台账号与连接</h2></div><button class="icon-button" data-close-dialog="settings-dialog" aria-label="关闭设置"><svg class="icon"><use href="#i-close"/></svg></button></div><p class="dialog-description">个人端使用 TaskLoom 平台账号调用共享模型服务。</p><div class="settings-account" id="settings-account"></div><form id="platform-form"><label for="platform-url">TaskLoom 平台 API 地址</label><input id="platform-url" type="url" value="http://127.0.0.1:8796" required><div class="connection-grid"><div><label for="username">平台用户名</label><input id="username" autocomplete="username" pattern="[a-z][a-z0-9_-]{2,31}" placeholder="例如 charlie"></div><div><label for="password">账号密码</label><input id="password" type="password" autocomplete="current-password" minlength="10" maxlength="128" placeholder="至少 10 个字符"></div></div><div class="dialog-actions"><button type="button" id="login" class="primary-button">登录并连接</button><button type="button" id="register" class="secondary-button">注册并连接</button></div><details class="agent-config"><summary>Agent 提示词与工作目录</summary><p id="agent-workspace"></p><pre id="agent-prompt"></pre></details><div class="form-separator"><span>或使用已有凭证</span></div><label for="api-key">平台账号 API Key</label><input id="api-key" type="password" autocomplete="off" placeholder="粘贴平台注册账号下的 API Key"><button type="submit" id="connect" class="secondary-button full-width">使用 API Key 连接</button><p class="input-hint">凭证保存在本机当前 profile。更换平台或账号时，使用独立 profile 保存任务与账本。</p><p id="connection-error" class="form-error" role="alert"></p></form></dialog>
+  <dialog id="settings-dialog" class="settings-dialog" aria-label="个人端设置"><div class="dialog-heading"><div><p class="eyebrow">PLATFORM CONNECTION</p><h2>个人端设置</h2></div><button class="icon-button" data-close-dialog="settings-dialog" aria-label="关闭设置"><svg class="icon"><use href="#i-close"/></svg></button></div><p class="dialog-description">个人端使用 TaskLoom 平台账号调用共享模型服务。</p><div class="settings-account" id="settings-account"></div><form id="platform-form"><label for="platform-url">TaskLoom 平台 API 地址</label><input id="platform-url" type="url" value="http://127.0.0.1:8796" required><div class="connection-grid"><div><label for="username">平台用户名</label><input id="username" autocomplete="username" pattern="[a-z][a-z0-9_-]{2,31}" placeholder="例如 charlie"></div><div><label for="password">账号密码</label><input id="password" type="password" autocomplete="current-password" minlength="10" maxlength="128" placeholder="至少 10 个字符"></div></div><div class="dialog-actions"><button type="button" id="login" class="primary-button">登录并连接</button><button type="button" id="register" class="secondary-button">注册并连接</button></div><details class="agent-config"><summary>Agent 提示词与工作目录</summary><p id="agent-workspace"></p><pre id="agent-prompt"></pre></details><div class="form-separator"><span>或使用已有凭证</span></div><label for="api-key">平台账号 API Key</label><input id="api-key" type="password" autocomplete="off" placeholder="粘贴平台注册账号下的 API Key"><button type="submit" id="connect" class="secondary-button full-width">使用 API Key 连接</button><p class="input-hint">凭证保存在本机当前 profile。更换平台或账号时，使用独立 profile 保存任务与账本。</p><p id="connection-error" class="form-error" role="alert"></p></form>
+    <section class="demo-settings" aria-label="调试模式与耗时映射">
+      <form id="demo-form">
+        <div class="demo-heading"><h3>调试模式 · 调度演示</h3><label class="demo-toggle"><input type="checkbox" name="enabled" role="switch">开启耗时映射</label></div>
+        <p>延长工具和模型服务的占用时间，让排队、分配与取消过程更清晰。配置应用于新任务，正在执行的任务保留原设置。</p>
+        <div class="demo-controls">
+          <label class="demo-wide">映射强度 <output id="demo-strength-value">10 倍</output><input type="range" name="strength" min="1" max="100" step="1" value="10"></label>
+          <label>曲线指数（1 为线性）<input type="number" name="exponent" min="0.25" max="2" step="0.25" value="1" required></label>
+          <label>单次目标上限 / 秒<input type="number" name="cap_seconds" min="1" max="120" value="120" required></label>
+          <label>22 KiB 文本基准 / ms<input type="number" name="text_reference_ms" min="10" max="5000" value="200" required></label>
+          <label>固定工具基准 / ms<input type="number" name="fixed_tool_ms" min="10" max="5000" value="100" required></label>
+          <label class="demo-wide">1,000 输入估算 Token 的模型基准 / ms<input type="number" name="model_reference_ms" min="10" max="5000" value="500" required></label>
+          <label class="demo-inline"><input type="checkbox" name="tools" checked>映射本地工具</label>
+          <label class="demo-inline"><input type="checkbox" name="models" checked>映射平台响应</label>
+          <label class="demo-inline demo-wide"><input type="checkbox" name="model_workload" checked>模型按上下文规模映射（关闭后使用固定模型基准）</label>
+        </div>
+        <svg id="demo-curve" class="demo-chart" viewBox="0 0 420 160" role="img" aria-label="任务量与映射目标耗时曲线"></svg>
+        <div class="demo-legend"><span style="--curve:#28755d">文本工具</span><span style="--curve:#4e74b8">模型请求</span><span style="--curve:#b77b32">固定工具</span></div>
+        <p>横轴为任务量相对基准的倍数，纵轴为目标秒数。文本工具按文件字节数映射；列文件、执行命令使用固定基准。目标 = 基准 × 任务量比例的曲线次方 × 强度，并受单次上限约束。</p>
+        <p id="demo-samples"></p>
+        <p>实际调用完成较快时补足目标时间，较慢时保留真实耗时。演示等待计入资源占用，模型内容和真实消费照常记录；合成长期实验独立运行。</p>
+        <button id="demo-save" type="submit" class="primary-button">保存调试设置</button>
+        <p id="demo-status" role="status"></p>
+      </form>
+    </section></dialog>
   <dialog id="rename-dialog" class="rename-dialog" aria-label="重命名会话"><form id="rename-form"><div class="dialog-heading"><h2>重命名会话</h2><button type="button" class="icon-button" data-close-dialog="rename-dialog" aria-label="关闭重命名"><svg class="icon"><use href="#i-close"/></svg></button></div><label for="conversation-title">会话名称</label><input id="conversation-title" maxlength="120" required><p id="rename-error" class="form-error" role="alert"></p><div class="dialog-actions"><button type="button" class="secondary-button" data-close-dialog="rename-dialog">取消</button><button type="submit" class="primary-button" id="save-title">保存名称</button></div></form></dialog>
   <div id="toast" class="toast" role="status" hidden></div>
 </body>

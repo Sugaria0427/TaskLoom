@@ -40,8 +40,9 @@ from typing import cast
 from taskloom.client.feedback_decision import (
     account_decision,
     request_decision,
+    stale_feedback,
 )
-from taskloom.contracts.models import GatewayRecord, ModelRequest, PlatformFeedback
+from taskloom.contracts.models import GatewayRecord, JsonObject, ModelRequest, PlatformFeedback
 from taskloom.policies.aging import AgingQueue
 
 _DEFAULT_RETRY_SECONDS = 0.1
@@ -163,6 +164,67 @@ class ModelScheduler:
     async def start(self) -> None:
         """启动后台调度循环。"""
         self._loop = asyncio.create_task(self._run())
+
+    def observation(self, feedback: PlatformFeedback | None) -> JsonObject:
+        """Expose queue facts and a conditional local candidate without sending feedback I/O."""
+        now = self._now()
+        blocked = None
+        if self.in_flight >= self._max_inflight:
+            blocked = "local_backpressure"
+        elif self._coordinated:
+            if feedback is None:
+                blocked = "feedback_unavailable"
+            else:
+                decision = account_decision(
+                    feedback,
+                    now=lambda: now,
+                    in_flight=self.in_flight,
+                    max_inflight=self._max_inflight,
+                    coordinated=True,
+                    has_queued=feedback.account_queued > 0,
+                )
+                if decision.action != "submit":
+                    blocked = decision.reason
+
+        def eligible(pending: _Pending) -> bool:
+            return self._eligible(pending) and _deadline_epoch(pending.request, self._now) > now
+
+        accept = self._acceptor(feedback) if self._coordinated and feedback else None
+        chosen, reason = self._queue.preview(eligible=eligible, accept=accept)
+        if self._coordinated and (feedback is None or stale_feedback(feedback, now=lambda: now)):
+            chosen = None
+        return {
+            "policy": "cost_drr_deadline_aging",
+            "blocked_by": blocked,
+            "next_attempt_id": chosen.request.attempt_id if chosen else None,
+            "selection_reason": reason,
+            "conditional": blocked is not None,
+            "entries": [
+                {
+                    "attempt_id": pending.request.attempt_id,
+                    "root_task_id": owner,
+                    "enqueued_at": enqueued,
+                    "cost_units": pending.charge_units,
+                    "deficit_units": self._queue.deficit(owner),
+                    "priority": pending.priority,
+                    "blocked_by": (
+                        "deadline_expired"
+                        if not eligible(pending)
+                        else blocked
+                        or (
+                            request_decision(feedback, request=pending.request).reason
+                            if self._coordinated
+                            and feedback
+                            and request_decision(feedback, request=pending.request).action
+                            != "submit"
+                            else None
+                        )
+                    ),
+                }
+                for owner, pending, enqueued in self._queue.entries()
+                if not pending.future.done()
+            ],
+        }
 
     async def submit(
         self,

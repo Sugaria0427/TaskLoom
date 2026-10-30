@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Literal
 
 from taskloom.client.checkpoint_upgrade import upgrade_checkpoint
+from taskloom.client.demo import timing_plan
 from taskloom.client.dispatcher import Dispatcher, QuarantinedExecution
 from taskloom.client.feedback_decision import request_decision
 from taskloom.client.feedback_source import FeedbackSource
@@ -19,6 +20,7 @@ from taskloom.contracts.models import (
     ClientConfig,
     ConversationState,
     ConversationUpdate,
+    DemoSettings,
     GatewayRecord,
     JsonObject,
     ModelReply,
@@ -83,6 +85,7 @@ class ClientService:
         )
         self.workspace_root.mkdir(parents=True, exist_ok=True)
         self.approval_waiters: dict[str, asyncio.Future[bool]] = {}
+        self.demo_settings = DemoSettings()
         self.platform_feedback_source = FeedbackSource(
             self.gateway.feedback, config.feedback_interval_seconds
         )
@@ -112,6 +115,9 @@ class ClientService:
         self.platform_error: str | None = None
 
     async def start(self) -> None:
+        saved_demo = await self.store.get("settings", "demo-timing")
+        if saved_demo:
+            self.demo_settings = DemoSettings.model_validate(saved_demo)
         binding = await self.store.get("profile", "platform-account")
         if binding is not None:
             self.config.tenant_id = binding["account_id"]
@@ -254,6 +260,25 @@ class ClientService:
         previous = self.attempts.get(attempt.attempt_id)
         if previous is not None and previous.settled:
             return
+        observed = utc_now()
+        if previous is not None:
+            attempt.created_at = previous.created_at
+            attempt.dispatched_at = previous.dispatched_at
+            attempt.completed_at = previous.completed_at
+            attempt.predecessors = previous.predecessors
+        attempt.state_changed_at = (
+            previous.state_changed_at
+            if previous is not None and previous.state == attempt.state
+            else observed
+        )
+        if (
+            attempt.state == WorkState.RUNNING
+            and attempt.dispatched_at is None
+            and (previous is None or previous.state != WorkState.RUNNING)
+        ):
+            attempt.dispatched_at = observed
+        if attempt.settled and attempt.quiescent and attempt.completed_at is None:
+            attempt.completed_at = observed
         task = self.get(attempt.root_task_id)
         all_attempts = dict(self.attempts)
         all_attempts[attempt.attempt_id] = attempt
@@ -423,6 +448,7 @@ class ClientService:
                 agent_id=identity(),
                 tenant_id=self.config.tenant_id,
                 specification=specification,
+                demo_settings=self.demo_settings.model_copy(deep=True),
                 input_version=digest(specification.documents),
                 deadline_at=(
                     datetime.now(UTC) + timedelta(seconds=specification.deadline_seconds)
@@ -503,6 +529,8 @@ class ClientService:
                 kind=kind,
                 generation=task.cancel_generation,
                 request_payload=request_payload,
+                created_at=utc_now(),
+                state_changed_at=utc_now(),
             )
             task.step_attempts[step] = attempt.attempt_id
             checkpoint = task.branches[branch].checkpoint if branch else task.checkpoint
@@ -542,6 +570,7 @@ class ClientService:
                 predecessors=predecessors,
                 current_attempt_id=attempt.attempt_id,
             )
+            attempt.predecessors = list(predecessors)
             await self.store.apply(
                 [
                     StoredRecord("task", task_id, task.tenant_id, task.model_dump(mode="json")),
@@ -1004,6 +1033,10 @@ class ClientService:
                 "platform_created_at": record.created_at,
                 "platform_dispatched_at": record.dispatched_at,
                 "platform_completed_at": record.completed_at,
+                "provider_completed_at": record.provider_completed_at,
+                "demo_timing": record.request.demo_timing.model_dump()
+                if record.request.demo_timing
+                else None,
             }
             attempt.error = record.error
             attempt.settled = record.state == "FINISHED"
@@ -1046,6 +1079,7 @@ class ClientService:
                 and self.platform_feedback_source.latest.pool_kind == "fixed-http"
                 else "fixture",
             )
+            request.demo_timing = timing_plan(task.demo_settings, "model", request.input_tokens)
             attempt.request_payload = request.model_dump(mode="json")
         request = ModelRequest.model_validate(attempt.request_payload)
         if attempt.fair_charge_units is None:
@@ -1147,6 +1181,19 @@ class ClientService:
                     ToolCall(call_id="legacy", name="file_stats"),
                 )
             profile = tool_profile(call.name)
+            size = sum(len(text.encode()) for text in task.specification.documents.values())
+            if call.name == "read_file":
+                path = local_path(call.arguments["path"], self.workspace_root)
+                if readable(
+                    path,
+                    self.workspace_root,
+                    (self.directory / "tasks").resolve(),
+                    (task.pending_approval or {}).get("path"),
+                ):
+                    try:
+                        size = path.stat().st_size
+                    except OSError:
+                        size = 0
             request = ToolRun(
                 attempt_id=attempt.attempt_id,
                 root_task_id=task.task_id,
@@ -1175,7 +1222,10 @@ class ClientService:
                 timeout_seconds=call.arguments["timeout_seconds"]
                 if call.name == "run_command"
                 else 60,
+                demo_timing=timing_plan(task.demo_settings, call.name, size),
             )
+            if request.demo_timing:
+                request.timeout_seconds += request.demo_timing.target_seconds + 2
             attempt.request_payload = request.model_dump(mode="json")
         request = ToolRun.model_validate(attempt.request_payload)
         if attempt.tool_claim is None:
@@ -1432,6 +1482,21 @@ class ClientService:
             raise DomainError(
                 "DEADLINE_EXPIRED", "Tool resource wait or execution exceeded task deadline"
             ) from None
+
+    async def set_demo_settings(self, settings: DemoSettings) -> DemoSettings:
+        async with self.lock:
+            await self.store.apply(
+                [
+                    StoredRecord(
+                        "settings",
+                        "demo-timing",
+                        self.config.tenant_id,
+                        settings.model_dump(mode="json"),
+                    )
+                ]
+            )
+            self.demo_settings = settings.model_copy(deep=True)
+        return self.demo_settings.model_copy(deep=True)
 
     def _chat_history(self, task: TaskState) -> list[JsonObject]:
         if task.specification.mode != "chat":
@@ -1762,6 +1827,13 @@ class ClientService:
                 for request_id, root_task_id in self.models.in_flight_requests
             ],
             "attempts": [a.model_dump(mode="json") for a in self.attempts.values()],
+            "scheduling": {
+                "observed_at": utc_now(),
+                "model": self.models.observation(
+                    self.platform_feedback_source.latest if self.platform_error is None else None
+                ),
+                "tool": self.tools.observation(),
+            },
         }
 
     async def close(self) -> None:

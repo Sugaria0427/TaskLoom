@@ -47,6 +47,14 @@ class FairQueue[T]:
                 self._owners.remove(owner)
         return removed
 
+    def peek(self, eligible: Callable[[T], bool] = lambda _: True) -> T | None:
+        """Return the next feasible item without rotating or removing any owner."""
+        for owner in self._owners:
+            for item in self._items[owner]:
+                if eligible(item):
+                    return item
+        return None
+
     def __len__(self) -> int:
         return sum(len(items) for items in self._items.values())
 

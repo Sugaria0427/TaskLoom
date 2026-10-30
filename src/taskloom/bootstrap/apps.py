@@ -28,6 +28,7 @@ from taskloom.contracts.models import (
     ConversationCreate,
     ConversationState,
     ConversationUpdate,
+    DemoSettings,
     GatewayRecord,
     JsonObject,
     ModelRequest,
@@ -441,6 +442,14 @@ def client_app(base: Path, config: ClientConfig) -> FastAPI:
             "skills": [{"id": key, **value} for key, value in SKILLS.items()],
             "tools": service.chat_registry.schemas(),
         }
+
+    @app.get("/api/v1/settings/demo")
+    async def demo_settings() -> DemoSettings:
+        return service.demo_settings.model_copy(deep=True)
+
+    @app.post("/api/v1/settings/demo")
+    async def save_demo_settings(body: DemoSettings) -> DemoSettings:
+        return await service.set_demo_settings(body)
 
     @app.post("/api/v1/tasks/{task_id}/approvals/{approval_id}")
     async def approve(task_id: str, approval_id: str, body: ApprovalDecision) -> TaskState:

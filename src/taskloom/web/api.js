@@ -303,6 +303,10 @@ function executionDetails(task) {
     row.append(icon(item.kind === "tool" ? "file" : "bolt"), node("span", "", stepLabel(item, index)), outcomeBadge(item), node("span", "step-cost", item.kind === "model" ? number(item.consumed_units) : "本地"));
     row.title = `${item.attempt_id} · ${item.state}`;
     list.append(row);
+    if (item.request_payload?.demo_timing) {
+      const plan = item.request_payload.demo_timing;
+      list.append(node("p", "demo-step-note", `演示映射 · ${plan.strength} 倍 · 目标 ${plan.target_seconds.toFixed(2)} s · ${plan.kind === "fixed" ? "固定基准" : "按任务量"}`));
+    }
     if (item.kind === "tool") {
       const info = node("details", "tool-output");
       info.append(node("summary", "", item.request_payload?.tool_name || "工具调用"));
@@ -344,6 +348,7 @@ function renderMessage(task) {
   const body = node("div", "assistant-body");
   const head = node("div", "assistant-head"); head.append(node("strong", "", "TaskLoom"), outcomeBadge(task));
   body.append(head);
+  if (task.demo_settings?.enabled) head.append(node("span", "demo-tag", `调试 ${task.demo_settings.strength}×`));
   if (task.result) {
     body.append(node("p", "assistant-text", task.result.content || task.result.summary || "任务已完成。"));
     if (task.result.files !== undefined && task.result.words !== undefined) {
@@ -558,6 +563,7 @@ function renderMonitor() {
 
 function render() {
   renderSidebar(); renderHeader(); renderPlatform(); renderMessages(); renderInspector(); renderMonitor();
+  window.TaskLoomTree.render(state);
   setText("error", state.error);
   const r = state.resources;
   if (state.status) {
@@ -586,6 +592,7 @@ async function refresh() {
     setText("statusbar-feedback", "连接中断 · 自动重连");
     $("connection-dot").classList.add("offline");
     state.ready = false;
+    window.TaskLoomTree.render(state);
     updateSend();
     if (!state.status) setText("error", error.message);
   } finally { state.refreshing = false; }
@@ -746,8 +753,8 @@ async function taskAction(id, action, button) {
   } catch (error) { state.error = error.message; setText("error", state.error); button.disabled = false; }
 }
 
-async function updateConversation(update) {
-  const updated = await api(`/api/v1/conversations/${state.conversationId}/update`, {method:"POST", body:JSON.stringify(update)});
+async function updateConversation(update, conversationId = state.conversationId) {
+  const updated = await api(`/api/v1/conversations/${encodeURIComponent(conversationId)}/update`, {method:"POST", body:JSON.stringify(update)});
   state.conversations = state.conversations.map((item) => item.conversation_id === updated.conversation_id ? {...item, ...updated} : item);
   render(); return updated;
 }
@@ -798,6 +805,16 @@ $("file-input").onchange = () => addFiles([...$("file-input").files]);
 $("task-options").onclick = () => { const open = $("options-panel").hidden; $("options-panel").hidden = !open; $("task-options").setAttribute("aria-expanded", String(open)); };
 $("toggle-inspector").onclick = () => showInspector(window.innerWidth <= 1020 ? !shell.classList.contains("inspector-open") : !state.inspector);
 $("close-inspector").onclick = () => { showInspector(false); $("toggle-inspector").focus(); };
+for (const tab of ["resources", "tree"]) {
+  const button = $(`inspector-tab-${tab}`);
+  button.onclick = () => { window.TaskLoomTree.select(tab); window.TaskLoomTree.render(state); };
+  button.onkeydown = (event) => {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    const next = event.key === "Home" ? "resources" : event.key === "End" ? "tree" : tab === "tree" ? "resources" : "tree";
+    window.TaskLoomTree.select(next); window.TaskLoomTree.render(state); $(`inspector-tab-${next}`).focus();
+  };
+}
 $("toggle-sidebar").onclick = () => { const show = !shell.classList.contains("sidebar-open"); closeDrawers(); shell.classList.toggle("sidebar-open", show); $("mobile-backdrop").hidden = !show; };
 $("mobile-backdrop").onclick = closeDrawers;
 $("open-settings").onclick = () => { closeDrawers(); $("settings-dialog").showModal(); };
@@ -806,13 +823,24 @@ document.querySelectorAll("dialog").forEach((dialog) => dialog.addEventListener(
 $("login").onclick = () => connectAccount("login");
 $("register").onclick = () => connectAccount("register");
 $("platform-form").onsubmit = (event) => { event.preventDefault(); connectAccount("connect"); };
-$("rename-chat").onclick = () => { $("conversation-title").value = conversation()?.title || ""; setText("rename-error", ""); $("rename-dialog").showModal(); $("conversation-title").select(); };
+function openConversationRename(conversationId) {
+  const target=state.conversations.find((item)=>item.conversation_id===conversationId);
+  if (!target) return;
+  $("rename-dialog").dataset.conversationId=conversationId;
+  $("conversation-title").value=target.title;setText("rename-error", "");
+  if (!$("rename-dialog").open) $("rename-dialog").showModal();
+  $("conversation-title").select();
+}
+$("rename-chat").onclick = () => openConversationRename(state.conversationId);
+window.addEventListener("taskloom:rename-conversation",(event)=>openConversationRename(event.detail?.conversationId));
 $("rename-form").onsubmit = async (event) => {
   event.preventDefault();
   const title = $("conversation-title").value.trim();
   if (!title) { setText("rename-error", "会话名称不能为空。"); return; }
+  const conversationId=$("rename-dialog").dataset.conversationId;
+  if (!conversationId) return;
   $("save-title").disabled = true;
-  try { await updateConversation({title}); $("rename-dialog").close(); toast("会话名称已保存。"); }
+  try { await updateConversation({title},conversationId); $("rename-dialog").close(); toast("会话名称已保存。"); }
   catch (error) { setText("rename-error", error.message); }
   finally { $("save-title").disabled = false; }
 };
@@ -833,6 +861,7 @@ window.addEventListener("resize", () => { closeDrawers(); renderHeader(); });
 window.addEventListener("beforeunload", persistDraft);
 try {
   state.inspector = localStorage.getItem("taskloom.inspector") !== "false";
+  window.TaskLoomTree.select(localStorage.getItem("taskloom.inspectorTab"));
   const draft = JSON.parse(localStorage.getItem("taskloom.draft") || "null");
   if (draft?.text) state.drafts.set(draft.conversationId || "new", {text:draft.text, attachments:[]});
 } catch { /* Server-side conversations remain available without browser storage. */ }

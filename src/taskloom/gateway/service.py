@@ -92,6 +92,7 @@ class GatewayService:
         self.wake = asyncio.Event()
         self._loop: asyncio.Task[None] | None = None
         self._active: dict[str, asyncio.Task[None]] = {}
+        self._demo_waiters: dict[str, asyncio.Event] = {}
         self._recent_roots: dict[str, float] = {}
         self._next_prune = 0.0
         self.ready = False
@@ -348,6 +349,9 @@ class GatewayService:
             if noted:
                 self._note("cancel", record, detail=detail)
             self.wake.set()
+            waiter = self._demo_waiters.get(self.key(tenant, request_id))
+            if waiter:
+                waiter.set()
             return record.model_copy(deep=True)
 
     def _refresh_window(self) -> None:
@@ -592,7 +596,24 @@ class GatewayService:
                 update={"request_id": self.pool_request_id(record)}
             )
             reply = await self.provider.generate(upstream, account=record.upstream_account)
-            await self._finish(key, reply)
+            if record.request.demo_timing:
+                async with self.lock:
+                    saved = self.requests[key].model_copy(deep=True)
+                    saved.demo_reply = reply
+                    saved.provider_completed_at = self.now()
+                    start = datetime.fromisoformat(
+                        saved.dispatched_at or saved.created_at
+                    ).timestamp()
+                    release = min(
+                        start + record.request.demo_timing.target_seconds,
+                        datetime.fromisoformat(saved.request.deadline_at).timestamp(),
+                    )
+                    saved.demo_release_at = datetime.fromtimestamp(release, UTC).isoformat()
+                    await self._save(saved)
+                    self.requests[key] = saved
+                await self._complete_demo(key)
+            else:
+                await self._finish(key, reply)
         except ProviderRejected as error:
             await self._rejected(key, error)
         except (Exception, asyncio.CancelledError) as error:
@@ -607,6 +628,27 @@ class GatewayService:
         finally:
             self._active.pop(key, None)
             self.wake.set()
+
+    async def _complete_demo(self, key: str) -> None:
+        """Hold a real platform slot; the durable reply survives cancellation and restart."""
+        waiter = asyncio.Event()
+        self._demo_waiters[key] = waiter
+        try:
+            record = self.requests[key]
+            remaining = max(
+                0,
+                datetime.fromisoformat(record.demo_release_at or self.now()).timestamp()
+                - self.clock(),
+            )
+            if remaining and not record.cancel_requested:
+                try:
+                    await asyncio.wait_for(waiter.wait(), remaining)
+                except TimeoutError:
+                    pass
+            if record.demo_reply is not None:
+                await self._finish(key, record.demo_reply)
+        finally:
+            self._demo_waiters.pop(key, None)
 
     async def _rejected(self, key: str, error: ProviderRejected) -> None:
         async with self.lock:
@@ -688,6 +730,7 @@ class GatewayService:
             record.worst_units = 0
             record.consumed_units = reply.usage.cost_units
             record.reply = reply
+            record.demo_reply = None
             record.state = "FINISHED"
             record.outcome = Outcome.CANCELLED if record.cancel_requested else Outcome.SUCCEEDED
             record.quiescent = True
@@ -747,6 +790,10 @@ class GatewayService:
         for key, record in list(self.requests.items()):
             if record.state != "UNKNOWN":
                 continue
+            if record.demo_reply is not None:
+                if key not in self._active:
+                    self._active[key] = asyncio.create_task(self._recover_demo(key))
+                continue
             try:
                 reply = await self.provider.reconcile(
                     self.pool_request_id(record), account=record.upstream_account
@@ -756,6 +803,13 @@ class GatewayService:
             except Exception:
                 # Query failures preserve the unresolved reservation.
                 continue
+
+    async def _recover_demo(self, key: str) -> None:
+        try:
+            await self._complete_demo(key)
+        finally:
+            self._active.pop(key, None)
+            self.wake.set()
 
     def status(self) -> JsonObject:
         return {

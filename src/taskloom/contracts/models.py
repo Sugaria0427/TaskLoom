@@ -40,6 +40,30 @@ class Contract(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class DemoSettings(Contract):
+    enabled: bool = False
+    tools: bool = True
+    models: bool = True
+    strength: float = Field(default=10, ge=1, le=100, allow_inf_nan=False)
+    exponent: float = Field(default=1, ge=0.25, le=2, allow_inf_nan=False)
+    text_reference_ms: float = Field(default=200, ge=10, le=5000, allow_inf_nan=False)
+    fixed_tool_ms: float = Field(default=100, ge=10, le=5000, allow_inf_nan=False)
+    model_reference_ms: float = Field(default=500, ge=10, le=5000, allow_inf_nan=False)
+    model_workload: bool = True
+    cap_seconds: float = Field(default=120, ge=1, le=120, allow_inf_nan=False)
+
+
+class DemoTiming(Contract):
+    kind: Literal["workload", "fixed"]
+    amount: int = Field(ge=0)
+    unit: Literal["bytes", "tokens", "call"]
+    reference_amount: int = Field(ge=1)
+    reference_ms: float = Field(gt=0, le=5000, allow_inf_nan=False)
+    strength: float = Field(ge=1, le=100, allow_inf_nan=False)
+    exponent: float = Field(ge=0.25, le=2, allow_inf_nan=False)
+    target_seconds: float = Field(ge=0, le=120, allow_inf_nan=False)
+
+
 class ToolCall(Contract):
     call_id: str
     name: str
@@ -98,6 +122,7 @@ class ModelRequest(Contract):
     max_tokens: int = Field(default=512, ge=1, le=4096)
     deadline_at: str
     token_count_mode: Literal["fixture", "utf8-bound"] = "fixture"
+    demo_timing: DemoTiming | None = Field(default=None, exclude_if=lambda value: value is None)
 
     @field_validator("deadline_at")
     @classmethod
@@ -167,6 +192,9 @@ class GatewayRecord(Contract):
     # Pool refusals before execution so far, and when the next dispatch may be tried.
     dispatch_attempts: int = 0
     not_before: str | None = None
+    demo_reply: ModelReply | None = None
+    demo_release_at: str | None = None
+    provider_completed_at: str | None = None
 
 
 class QuotaState(Contract):
@@ -340,6 +368,7 @@ class TaskState(Contract):
     result: JsonObject | None = None
     error: str | None = None
     pending_approval: JsonObject | None = None
+    demo_settings: DemoSettings | None = None
     created_at: str = Field(default_factory=utc_now)
     deadline_at: str
     completed_at: str | None = None
@@ -395,6 +424,12 @@ class AttemptState(Contract):
     phase_version: int = Field(default=0, ge=0, le=2)
     execution_ref: JsonObject | None = None
     error: str | None = None
+    # Observation metadata: old saved attempts keep unknown timestamps as None.
+    created_at: str | None = None
+    state_changed_at: str | None = None
+    dispatched_at: str | None = None
+    completed_at: str | None = None
+    predecessors: list[str] = Field(default_factory=list)
 
 
 class ToolRun(Contract):
@@ -423,6 +458,7 @@ class ToolRun(Contract):
     approved_external_path: str | None = None
     command_approved: bool = False
     approved_command_cwd: str | None = None
+    demo_timing: DemoTiming | None = Field(default=None, exclude_if=lambda value: value is None)
     resource_protocol: Literal["one-shot", "phase-v1"] = "one-shot"
     maximum_memory_bytes: int | None = Field(default=None, ge=16777216)
 

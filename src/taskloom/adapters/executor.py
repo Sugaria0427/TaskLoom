@@ -1,5 +1,6 @@
 import asyncio
 import json
+import signal
 import subprocess
 import sys
 import time
@@ -504,6 +505,7 @@ class ProcessExecutor:
             "approved_external_path": request.approved_external_path,
             "command_approved": request.command_approved,
             "approved_command_cwd": request.approved_command_cwd,
+            "demo_timing": request.demo_timing.model_dump() if request.demo_timing else None,
             "attempt_id": request.attempt_id,
             "generation": request.generation,
             "resource_protocol": request.resource_protocol,
@@ -624,6 +626,8 @@ class ProcessExecutor:
             except TimeoutError:
                 await asyncio.to_thread(self._stop, state)
                 code = await asyncio.to_thread(process.wait)
+                error = "TOOL_TIMEOUT"
+            if code == -signal.SIGALRM:
                 error = "TOOL_TIMEOUT"
             # A tool's root exiting does not prove its descendants exited.
             if state.pid is not None and live_group(state.pid, state.start_ticks, state.boot_id):

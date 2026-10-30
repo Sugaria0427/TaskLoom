@@ -201,6 +201,51 @@ class Dispatcher:
     def __len__(self) -> int:
         return sum(len(queue) for queue in self.queues.values())
 
+    def observation(self) -> dict[str, Any]:
+        """Preview the weighted turn; a blocked candidate assumes all local resources return."""
+        chosen = None
+        conditional = False
+        for available in (self.pool.available, self.pool.capacity):
+
+            def feasible(item: Pending[Any], budget: Resources = available) -> bool:
+                return (
+                    not item.future.done()
+                    and item.identity not in self.active
+                    and (item.identity in self.pool.allocations or item.demand.fits(budget))
+                )
+
+            for offset in range(len(self._schedule)):
+                index = (self._turn + offset) % len(self._schedule)
+                chosen = self.queues[self._schedule[index]].peek(feasible)
+                if chosen is not None:
+                    break
+            if chosen is not None:
+                break
+            conditional = True
+        return {
+            "policy": "weighted_priority_round_robin",
+            "next_attempt_id": chosen.identity if chosen else None,
+            "conditional": conditional,
+            "selection_reason": "resources_released" if conditional else "feasible_turn",
+            "entries": [
+                {
+                    "attempt_id": item.identity,
+                    "root_task_id": item.owner,
+                    "priority": item.priority,
+                    "enqueued_at": item.enqueued_at,
+                    "blocked_by": self.pool.admission(item.demand)[1]
+                    if item.identity not in self.pool.allocations
+                    else None,
+                    "shortage": asdict(self.pool.shortage(item.demand))
+                    if item.identity not in self.pool.allocations
+                    else asdict(Resources()),
+                }
+                for queue in self.queues.values()
+                for item in queue.items()
+                if not item.future.done()
+            ],
+        }
+
     def set_priority(self, identity: str, priority: str) -> bool:
         """Move a waiting request; running work keeps its current allocation."""
         if priority not in self.queues:

@@ -324,6 +324,17 @@ class CostDRR[T]:
         """按轮转顺序给出当前排队的一方的快照。"""
         return list(self._owners)
 
+    def clone(self) -> "CostDRR[T]":
+        """Copy scheduling state while retaining item identity for read-only previews."""
+        other: CostDRR[T] = CostDRR(self._quantum, self._cost)
+        other._owners = self._owners.copy()
+        other._items = {owner: items.copy() for owner, items in self._items.items()}
+        other._deficit = self._deficit.copy()
+        other._carried = self._carried.copy()
+        other._visited = self._visited.copy()
+        other._turn_done = self._turn_done.copy()
+        return other
+
     def items(self, owner: str) -> tuple[T, ...]:
         """``owner`` 当前排队条目的快照，不改变队列。"""
         return tuple(self._items.get(owner, ()))

@@ -35,6 +35,7 @@
 """
 
 from collections.abc import Callable
+from copy import copy
 from dataclasses import dataclass
 from typing import TypeVar
 
@@ -198,6 +199,36 @@ class AgingQueue[T]:
     def deficit(self, owner: str) -> int:
         """该根任务当前的可用额度。"""
         return self._drr.deficit(owner)
+
+    def entries(self) -> tuple[tuple[str, T, float], ...]:
+        """Observe ownership and enqueue time without advancing the fair ledger."""
+        return tuple(
+            (owner, slot.item, self._enqueued_at[slot.push_id])
+            for owner in self._drr.owners()
+            for slot in self._drr.items(owner)
+        )
+
+    def preview(
+        self,
+        eligible: Callable[[T], bool] = lambda _: True,
+        accept: Callable[[T], bool] | None = None,
+    ) -> tuple[T | None, str]:
+        """Preview one actual scheduling round on copied state; never accrue live credit."""
+        frozen = self._now()
+        other = copy(self)
+        other._now = lambda: frozen
+        other._drr = self._drr.clone()
+        other._enqueued_at = self._enqueued_at.copy()
+        reason = "cost_drr"
+        if other._promoted_in_row < other._urgency_burst:
+            if other._most_urgent_owner(eligible, accept) is not None:
+                reason = "deadline"
+            elif other._most_aged_owner(eligible, accept) is not None:
+                reason = "aging"
+            elif other._most_priority_owner(eligible, accept) is not None:
+                reason = "priority"
+        chosen = other.pop(eligible=eligible, limit=1, accept=accept)
+        return (chosen[0], reason) if chosen else (None, "no_candidate")
 
     def refund(self, owner: str, amount: int) -> None:
         """把多扣的额度还给该根任务。"""

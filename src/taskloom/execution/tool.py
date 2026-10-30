@@ -13,8 +13,10 @@ import codecs
 import hashlib
 import json
 import os
+import signal
 import stat
 import subprocess
+import time
 from collections import Counter
 from collections.abc import Callable
 from pathlib import Path
@@ -339,7 +341,26 @@ def main() -> None:
         inputs = Path(spec["workspace"]) / "inputs"
         check_inputs(inputs)
         verify_inputs(spec, inputs)
-        result = HANDLERS[tool](spec, inputs)
+        started = time.monotonic()
+        # Preserve the command's own timeout independently of demonstration padding.
+        if tool == "run_command" and spec.get("demo_timing"):
+            signal.setitimer(signal.ITIMER_REAL, spec["arguments"]["timeout_seconds"])
+        try:
+            result = HANDLERS[tool](spec, inputs)
+        finally:
+            if tool == "run_command" and spec.get("demo_timing"):
+                signal.setitimer(signal.ITIMER_REAL, 0)
+        plan = spec.get("demo_timing")
+        if plan:
+            actual_seconds = time.monotonic() - started
+            padding_seconds = max(0.0, plan["target_seconds"] - actual_seconds)
+            time.sleep(padding_seconds)
+            result["demo_timing"] = {
+                **plan,
+                "actual_work_seconds": actual_seconds,
+                "padding_seconds": padding_seconds,
+                "mode": "demonstration",
+            }
         emit = spec["emit_bytes"]
         while emit:
             chunk = b"x" * min(4096, emit)
