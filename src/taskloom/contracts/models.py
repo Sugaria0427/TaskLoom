@@ -21,6 +21,16 @@ def tool_step_id(task_id: str, model_round: int, call_id: str) -> str:
     return f"{task_id}-model-{model_round}-tool-{call_id}"
 
 
+def branch_agent_id(task_id: str, name: str) -> str:
+    """Internal identity of a branch sub-agent, namespaced by its root task.
+
+    ``BranchSpec.agent_id`` is only a label unique inside one task; agent and
+    step records are keyed globally, so two tasks may both name ``branch-a``.
+    ``:`` never appears in a label, so the identity cannot collide with a root step.
+    """
+    return f"{task_id}:{name}"
+
+
 def mock_tokens(value: object) -> int:
     """The fixture contract explicitly defines its own deterministic token unit."""
     return max(1, (len(json.dumps(value, ensure_ascii=False).encode()) + 3) // 4)
@@ -34,6 +44,27 @@ class ToolCall(Contract):
     call_id: str
     name: str
     arguments: JsonObject = Field(default_factory=dict)
+
+
+class BranchSpec(Contract):
+    """One controlled parallel sub-agent of a root task.
+
+    The root task is the owner of budget and service share; a branch adds
+    concurrency without adding budget or fairness. ``depends_on`` names other
+    branch ``agent_id``s that must SUCCEED before this branch starts.
+    """
+
+    agent_id: str = Field(pattern=r"^[a-zA-Z0-9_-]{1,96}$")
+    instruction: str = Field(min_length=1, max_length=4000)
+    required: bool = True
+    depends_on: list[str] = Field(default_factory=list, max_length=8)
+
+    @field_validator("depends_on")
+    @classmethod
+    def unique_dependencies(cls, value: list[str]) -> list[str]:
+        if len(set(value)) != len(value):
+            raise ValueError("Branch dependencies must be unique")
+        return value
 
 
 class Usage(Contract):
@@ -204,6 +235,10 @@ class TaskCreate(Contract):
             raise ValueError("Attachments exceed 512 KiB")
         return self
 
+    # Controlled parallel sub-agents; each branch shares this root's budget and
+    # service share and adds no extra quota. Empty keeps the plain single-agent loop.
+    branches: list[BranchSpec] = Field(default_factory=list, max_length=8)
+
     @field_validator("documents")
     @classmethod
     def valid_documents(cls, value: dict[str, str]) -> dict[str, str]:
@@ -213,6 +248,35 @@ class TaskCreate(Contract):
             if not re.fullmatch(r"[^/\\\x00-\x1f]{1,80}", name) or name in {".", ".."}:
                 raise ValueError("Use simple document filenames")
         return value
+
+    @model_validator(mode="after")
+    def consistent_branches(self) -> "TaskCreate":
+        if self.branches and self.mode == "chat":
+            # Branches and the parent summary use the legacy registry and prompt;
+            # chat history, workspace and attachments are not carried into them.
+            raise ValueError("Branches are not supported in chat mode")
+        ids = [b.agent_id for b in self.branches]
+        if len(set(ids)) != len(ids):
+            raise ValueError("Branch agent ids must be unique")
+        known = set(ids)
+        for branch in self.branches:
+            for dependency in branch.depends_on:
+                if dependency == branch.agent_id:
+                    raise ValueError("A branch cannot depend on itself")
+                if dependency not in known:
+                    raise ValueError(f"Branch depends on unknown branch {dependency!r}")
+        # A dependency cycle would leave every branch on it waiting forever:
+        # repeatedly peel branches whose dependencies are all peeled (Kahn).
+        remaining = {b.agent_id: set(b.depends_on) for b in self.branches}
+        while remaining:
+            ready = [name for name, deps in remaining.items() if not deps & remaining.keys()]
+            if not ready:
+                raise ValueError(
+                    "Branch dependencies form a cycle among " + ", ".join(sorted(remaining))
+                )
+            for name in ready:
+                del remaining[name]
+        return self
 
 
 class PriorityUpdate(Contract):
@@ -225,6 +289,35 @@ class Checkpoint(Contract):
     completed_tools: dict[str, JsonObject] = Field(default_factory=dict)
     completed_tool_calls: dict[str, ToolCall] = Field(default_factory=dict)
     model_round: int = 0
+
+
+class BranchState(Contract):
+    """Durable runtime state of one branch; persisted inside TaskState.branches.
+
+    ``agent_id`` is the task-local label from ``BranchSpec``; attempts, steps and
+    the agent record use ``branch_agent_id(root_task_id, agent_id)``.
+    ``quiescent``/``consumed_units``/``reserved_units`` are derived from the
+    branch's attempts on every attempt save; ``cancel_generation`` is the root
+    generation the branch last ran under.
+    """
+
+    agent_id: str
+    root_task_id: str
+    parent_agent_id: str
+    instruction: str
+    required: bool = True
+    depends_on: list[str] = Field(default_factory=list)
+    state: WorkState = WorkState.READY
+    outcome: Outcome = Outcome.PENDING
+    checkpoint: Checkpoint = Field(default_factory=Checkpoint)
+    cancel_generation: int = 0
+    quiescent: bool = True
+    consumed_units: int = 0
+    reserved_units: int = 0
+    result: JsonObject | None = None
+    error: str | None = None
+    created_at: str = Field(default_factory=utc_now)
+    completed_at: str | None = None
 
 
 class TaskState(Contract):
@@ -250,6 +343,8 @@ class TaskState(Contract):
     created_at: str = Field(default_factory=utc_now)
     deadline_at: str
     completed_at: str | None = None
+    # Controlled parallel sub-agents keyed by agent_id; durable across restarts.
+    branches: dict[str, BranchState] = Field(default_factory=dict)
 
 
 class ConversationCreate(Contract):
@@ -296,6 +391,8 @@ class AttemptState(Contract):
     result: JsonObject | None = None
     request_payload: JsonObject | None = None
     tool_claim: ToolClaim | None = None
+    phase_allocation: ToolClaim | None = None
+    phase_version: int = Field(default=0, ge=0, le=2)
     execution_ref: JsonObject | None = None
     error: str | None = None
 
@@ -306,7 +403,13 @@ class ToolRun(Contract):
     tenant_id: str
     generation: int = Field(ge=0)
     tool_name: Literal[
-        "file_stats", "grep", "list_files", "top_words", "read_file", "run_command"
+        "file_stats",
+        "grep",
+        "list_files",
+        "top_words",
+        "read_file",
+        "run_command",
+        "staged_top_words",
     ] = "file_stats"
     input_version: str
     work_iterations: int = Field(default=1, ge=1, le=5000000)
@@ -320,6 +423,39 @@ class ToolRun(Contract):
     approved_external_path: str | None = None
     command_approved: bool = False
     approved_command_cwd: str | None = None
+    resource_protocol: Literal["one-shot", "phase-v1"] = "one-shot"
+    maximum_memory_bytes: int | None = Field(default=None, ge=16777216)
+
+    @model_validator(mode="after")
+    def consistent_resources(self) -> "ToolRun":
+        staged = self.tool_name == "staged_top_words"
+        if staged != (self.resource_protocol == "phase-v1"):
+            raise ValueError("Staged tools require phase-v1; ordinary tools remain one-shot")
+        if staged:
+            if self.memory_bytes != 128 * 1048576 or self.maximum_memory_bytes != 384 * 1048576:
+                raise ValueError("staged_top_words requires the registered 128/384 MiB claim")
+        elif self.maximum_memory_bytes is not None:
+            raise ValueError("One-shot tools cannot declare phase expansion")
+        return self
+
+
+class ExecutorCapabilities(Contract):
+    ready: bool
+    protection: str
+    resource_protocols: list[Literal["one-shot", "phase-v1"]] = Field(
+        default=["one-shot"], max_length=2
+    )
+
+
+class ToolPhase(Contract):
+    attempt_id: str = Field(pattern=r"^[a-zA-Z0-9_-]{1,96}$")
+    generation: int = Field(ge=0)
+    version: int = Field(ge=1, le=2)
+    memory_bytes: int = Field(ge=16777216)
+
+    @property
+    def request_id(self) -> str:
+        return f"{self.attempt_id}:phase:{self.version}"
 
 
 class ToolState(Contract):
@@ -344,6 +480,8 @@ class ToolState(Contract):
     # served from a published preparation ("shared"); None runs unshared.
     share_role: Literal["owner", "waiter", "shared"] | None = None
     created_at: str = Field(default_factory=utc_now)
+    pending_phase: ToolPhase | None = None
+    phase_grants: list[ToolPhase] = Field(default_factory=list, max_length=2)
 
 
 class ClientConfig(Contract):
@@ -359,6 +497,11 @@ class ClientConfig(Contract):
     artifact_budget_mib: int = Field(default=64, ge=1)
     max_steps: int = Field(default=12, ge=3, le=128)
     workspace_root: str | None = None
+    phase_banker: bool = True
+    staged_tools: bool = False
+    large_tool_protection: bool = True
+    protection_seconds: float = Field(default=5, gt=0, le=3600)
+    protection_bypasses: int = Field(default=8, ge=1, le=10000)
 
 
 class PoolAccount(Contract):

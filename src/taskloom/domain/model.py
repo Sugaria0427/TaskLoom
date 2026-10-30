@@ -8,6 +8,8 @@ class Agent:
     agent_id: str
     root_task_id: str
     parent_agent_id: str | None = None
+    # Task-local display name of a branch sub-agent; agent_id stays globally unique.
+    label: str | None = None
 
 
 @dataclass(frozen=True)

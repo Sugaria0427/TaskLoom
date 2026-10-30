@@ -91,7 +91,7 @@ class PhaseBanker:
         sequence: list[str] = []
         while remaining:
             progressed = False
-            for identity in list(remaining):
+            for identity in sorted(remaining):
                 need = maximum[identity] - allocation.get(identity, Resources())
                 if need.fits(available):
                     available += allocation.get(identity, Resources())

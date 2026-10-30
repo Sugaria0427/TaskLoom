@@ -157,7 +157,7 @@ class ToolRegistry:
         return len(self._tools)
 
 
-def default_registry() -> ToolRegistry:
+def default_registry(*, staged: bool = False) -> ToolRegistry:
     """The current tool set: staged-file statistics plus literal search."""
     registry = ToolRegistry()
     registry.register(
@@ -197,6 +197,16 @@ def default_registry() -> ToolRegistry:
             validate=_validate_top_words,
         )
     )
+    if staged:
+        registry.register(
+            ToolSpec(
+                name="staged_top_words",
+                description="Count staged words with retained input and two controlled memory expansions.",
+                parameters={"top_n": {"type": "integer", "description": "Entries, from 1 to 1000"}},
+                demand=tool_demand("staged_top_words"),
+                validate=_validate_top_words,
+            )
+        )
     return registry
 
 
@@ -205,13 +215,14 @@ def _validate_top_words(call: ToolCall) -> None:
         raise DomainError("INVALID_TOOL", "top_n must be between 1 and 1000")
 
 
-def agent_registry() -> ToolRegistry:
-    registry = default_registry()
+def agent_registry(*, staged: bool = False) -> ToolRegistry:
+    registry = default_registry(staged=staged)
     descriptions = {
         "file_stats": "核验当前消息上传的纯文本附件，返回文件数、词数与校验值。仅在需要统计时使用。",
         "grep": "在当前消息的纯文本附件中搜索指定字面内容，返回匹配行。",
         "list_files": "列出当前消息上传的纯文本附件及文件大小。",
         "top_words": "统计当前消息纯文本附件中的高频词，top_n 为 1 到 1000。",
+        "staged_top_words": "分阶段统计附件高频词，保留输入并由宿主批准后续内存申请；top_n 为 1 到 1000。",
     }
     # Rebuild descriptions without changing the legacy registry's compatibility surface.
     modern = ToolRegistry()

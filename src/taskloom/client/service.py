@@ -14,6 +14,7 @@ from taskloom.client.model_scheduler import ModelScheduler
 from taskloom.client.ports import ExecutorPort, GatewayPort
 from taskloom.contracts.models import (
     AttemptState,
+    BranchState,
     Checkpoint,
     ClientConfig,
     ConversationState,
@@ -28,8 +29,10 @@ from taskloom.contracts.models import (
     TaskState,
     ToolCall,
     ToolClaim,
+    ToolPhase,
     ToolRun,
     ToolState,
+    branch_agent_id,
     digest,
     identity,
     tool_step_id,
@@ -48,6 +51,8 @@ _MODEL_QUANTUM = 100
 _URGENCY_WINDOW_SECONDS = 60.0
 _AGING_WINDOW_SECONDS = 20.0
 _URGENCY_BURST = 2
+# 阶段授权幂等；会话内响应丢失时有限次重发同一版本，超出后转入核对。
+_PHASE_GRANT_SENDS = 3
 
 
 class ClientService:
@@ -69,8 +74,8 @@ class ClientService:
         self.attempts: dict[str, AttemptState] = {}
         self.runners: dict[str, asyncio.Task[None]] = {}
         self.lock = asyncio.Lock()
-        self.registry: ToolRegistry = default_registry()
-        self.chat_registry = agent_registry()
+        self.registry: ToolRegistry = default_registry(staged=config.staged_tools)
+        self.chat_registry = agent_registry(staged=config.staged_tools)
         self.workspace_root = (
             Path(config.workspace_root).resolve()
             if config.workspace_root
@@ -95,7 +100,11 @@ class ClientService:
                 slots=config.tool_slots,
                 memory_bytes=config.memory_budget_mib * 1048576,
                 artifact_bytes=config.artifact_budget_mib * 1048576,
-            )
+            ),
+            check_safe=config.phase_banker,
+            protect_large=config.large_tool_protection,
+            protection_seconds=config.protection_seconds,
+            bypass_limit=config.protection_bypasses,
         )
         self.reconciler: asyncio.Task[None] | None = None
         self.ready = False
@@ -146,7 +155,6 @@ class ClientService:
                 held.error = error.code + ": " + str(error)
                 await self._save_task(held, await self._checkpoint_backup(original))
         await self.models.start()
-        await self.tools.start()
         try:
             await self.refresh_platform()
         except Exception as error:
@@ -161,11 +169,13 @@ class ClientService:
                         receipt = None
                     if receipt is not None and self._tool_receipt_matches(attempt, receipt):
                         attempt.request_payload = receipt.request.model_dump(mode="json")
-                demand, _ = self._prepare_tool(attempt)
+                demand, request = self._prepare_tool(attempt)
                 await self._save_attempt(attempt)
-                if not self.tools.pool.reserve(attempt.attempt_id, demand):
-                    raise RuntimeError("Unresolved tool occupancy exceeds the configured capacity")
+                self.tools.pool.restore(
+                    attempt.attempt_id, demand, self._tool_maximum(demand, request)
+                )
                 self.tools.quarantined.add(attempt.attempt_id)
+        await self.tools.start()
         for task in list(self.tasks.values()):
             if task.outcome == Outcome.PENDING and not task.cancel_requested:
                 task.state = WorkState.RECONCILING
@@ -257,6 +267,12 @@ class ClientService:
         ):
             raise DomainError("PRIVATE_BUDGET", "Root task budget exhausted")
         task.quiescent = all(a.quiescent for a in related)
+        for name, branch in task.branches.items():
+            owner = branch_agent_id(task.task_id, name)
+            owned = [a for a in related if a.agent_id == owner]
+            branch.consumed_units = sum(a.consumed_units for a in owned)
+            branch.reserved_units = sum(a.reserved_units for a in owned)
+            branch.quiescent = all(a.quiescent for a in owned)
         if task.cancel_requested and task.quiescent:
             task.state = WorkState.FINISHED
         await self.store.apply(
@@ -279,6 +295,10 @@ class ClientService:
                 "generation": attempt.generation,
                 "type": attempt.kind + "." + attempt.state.lower(),
                 "outcome": attempt.outcome,
+                "resource_phase": attempt.phase_version,
+                "resource_allocation": attempt.phase_allocation.model_dump(mode="json")
+                if attempt.phase_allocation
+                else None,
                 "occurred_at": utc_now(),
             },
         )
@@ -445,9 +465,12 @@ class ClientService:
         kind: Literal["model", "tool"],
         request_payload: JsonObject | None = None,
         model_round: int | None = None,
+        branch: str | None = None,
     ) -> AttemptState:
         async with self.lock:
             task = self.get(task_id)
+            identity_agent = branch_agent_id(task_id, branch) if branch else task.agent_id
+            prefix = identity_agent if branch else task_id
             old_id = task.step_attempts.get(step)
             if old_id:
                 old = self.attempts[old_id]
@@ -474,7 +497,7 @@ class ClientService:
             attempt = AttemptState(
                 attempt_id=identity(),
                 root_task_id=task_id,
-                agent_id=task.agent_id,
+                agent_id=identity_agent,
                 step_id=step,
                 tenant_id=task.tenant_id,
                 kind=kind,
@@ -482,15 +505,14 @@ class ClientService:
                 request_payload=request_payload,
             )
             task.step_attempts[step] = attempt.attempt_id
+            checkpoint = task.branches[branch].checkpoint if branch else task.checkpoint
             tool_model_round = (
-                model_round if model_round is not None else task.checkpoint.model_round - 1
+                model_round if model_round is not None else checkpoint.model_round - 1
             )
             predecessors = (
-                tuple(
-                    task.tool_step_aliases.get(key, key) for key in task.checkpoint.completed_tools
-                )
+                tuple(task.tool_step_aliases.get(key, key) for key in checkpoint.completed_tools)
                 if kind == "model"
-                else (f"{task_id}-model-{tool_model_round}",)
+                else (f"{prefix}-model-{tool_model_round}",)
             )
             for predecessor in predecessors:
                 prior = task.step_attempts.get(predecessor)
@@ -514,7 +536,7 @@ class ClientService:
             step_record = Step(
                 step_id=step,
                 root_task_id=task_id,
-                agent_id=task.agent_id,
+                agent_id=identity_agent,
                 kind=kind,
                 input_version=task.input_version,
                 predecessors=predecessors,
@@ -547,28 +569,32 @@ class ClientService:
             await self.gateway.register(
                 RootRegistration(root_task_id=task_id, budget_units=task.specification.budget_units)
             )
-            result = await run_agent(
-                TaskHost(self, task_id, generation),
-                task_id,
-                task.specification,
-                task.checkpoint,
-                self.config.max_steps,
-                self.chat_registry if task.specification.mode == "chat" else self.registry,
-                history=self._chat_history(task),
-                workspace=str(self.workspace_root),
-                attachments={
-                    **{
-                        name: str(self.directory / "tasks" / task_id / "inputs" / name)
-                        for name in task.specification.documents
+            task = self.get(task_id)
+            if task.specification.branches:
+                result = await self._run_with_branches(task_id, generation)
+            else:
+                result = await run_agent(
+                    TaskHost(self, task_id, generation),
+                    task_id,
+                    task.specification,
+                    task.checkpoint,
+                    self.config.max_steps,
+                    self.chat_registry if task.specification.mode == "chat" else self.registry,
+                    history=self._chat_history(task),
+                    workspace=str(self.workspace_root),
+                    attachments={
+                        **{
+                            name: str(self.directory / "tasks" / task_id / "inputs" / name)
+                            for name in task.specification.documents
+                        },
+                        **{
+                            image.name: str(
+                                self.directory / "tasks" / task_id / "attachments" / image.name
+                            )
+                            for image in task.specification.images
+                        },
                     },
-                    **{
-                        image.name: str(
-                            self.directory / "tasks" / task_id / "attachments" / image.name
-                        )
-                        for image in task.specification.images
-                    },
-                },
-            )
+                )
             async with self.lock:
                 current = self.get(task_id)
                 if current.cancel_generation != generation or current.cancel_requested:
@@ -594,9 +620,12 @@ class ClientService:
         except Exception as error:
             async with self.lock:
                 current = self.get(task_id)
-                current.outcome = Outcome.FAILED if current.quiescent else Outcome.UNKNOWN
+                # A branch with an unknown result keeps the root in reconciliation
+                # even when its attempt has already stopped.
+                settled = current.quiescent and getattr(error, "code", "") != "BRANCH_UNRECONCILED"
+                current.outcome = Outcome.FAILED if settled else Outcome.UNKNOWN
                 current.completed_at = utc_now()
-                current.state = WorkState.FINISHED if current.quiescent else WorkState.RECONCILING
+                current.state = WorkState.FINISHED if settled else WorkState.RECONCILING
                 current.error = getattr(error, "code", type(error).__name__) + ": " + str(error)
                 await self._save_task(current)
         finally:
@@ -611,6 +640,240 @@ class ClientService:
                 Outcome.CANCELLED,
             ):
                 self.models.forget_root(task.task_id)
+
+    async def _run_with_branches(self, task_id: str, generation: int) -> JsonObject:
+        """Run controlled parallel sub-agents, wait for confluence, then let the
+        parent agent produce the final summary.
+
+        While the parent waits it holds no model or tool request, so its
+        execution permit is safely yielded to the branches. Every branch
+        request keeps ``root_task_id=task_id``: no matter how many branches run,
+        budget and L3/L4 fair share stay on the root task.
+
+        Confluence is fixed once the parent summary has written its checkpoint;
+        until then every new generation retries the branches that did not succeed.
+        """
+        async with self.lock:
+            task = self.get(task_id)
+            confluent = bool(task.checkpoint.messages)
+            agent_records: list[StoredRecord] = []
+            for spec in task.specification.branches:
+                branch = task.branches.get(spec.agent_id)
+                if branch is None:
+                    task.branches[spec.agent_id] = BranchState(
+                        agent_id=spec.agent_id,
+                        root_task_id=task_id,
+                        parent_agent_id=task.agent_id,
+                        instruction=spec.instruction,
+                        required=spec.required,
+                        depends_on=list(spec.depends_on),
+                    )
+                    agent = Agent(
+                        agent_id=branch_agent_id(task_id, spec.agent_id),
+                        root_task_id=task_id,
+                        parent_agent_id=task.agent_id,
+                        label=spec.agent_id,
+                    )
+                    agent_records.append(
+                        StoredRecord("agent", agent.agent_id, task.tenant_id, asdict(agent))
+                    )
+                elif branch.outcome != Outcome.SUCCEEDED and not confluent:
+                    # Keep the checkpoint: an unknown attempt is then confirmed under
+                    # its original identity instead of being replayed.
+                    branch.state = WorkState.READY
+                    branch.outcome = Outcome.PENDING
+                    branch.result = None
+                    branch.error = None
+                    branch.completed_at = None
+            task.state = WorkState.RUNNING if confluent else WorkState.WAIT_DEPENDENCY
+            await self._save_task(task, agent_records)
+        results: JsonObject | None = None
+        if not confluent:
+            results = await self._await_branches(task_id, generation)
+            async with self.lock:
+                task = self.get(task_id)
+                if task.cancel_generation != generation or task.cancel_requested:
+                    raise asyncio.CancelledError
+                task.state = WorkState.RUNNING
+                await self._save_task(task)
+        task = self.get(task_id)
+        return await run_agent(
+            TaskHost(self, task_id, generation),
+            task_id,
+            task.specification,
+            task.checkpoint,
+            self.config.max_steps,
+            self.registry,
+            branch_results=results,
+        )
+
+    async def _await_branches(self, task_id: str, generation: int) -> JsonObject:
+        """Start branches in dependency order until every one is terminal.
+
+        A required branch that ends without success fails the root at once and
+        the ``finally`` cancels its siblings. Returns the successful results.
+        """
+        pending = {
+            name
+            for name, branch in self.get(task_id).branches.items()
+            if branch.outcome != Outcome.SUCCEEDED
+        }
+        runners: dict[str, asyncio.Task[None]] = {}
+        try:
+            while pending:
+                progressed = False
+                async with self.lock:
+                    task = self.get(task_id)
+                    if task.cancel_generation != generation or task.cancel_requested:
+                        raise asyncio.CancelledError
+                    for name in [name for name, runner in runners.items() if runner.done()]:
+                        runners.pop(name)
+                        pending.discard(name)
+                        progressed = True
+                        branch = task.branches[name]
+                        if branch.required and branch.outcome != Outcome.SUCCEEDED:
+                            raise self._branch_error(name, branch)
+                    startable: list[str] = []
+                    for name in sorted(pending - runners.keys()):
+                        branch = task.branches[name]
+                        blocked = next(
+                            (
+                                dependency
+                                for dependency in branch.depends_on
+                                if dependency not in pending
+                                and task.branches[dependency].outcome != Outcome.SUCCEEDED
+                            ),
+                            None,
+                        )
+                        if blocked is None:
+                            if all(
+                                task.branches[dependency].outcome == Outcome.SUCCEEDED
+                                for dependency in branch.depends_on
+                            ):
+                                startable.append(name)
+                            continue
+                        if branch.required:
+                            raise DomainError(
+                                "BRANCH_DEPENDENCY_FAILED",
+                                f"Branch {name} waits on unsuccessful branch {blocked}",
+                            )
+                        # An optional branch whose dependency ended without success
+                        # never starts, so it owns no attempt to reconcile.
+                        branch.outcome = Outcome.FAILED
+                        branch.state = WorkState.FINISHED
+                        branch.error = f"BRANCH_DEPENDENCY_FAILED: {blocked} did not succeed"
+                        branch.completed_at = utc_now()
+                        pending.discard(name)
+                        progressed = True
+                        await self._save_task(task)
+                for name in startable:
+                    runners[name] = asyncio.create_task(self._run_branch(task_id, name, generation))
+                    progressed = True
+                if not runners:
+                    if pending and not progressed:
+                        raise DomainError(
+                            "BRANCH_DEADLOCK",
+                            "Branches can never start: " + ", ".join(sorted(pending)),
+                        )
+                    continue
+                await asyncio.wait(runners.values(), return_when=asyncio.FIRST_COMPLETED)
+        finally:
+            for runner in runners.values():
+                runner.cancel()
+            if runners:
+                await asyncio.gather(*runners.values(), return_exceptions=True)
+        task = self.get(task_id)
+        unreconciled = sorted(
+            name for name, branch in task.branches.items() if branch.outcome == Outcome.UNKNOWN
+        )
+        if unreconciled:
+            # Optional or not, unconfirmed work must be reconciled before any summary.
+            raise DomainError(
+                "BRANCH_UNRECONCILED",
+                "Branches hold unreconciled work: " + ", ".join(unreconciled),
+            )
+        return {
+            name: branch.result
+            for name, branch in task.branches.items()
+            if branch.outcome == Outcome.SUCCEEDED and branch.result is not None
+        }
+
+    @staticmethod
+    def _branch_error(name: str, branch: BranchState) -> DomainError:
+        if branch.outcome == Outcome.UNKNOWN:
+            return DomainError("BRANCH_UNRECONCILED", f"Required branch {name} holds unknown work")
+        return DomainError(
+            "BRANCH_FAILED", f"Required branch {name} failed: {branch.error or branch.outcome}"
+        )
+
+    def _branch_unreconciled(self, task_id: str, name: str) -> bool:
+        """Whether a branch still owns a dispatched attempt with an unknown result."""
+        owner = branch_agent_id(task_id, name)
+        return any(
+            attempt.root_task_id == task_id
+            and attempt.agent_id == owner
+            and (
+                not attempt.quiescent
+                or (attempt.outcome == Outcome.UNKNOWN and not attempt.settled)
+            )
+            for attempt in self.attempts.values()
+        )
+
+    async def _run_branch(self, task_id: str, name: str, generation: int) -> None:
+        """Execute one controlled sub-agent to its own bounded loop and record
+        its durable outcome inside TaskState.branches."""
+        try:
+            async with self.lock:
+                task = self.get(task_id)
+                branch = task.branches[name]
+                branch.state = WorkState.RUNNING
+                branch.cancel_generation = generation
+                await self._save_task(task)
+            result = await run_agent(
+                BranchHost(self, task_id, name, generation),
+                task_id,
+                task.specification,
+                branch.checkpoint,
+                self.config.max_steps,
+                self.registry,
+                agent_id=branch_agent_id(task_id, name),
+                instruction=branch.instruction,
+            )
+            async with self.lock:
+                task = self.get(task_id)
+                branch = task.branches[name]
+                if task.cancel_generation != generation or task.cancel_requested:
+                    return
+                branch.result = result
+                branch.completed_at = utc_now()
+                branch.outcome = Outcome.SUCCEEDED
+                branch.state = WorkState.FINISHED
+                await self._save_task(task)
+        except asyncio.CancelledError:
+            await self._finish_branch(task_id, name, None)
+            raise
+        except Exception as error:
+            await self._finish_branch(task_id, name, error)
+
+    async def _finish_branch(self, task_id: str, name: str, error: Exception | None) -> None:
+        """Record a branch that stopped without a result.
+
+        The outcome follows the branch's own attempts: any dispatched attempt whose
+        result is still unknown makes the branch UNKNOWN/RECONCILING, never FAILED.
+        """
+        async with self.lock:
+            task = self.get(task_id)
+            branch = task.branches[name]
+            unreconciled = self._branch_unreconciled(task_id, name)
+            if error is None:
+                cancelled = task.cancel_requested or not unreconciled
+                branch.outcome = Outcome.CANCELLED if cancelled else Outcome.UNKNOWN
+            else:
+                branch.outcome = Outcome.UNKNOWN if unreconciled else Outcome.FAILED
+                branch.error = getattr(error, "code", type(error).__name__) + ": " + str(error)
+            branch.completed_at = utc_now()
+            branch.state = WorkState.RECONCILING if unreconciled else WorkState.FINISHED
+            await self._save_task(task)
 
     async def cancel(self, task_id: str) -> TaskState:
         async with self.lock:
@@ -750,8 +1013,17 @@ class ClientService:
                 self.models.settle(attempt.root_task_id, reserved, record.consumed_units)
             return record
 
-    async def model(self, task_id: str, messages: list[JsonObject], round_index: int) -> ModelReply:
-        attempt = await self._attempt(task_id, f"{task_id}-model-{round_index}", "model")
+    async def model(
+        self,
+        task_id: str,
+        messages: list[JsonObject],
+        round_index: int,
+        branch: str | None = None,
+    ) -> ModelReply:
+        prefix = branch_agent_id(task_id, branch) if branch else task_id
+        attempt = await self._attempt(
+            task_id, f"{prefix}-model-{round_index}", "model", branch=branch
+        )
         if attempt.result is not None and attempt.outcome == Outcome.SUCCEEDED:
             return ModelReply.model_validate(attempt.result)
         task = self.get(task_id)
@@ -759,7 +1031,7 @@ class ClientService:
             request = ModelRequest(
                 request_id=attempt.attempt_id,
                 root_task_id=task_id,
-                agent_id=task.agent_id,
+                agent_id=attempt.agent_id,
                 step_id=attempt.step_id,
                 attempt_id=attempt.attempt_id,
                 cancel_generation=attempt.generation,
@@ -885,6 +1157,8 @@ class ClientService:
                 work_iterations=task.specification.work_iterations,
                 emit_bytes=task.specification.emit_bytes,
                 memory_bytes=profile.demand.memory_bytes,
+                resource_protocol="phase-v1" if profile.maximum else "one-shot",
+                maximum_memory_bytes=profile.maximum.memory_bytes if profile.maximum else None,
                 cpu_quota=profile.cpu_quota,
                 cpu_period=profile.cpu_period,
                 arguments=call.arguments,
@@ -914,18 +1188,102 @@ class ClientService:
         claim = attempt.tool_claim
         if claim.memory_bytes != request.memory_bytes:
             raise DomainError("TOOL_CLAIM_CONFLICT", "Saved claim differs from executor request")
+        if attempt.phase_version:
+            allocation = attempt.phase_allocation
+            if (
+                request.resource_protocol != "phase-v1"
+                or allocation is None
+                or allocation.memory_bytes != (128 + attempt.phase_version * 128) * 1048576
+                or allocation.slots != claim.slots
+                or allocation.artifact_bytes != claim.artifact_bytes
+            ):
+                raise DomainError("TOOL_CLAIM_CONFLICT", "Saved phase allocation differs")
+            claim = allocation
         return Resources(claim.slots, claim.memory_bytes, claim.artifact_bytes), request
 
-    async def tool(self, task_id: str, call: ToolCall, model_round: int) -> JsonObject:
+    @staticmethod
+    def _tool_maximum(demand: Resources, request: ToolRun) -> Resources:
+        return Resources(
+            demand.slots, request.maximum_memory_bytes or demand.memory_bytes, demand.artifact_bytes
+        )
+
+    async def _advance_tool_phase(
+        self, attempt: AttemptState, state: ToolState, generation: int
+    ) -> None:
+        phase = state.pending_phase
+        if phase is None or state.quiescent:
+            return
+        if not self._tool_receipt_matches(attempt, state) or (
+            state.request.resource_protocol != "phase-v1"
+            or phase.attempt_id != attempt.attempt_id
+            or phase.generation != attempt.generation
+            or phase.memory_bytes != (128 + phase.version * 128) * 1048576
+        ):
+            raise QuarantinedExecution("Phase request differs from the saved tool identity")
+        async with self.lock:
+            current = self.attempts[attempt.attempt_id]
+            task = self.get(attempt.root_task_id)
+            if task.cancel_requested or task.cancel_generation != generation:
+                raise asyncio.CancelledError
+            if current.settled:
+                return
+            attempt.phase_version = current.phase_version
+            attempt.phase_allocation = current.phase_allocation
+            if phase.version > current.phase_version + 1:
+                raise QuarantinedExecution("Phase request skipped a predecessor")
+            if phase.version < current.phase_version:
+                return
+            demand, request = self._prepare_tool(attempt)
+            target = Resources(demand.slots, phase.memory_bytes, demand.artifact_bytes)
+            if not target.fits(self._tool_maximum(demand, request)):
+                raise QuarantinedExecution("Phase exceeds the persisted maximum")
+            if not self.tools.expand(attempt.attempt_id, target):
+                return
+            if phase.version > current.phase_version:
+                attempt.phase_version = phase.version
+                attempt.phase_allocation = ToolClaim(
+                    profile_version="phase-v1",
+                    slots=target.slots,
+                    memory_bytes=target.memory_bytes,
+                    artifact_bytes=target.artifact_bytes,
+                )
+                # Commit before sending. Lost replies retain the entitlement and
+                # retry the same version, never a second incremental debit.
+                await self._save_attempt(attempt, locked=True)
+        applied = await self._send_phase_grant(phase)
+        if not self._tool_receipt_matches(attempt, applied) or phase not in applied.phase_grants:
+            raise QuarantinedExecution("Executor did not confirm the granted phase")
+
+    async def _send_phase_grant(self, phase: ToolPhase) -> ToolState:
+        """Resend one saved absolute grant; the executor treats a replay as a no-op."""
+        for attempt in range(_PHASE_GRANT_SENDS):
+            try:
+                return await self.executor.grant_phase(phase)
+            except DomainError as error:
+                if not error.retryable or attempt + 1 == _PHASE_GRANT_SENDS:
+                    raise
+            except Exception:
+                if attempt + 1 == _PHASE_GRANT_SENDS:
+                    raise
+            await asyncio.sleep(0.05 * 2**attempt)
+        raise AssertionError("unreachable")
+
+    async def tool(
+        self, task_id: str, call: ToolCall, model_round: int, branch: str | None = None
+    ) -> JsonObject:
         task = self.get(task_id)
+        generation = task.cancel_generation
         spec = (self.chat_registry if task.specification.mode == "chat" else self.registry).require(
             call.name
         )
         spec.check(call)
-        canonical = tool_step_id(task_id, model_round, call.call_id)
+        prefix = branch_agent_id(task_id, branch) if branch else task_id
+        canonical = tool_step_id(prefix, model_round, call.call_id)
         step_id = self.get(task_id).tool_step_aliases.get(canonical, canonical)
         request_payload = {"tool_name": call.name, "arguments": call.arguments}
-        attempt = await self._attempt(task_id, step_id, "tool", request_payload, model_round)
+        attempt = await self._attempt(
+            task_id, step_id, "tool", request_payload, model_round, branch=branch
+        )
         if attempt.outcome == Outcome.SUCCEEDED and attempt.result is not None:
             return attempt.result
         recovering = attempt.outcome == Outcome.UNKNOWN or not attempt.quiescent
@@ -962,8 +1320,8 @@ class ClientService:
                 raise DomainError("ARTIFACT_BUDGET", "Retained artifacts fill the local budget")
             attempt.state = WorkState.RUNNING
             attempt.quiescent = False
-            await self._save_attempt(attempt)
             try:
+                await self._save_attempt(attempt)
                 if recovering:
                     state = await self.executor.query(attempt.attempt_id)
                     if state is None:
@@ -979,6 +1337,7 @@ class ClientService:
                 }
                 await self._save_attempt(attempt)
                 while not state.quiescent and state.outcome == Outcome.PENDING:
+                    await self._advance_tool_phase(attempt, state, generation)
                     await asyncio.sleep(0.05)
                     found = await self.executor.query(attempt.attempt_id)
                     if found is None:
@@ -1024,7 +1383,13 @@ class ClientService:
             except QuarantinedExecution:
                 raise
             except DomainError as error:
-                if error.code in ("EXECUTOR_FULL", "INPUT_VERSION_MISMATCH", "ATTEMPT_CONFLICT"):
+                if error.code in (
+                    "EXECUTOR_FULL",
+                    "INPUT_VERSION_MISMATCH",
+                    "ATTEMPT_CONFLICT",
+                    "RESOURCE_PROTOCOL_UNSUPPORTED",
+                    "EXECUTOR_NOT_READY",
+                ):
                     attempt.quiescent = True
                     attempt.outcome = Outcome.FAILED
                     attempt.error = error.code
@@ -1038,13 +1403,35 @@ class ClientService:
                 await self._save_attempt(attempt)
                 raise QuarantinedExecution("Executor transport failed") from error
 
-        return await self.tools.submit(
-            attempt.attempt_id,
-            task_id,
-            demand,
-            execute,
-            priority=self.get(task_id).specification.priority,
-        )
+        remaining = (
+            datetime.fromisoformat(self.get(task_id).deadline_at) - datetime.now(UTC)
+        ).total_seconds()
+        try:
+            if not self._tool_maximum(demand, request).fits(self.tools.pool.capacity):
+                raise DomainError("RESOURCE_TOO_LARGE", "Tool maximum exceeds total local capacity")
+            async with asyncio.timeout(max(0, remaining)):
+                return await self.tools.submit(
+                    attempt.attempt_id,
+                    task_id,
+                    demand,
+                    execute,
+                    priority=self.get(task_id).specification.priority,
+                    maximum=self._tool_maximum(demand, request),
+                )
+        except (TimeoutError, DomainError) as error:
+            code = error.code if isinstance(error, DomainError) else "DEADLINE_EXPIRED"
+            current = self.attempts[attempt.attempt_id].model_copy(deep=True)
+            if current.quiescent and not current.settled and code != "RESERVATION_CONFLICT":
+                current.outcome = Outcome.FAILED
+                current.state = WorkState.FINISHED
+                current.settled = True
+                current.error = code
+                await self._save_attempt(current)
+            if isinstance(error, DomainError):
+                raise
+            raise DomainError(
+                "DEADLINE_EXPIRED", "Tool resource wait or execution exceeded task deadline"
+            ) from None
 
     def _chat_history(self, task: TaskState) -> list[JsonObject]:
         if task.specification.mode != "chat":
@@ -1340,6 +1727,8 @@ class ClientService:
             "capacity": asdict(self.tools.pool.capacity),
             "available": asdict(self.tools.pool.available),
             "queued_tools": len(self.tools.queue),
+            "banker": self.tools.pool.snapshot(),
+            "tool_protection": self.tools.snapshot(),
             "queued_models": self.models.pending,
             "quarantined": list(self.tools.quarantined),
             "artifact_bytes": self.artifact_size(),
@@ -1407,4 +1796,33 @@ class TaskHost:
             if task.cancel_generation != self.generation or task.cancel_requested:
                 raise asyncio.CancelledError
             task.checkpoint = checkpoint.model_copy(deep=True)
+            await self.service._save_task(task)
+
+
+class BranchHost:
+    """AgentHost adapter for one controlled sub-agent.
+
+    Steps and the checkpoint are scoped to the branch while every model request
+    keeps ``root_task_id`` on the root task, so budget and service share never
+    grow with the branch count. ``branch`` is the task-local label.
+    """
+
+    def __init__(self, service: ClientService, task_id: str, branch: str, generation: int) -> None:
+        self.service = service
+        self.task_id = task_id
+        self.branch = branch
+        self.generation = generation
+
+    async def model(self, messages: list[JsonObject], round_index: int) -> ModelReply:
+        return await self.service.model(self.task_id, messages, round_index, branch=self.branch)
+
+    async def tool(self, call: ToolCall, model_round: int) -> JsonObject:
+        return await self.service.tool(self.task_id, call, model_round, branch=self.branch)
+
+    async def checkpoint(self, checkpoint: Checkpoint) -> None:
+        async with self.service.lock:
+            task = self.service.get(self.task_id)
+            if task.cancel_generation != self.generation or task.cancel_requested:
+                raise asyncio.CancelledError
+            task.branches[self.branch].checkpoint = checkpoint.model_copy(deep=True)
             await self.service._save_task(task)

@@ -5,6 +5,7 @@ from taskloom.contracts.models import (
     ModelRequest,
     PlatformFeedback,
     RootRegistration,
+    ToolPhase,
     ToolRun,
     ToolState,
 )
@@ -25,6 +26,8 @@ class GatewayPort(Protocol):
 
 
 class ExecutorPort(Protocol):
+    async def grant_phase(self, grant: ToolPhase) -> ToolState: ...
+
     async def run(self, request: ToolRun) -> ToolState: ...
 
     async def query(self, attempt_id: str) -> ToolState | None: ...

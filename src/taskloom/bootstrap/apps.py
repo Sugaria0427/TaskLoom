@@ -42,6 +42,7 @@ from taskloom.contracts.models import (
     SchedulerSnapshot,
     TaskCreate,
     TaskState,
+    ToolPhase,
     ToolRun,
     ToolState,
     digest,
@@ -285,11 +286,19 @@ def executor_app(base: Path, config: ClientConfig) -> FastAPI:
 
     @app.get("/health/ready")
     async def ready() -> JsonObject:
-        return {"ready": True, "protection": "cgroup-v2" if group_root else "process-group"}
+        return {
+            "ready": True,
+            "protection": "cgroup-v2" if group_root else "process-group",
+            "resource_protocols": ["one-shot", "phase-v1"],
+        }
 
     @app.post("/execute", status_code=202)
     async def execute(body: ToolRun) -> ToolState:
         return await backend.run(body)
+
+    @app.post("/phases/grant")
+    async def grant_phase(body: ToolPhase) -> ToolState:
+        return await backend.grant_phase(body)
 
     @app.get("/attempts/{attempt_id}")
     async def query(attempt_id: str) -> ToolState:

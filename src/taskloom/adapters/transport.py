@@ -3,10 +3,12 @@ import httpx
 from taskloom.contracts.models import (
     AccountCredential,
     AccountLogin,
+    ExecutorCapabilities,
     GatewayRecord,
     ModelRequest,
     PlatformFeedback,
     RootRegistration,
+    ToolPhase,
     ToolRun,
     ToolState,
 )
@@ -77,7 +79,24 @@ class ExecutorHTTP:
         )
 
     async def run(self, request: ToolRun) -> ToolState:
-        response = checked(await self.client.post("/execute", json=request.model_dump(mode="json")))
+        if request.resource_protocol == "phase-v1":
+            ready = checked(await self.client.get("/health/ready"))
+            capabilities = ExecutorCapabilities.model_validate(ready.json())
+            if "phase-v1" not in capabilities.resource_protocols:
+                raise DomainError(
+                    "RESOURCE_PROTOCOL_UNSUPPORTED", "Executor does not support phase-v1"
+                )
+            if not capabilities.ready:
+                raise DomainError("EXECUTOR_NOT_READY", "Executor is not ready", retryable=True)
+        response = checked(
+            await self.client.post(
+                "/execute", json=request.model_dump(mode="json", exclude_defaults=True)
+            )
+        )
+        return ToolState.model_validate(response.json())
+
+    async def grant_phase(self, grant: ToolPhase) -> ToolState:
+        response = checked(await self.client.post("/phases/grant", json=grant.model_dump()))
         return ToolState.model_validate(response.json())
 
     async def query(self, attempt_id: str) -> ToolState | None:

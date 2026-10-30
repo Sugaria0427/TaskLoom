@@ -1,9 +1,11 @@
 from typing import Protocol
 
-from taskloom.contracts.models import ToolRun, ToolState
+from taskloom.contracts.models import ToolPhase, ToolRun, ToolState
 
 
 class ToolBackend(Protocol):
+    async def grant_phase(self, grant: ToolPhase) -> ToolState: ...
+
     async def start(self) -> None: ...
 
     async def run(self, request: ToolRun) -> ToolState: ...

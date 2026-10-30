@@ -25,6 +25,7 @@ from taskloom.execution.access import local_path, readable
 from taskloom.execution.catalog import tool_names
 from taskloom.execution.coordination import SECRET_BYTES, AccessPermit, FileLease, check_permit
 from taskloom.execution.images import inspect_image, model_image
+from taskloom.execution.phases import request_memory
 
 
 def read_inputs(inputs: Path) -> dict[str, str]:
@@ -274,7 +275,29 @@ def run_command(spec: dict[str, Any], inputs: Path) -> dict[str, Any]:
     }
 
 
+def staged_top_words(spec: dict[str, Any], inputs: Path) -> dict[str, Any]:
+    # Actual input survives both waits; tokenization and counting run only
+    # after the corresponding expansion is durably granted by the client.
+    contents = read_inputs(inputs)
+    request_memory(spec, 1)
+    words = [word for content in contents.values() for word in content.split()]
+    request_memory(spec, 2)
+    counts = Counter(words)
+    verify_inputs(spec, inputs)
+    return {
+        "files": len(contents),
+        "words": len(words),
+        "rows": [
+            {"word": word, "count": count}
+            for word, count in counts.most_common(spec["arguments"]["top_n"])
+        ],
+        "input_version": spec["input_version"],
+        "resource_phases": 3,
+    }
+
+
 HANDLERS: dict[str, Callable[[dict[str, Any], Path], dict[str, Any]]] = {
+    "staged_top_words": staged_top_words,
     "read_file": read_file,
     "run_command": run_command,
     "file_stats": file_stats,
