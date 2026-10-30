@@ -1,6 +1,6 @@
 import asyncio
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from functools import partial
 from time import monotonic
 from typing import Any, TypeVar
@@ -10,6 +10,9 @@ from taskloom.policies.fair import FairQueue
 from taskloom.policies.resources import PhaseResourcePool
 
 T = TypeVar("T")
+
+# Lower rank is more urgent. Protection only defers same-or-lower urgency work.
+PRIORITY_RANK = {"high": 0, "normal": 1, "low": 2}
 
 
 class QuarantinedExecution(Exception):
@@ -26,6 +29,8 @@ class Pending[T]:
     priority: str
     enqueued_at: float
     bypasses: int = 0
+    # Only registered large requests may become protection targets.
+    large: bool = False
 
 
 class Dispatcher:
@@ -46,6 +51,8 @@ class Dispatcher:
         self.bypass_limit = bypass_limit
         self.protect_large = protect_large
         self.protected: Pending[Any] | None = None
+        # Absolute targets that running holders asked for but could not yet obtain.
+        self.expansions: dict[str, Resources] = {}
         self.max_pending = max_pending
         self.queues: dict[str, FairQueue[Pending[Any]]] = {
             name: FairQueue() for name in ("high", "normal", "low")
@@ -60,27 +67,51 @@ class Dispatcher:
     def _waiting(self) -> list[Pending[Any]]:
         return [item for queue in self.queues.values() for item in queue.items()]
 
-    def _refresh_protection(self) -> None:
+    def _protection_target(self) -> Pending[Any] | None:
+        """Pure view of the current target; callers decide whether to commit it."""
         waiting = self._waiting()
-        if self.protected is not None and (
-            self.protected not in waiting or self.protected.future.done()
+        current = self.protected
+        if (
+            current is not None
+            and not current.future.done()
+            and any(item is current for item in waiting)
         ):
-            self.protected = None
-        if not self.protect_large or self.protected is not None:
-            return
+            return current
+        if not self.protect_large:
+            return None
         now = monotonic()
         aged = [
             item
             for item in waiting
-            if not item.future.done()
+            if item.large
+            and not item.future.done()
             and item.identity not in self.pool.allocations
             and (
                 now - item.enqueued_at >= self.protection_seconds
                 or item.bypasses >= self.bypass_limit
             )
         ]
-        if aged:
-            self.protected = min(aged, key=lambda item: item.enqueued_at)
+        return min(aged, key=lambda item: item.enqueued_at) if aged else None
+
+    def _refresh_protection(self) -> None:
+        self.protected = self._protection_target()
+
+    def _expansion_headroom(self) -> Resources:
+        total = Resources()
+        for identity, target in self.expansions.items():
+            current = self.pool.allocations.get(identity)
+            if current is not None and current.fits(target):
+                total = total + (target - current)
+        return total
+
+    def expand(self, identity: str, target: Resources) -> bool:
+        """Grant a holder's absolute target, or keep headroom for it against new work."""
+        granted = self.pool.grant(identity, target)
+        if granted or identity not in self.pool.allocations:
+            self.expansions.pop(identity, None)
+        else:
+            self.expansions[identity] = target
+        return granted
 
     def _eligible(self, item: Pending[Any]) -> bool:
         if item.future.cancelled():
@@ -96,8 +127,26 @@ class Dispatcher:
                 item.identity, item.demand, reason or "resource admission denied"
             )
             return False
+        headroom = self._expansion_headroom()
+        available = self.pool.available
+        if any(
+            want and want + reserved > free
+            for want, reserved, free in zip(
+                (item.demand.slots, item.demand.memory_bytes, item.demand.artifact_bytes),
+                (headroom.slots, headroom.memory_bytes, headroom.artifact_bytes),
+                (available.slots, available.memory_bytes, available.artifact_bytes),
+                strict=True,
+            )
+        ):
+            # Holders already own part of their claim; new work must not starve them.
+            self.pool.blocked[item.identity] = "capacity reserved for holder expansion"
+            return False
         protected = self.protected
-        if protected is not None and protected is not item:
+        if (
+            protected is not None
+            and protected is not item
+            and PRIORITY_RANK[item.priority] >= PRIORITY_RANK[protected.priority]
+        ):
             # Drain conflicting dimensions. Preserve WRR among eligible work;
             # never reserve partial physical allocations for the waiting target.
             if any(
@@ -118,11 +167,12 @@ class Dispatcher:
         return True
 
     def snapshot(self) -> dict[str, object]:
-        self._refresh_protection()
+        protected = self._protection_target()
         now = monotonic()
         return {
             "enabled": self.protect_large,
-            "protected_attempt_id": self.protected.identity if self.protected else None,
+            "protected_attempt_id": protected.identity if protected else None,
+            "expansions_waiting": {key: asdict(value) for key, value in self.expansions.items()},
             "waiting": [
                 {
                     "attempt_id": item.identity,
@@ -130,11 +180,12 @@ class Dispatcher:
                     "priority": item.priority,
                     "wait_seconds": now - item.enqueued_at,
                     "bypass_count": item.bypasses,
-                    "protected": item is self.protected,
+                    "large": item.large,
+                    "protected": item is protected,
                     "protection_reason": (
                         "bypass_limit" if item.bypasses >= self.bypass_limit else "wait_threshold"
                     )
-                    if item is self.protected
+                    if item is protected
                     else None,
                     "blocked_by": self.pool.blocked.get(item.identity),
                 }
@@ -175,7 +226,9 @@ class Dispatcher:
         callback: Callable[[], Awaitable[T]],
         priority: str = "normal",
         maximum: Resources | None = None,
+        large: bool | None = None,
     ) -> T:
+        """Queue work; ``large`` defaults to a registered maximum above the initial demand."""
         if maximum is not None and not demand.fits(maximum):
             raise DomainError("RESOURCE_MAXIMUM_CONFLICT", "Initial demand exceeds maximum")
         if not demand.fits(self.pool.capacity):
@@ -190,7 +243,16 @@ class Dispatcher:
             raise DomainError("RESERVATION_CONFLICT", "Identity has a different demand")
         self.pool.declare(identity, maximum or demand)
         future: asyncio.Future[T] = asyncio.get_running_loop().create_future()
-        pending = Pending(identity, owner, demand, callback, future, priority, monotonic())
+        pending = Pending(
+            identity,
+            owner,
+            demand,
+            callback,
+            future,
+            priority,
+            monotonic(),
+            large=(maximum is not None and maximum != demand) if large is None else large,
+        )
         self.queues[priority].push(owner, pending)
         self.wake.set()
         try:
@@ -259,7 +321,9 @@ class Dispatcher:
                 [
                     pending.enqueued_at + self.protection_seconds
                     for pending in self._waiting()
-                    if pending.identity not in self.pool.allocations and not pending.future.done()
+                    if pending.large
+                    and pending.identity not in self.pool.allocations
+                    and not pending.future.done()
                 ]
                 if self.protect_large and self.protected is None
                 else []
@@ -276,6 +340,7 @@ class Dispatcher:
 
     def _done(self, item: Pending[Any], operation: asyncio.Task[None]) -> None:
         # A task cancelled before its first tick never reaches _run's finally.
+        self.expansions.pop(item.identity, None)
         if self.active.get(item.identity) is operation:
             self.active.pop(item.identity)
             if item.identity not in self.quarantined:
@@ -302,6 +367,7 @@ class Dispatcher:
             if not item.future.done():
                 item.future.set_exception(error)
         finally:
+            self.expansions.pop(item.identity, None)
             if release:
                 self.pool.release(item.identity)
             self.active.pop(item.identity, None)

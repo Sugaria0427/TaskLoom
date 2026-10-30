@@ -43,7 +43,9 @@ async def protection_trial(enabled: bool) -> JsonObject:
             key,
             Resources(slots=1, memory_bytes=memory),
             execute,
-            priority="low" if key == "large" else "high",
+            # Same tier: protection never defers more urgent work.
+            priority="low",
+            large=key == "large",
         )
 
     try:

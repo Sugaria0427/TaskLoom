@@ -71,10 +71,6 @@ class PlatformHTTP:
 
 
 class ExecutorHTTP:
-    async def grant_phase(self, grant: ToolPhase) -> ToolState:
-        response = checked(await self.client.post("/phases/grant", json=grant.model_dump()))
-        return ToolState.model_validate(response.json())
-
     def __init__(self, socket_path: str) -> None:
         self.client = httpx.AsyncClient(
             transport=httpx.AsyncHTTPTransport(uds=socket_path),
@@ -97,6 +93,10 @@ class ExecutorHTTP:
                 "/execute", json=request.model_dump(mode="json", exclude_defaults=True)
             )
         )
+        return ToolState.model_validate(response.json())
+
+    async def grant_phase(self, grant: ToolPhase) -> ToolState:
+        response = checked(await self.client.post("/phases/grant", json=grant.model_dump()))
         return ToolState.model_validate(response.json())
 
     async def query(self, attempt_id: str) -> ToolState | None:

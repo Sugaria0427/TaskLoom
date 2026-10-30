@@ -305,3 +305,37 @@ async def test_duplicate_queued_call_does_not_terminalize_the_original_waiter(
         finally:
             first.cancel()
             await asyncio.gather(first, return_exceptions=True)
+
+
+async def test_lost_grant_reply_in_session_is_resent_once_without_double_debit(
+    tmp_path,
+    platform_feedback,
+):
+    async with client(tmp_path, platform_feedback) as (service, executor, _app):
+        call = await seed(service)
+        grant = executor.grant_phase
+        sent = []
+
+        async def lose_first_reply(phase):
+            sent.append(phase.version)
+            applied = await grant(phase)
+            if len(sent) == 1:
+                raise httpx.ReadError("reply lost after the executor applied the phase")
+            return applied
+
+        executor.grant_phase = lose_first_reply
+        result = await asyncio.wait_for(service.tool("root", call, 0), 15)
+        assert result["words"] == 6 and result["resource_phases"] == 3
+        assert sent == [1, 1, 2]
+        attempt = next(a for a in service.attempts.values() if a.kind == "tool")
+        receipt = await executor.query(attempt.attempt_id)
+        assert [phase.version for phase in receipt.phase_grants] == [1, 2]
+        assert attempt.phase_version == 2 and attempt.settled
+        granted = [
+            entry["target"]["memory_bytes"]
+            for entry in service.tools.pool.history
+            if entry["identity"] == attempt.attempt_id and entry["granted"]
+        ]
+        assert granted == [128 * MIB, 256 * MIB, 384 * MIB]
+        assert service.tools.pool.available == service.tools.pool.capacity
+        assert not service.tools.expansions

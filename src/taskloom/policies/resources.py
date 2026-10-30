@@ -46,7 +46,14 @@ class PhaseResourcePool(ResourcePool):
         if not self.allocations.get(identity, Resources()).fits(maximum):
             raise DomainError("RESOURCE_MAXIMUM_CONFLICT", "Maximum is below current allocation")
         trial = {**self.maximum, identity: maximum}
-        if self.check_safe and self._banker(self.allocations, trial).safe() is None:
+        # A claimant holding nothing can always finish last because its maximum fits
+        # the capacity, so its declaration cannot change safety. Skipping the proof
+        # lets new work queue behind restored unsafe occupancy; admission still checks.
+        if (
+            self.check_safe
+            and identity in self.allocations
+            and self._banker(self.allocations, trial).safe() is None
+        ):
             raise DomainError("RESOURCE_UNSAFE", "Maximum update would break the safe sequence")
         self.maximum = trial
 

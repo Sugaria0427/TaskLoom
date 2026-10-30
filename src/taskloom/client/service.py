@@ -28,6 +28,7 @@ from taskloom.contracts.models import (
     TaskState,
     ToolCall,
     ToolClaim,
+    ToolPhase,
     ToolRun,
     ToolState,
     digest,
@@ -48,6 +49,8 @@ _MODEL_QUANTUM = 100
 _URGENCY_WINDOW_SECONDS = 60.0
 _AGING_WINDOW_SECONDS = 20.0
 _URGENCY_BURST = 2
+# 阶段授权幂等；会话内响应丢失时有限次重发同一版本，超出后转入核对。
+_PHASE_GRANT_SENDS = 3
 
 
 class ClientService:
@@ -974,7 +977,7 @@ class ClientService:
             target = Resources(demand.slots, phase.memory_bytes, demand.artifact_bytes)
             if not target.fits(self._tool_maximum(demand, request)):
                 raise QuarantinedExecution("Phase exceeds the persisted maximum")
-            if not self.tools.pool.grant(attempt.attempt_id, target):
+            if not self.tools.expand(attempt.attempt_id, target):
                 return
             if phase.version > current.phase_version:
                 attempt.phase_version = phase.version
@@ -987,9 +990,23 @@ class ClientService:
                 # Commit before sending. Lost replies retain the entitlement and
                 # retry the same version, never a second incremental debit.
                 await self._save_attempt(attempt, locked=True)
-        applied = await self.executor.grant_phase(phase)
+        applied = await self._send_phase_grant(phase)
         if not self._tool_receipt_matches(attempt, applied) or phase not in applied.phase_grants:
             raise QuarantinedExecution("Executor did not confirm the granted phase")
+
+    async def _send_phase_grant(self, phase: ToolPhase) -> ToolState:
+        """Resend one saved absolute grant; the executor treats a replay as a no-op."""
+        for attempt in range(_PHASE_GRANT_SENDS):
+            try:
+                return await self.executor.grant_phase(phase)
+            except DomainError as error:
+                if not error.retryable or attempt + 1 == _PHASE_GRANT_SENDS:
+                    raise
+            except Exception:
+                if attempt + 1 == _PHASE_GRANT_SENDS:
+                    raise
+            await asyncio.sleep(0.05 * 2**attempt)
+        raise AssertionError("unreachable")
 
     async def tool(self, task_id: str, call: ToolCall, model_round: int) -> JsonObject:
         task = self.get(task_id)

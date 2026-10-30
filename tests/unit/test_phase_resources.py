@@ -72,3 +72,16 @@ def test_cancelled_declarations_are_removed_and_multi_resource_admission_is_atom
     assert pool.reserve("a", Resources(slots=1, memory_bytes=1, artifact_bytes=8))
     assert not pool.reserve("b", Resources(slots=1, memory_bytes=1, artifact_bytes=3))
     assert "b" not in pool.allocations
+
+
+def test_zero_allocation_declaration_is_accepted_and_admission_still_waits_for_safety():
+    pool = PhaseResourcePool(Resources(slots=3, memory_bytes=10))
+    pool.restore("a", memory(4), memory(10))
+    pool.restore("b", memory(4), memory(10))
+    pool.declare("fresh", memory(2))  # used to raise RESOURCE_UNSAFE forever
+    assert pool.decision("fresh", memory(1)) == (False, "would break the safe sequence")
+    assert not pool.grant("fresh", memory(1))
+    with pytest.raises(DomainError, match="safe sequence"):
+        pool.declare("b", memory(9))  # still checked: b holds resources
+    assert pool.release("a")
+    assert pool.grant("fresh", memory(1))
