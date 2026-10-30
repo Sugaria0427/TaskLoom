@@ -16,7 +16,16 @@ from typing import Any
 from components import CASES
 
 from taskloom.bootstrap.development import Topology, free_port
-from taskloom.contracts.models import UpstreamConfig
+from taskloom.contracts.models import ClientConfig, UpstreamConfig
+
+
+class AcceptanceTopology(Topology):
+    """Enable phase tools only inside this disposable acceptance topology."""
+
+    def client_config(self, profile: str, port: int) -> ClientConfig:
+        config = super().client_config(profile, port)
+        config.staged_tools = True
+        return config
 
 
 class ScriptedModel(BaseHTTPRequestHandler):
@@ -60,7 +69,7 @@ class ScriptedModel(BaseHTTPRequestHandler):
                         for message in reversed(messages)
                         if message.get("role") == "user"
                     )
-                    plan = json.loads(text.split("验收工具参数：", 1)[1])
+                    plan, _ = json.JSONDecoder().raw_decode(text.split("验收工具参数：", 1)[1])
                     message = {
                         "role": "assistant",
                         "content": None,
@@ -91,20 +100,20 @@ class ScriptedModel(BaseHTTPRequestHandler):
 
 
 def verify(args: Namespace, output: Path) -> dict[str, Any]:
-    from runner import LiveCase, comparison
+    from runner import GROUPS, LIVE, LiveCase, PrerequisiteError, comparison, run_groups
 
-    components = {}
-    for name, function in CASES.items() if not args.only else []:
-        value = function()
-        components[name] = asyncio.run(value) if inspect.isawaitable(value) else value
-        print("组件场景完成：" + name, flush=True)
+    target = args.only or ("all" if args.case == "verify" else args.case)
+    configured = copy.copy(args)
+    configured.case = target
+    if args.components_only and target in {*GROUPS, "all"}:
+        return run_groups(configured, output)
     server = ThreadingHTTPServer(("127.0.0.1", free_port()), ScriptedModel)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     cases = {}
     try:
         with tempfile.TemporaryDirectory(prefix="tl-accept-") as directory:
-            topology = Topology(
+            topology = AcceptanceTopology(
                 Path(directory), ephemeral=True, with_second_client=True, scenario="api_constrained"
             )
             # The local fixture owns an HTTP loopback transport; no user upstream file is read.
@@ -117,50 +126,34 @@ def verify(args: Namespace, output: Path) -> dict[str, Any]:
             topology.start()
             try:
                 print("隔离服务已启动：临时端口、临时账号、脚本模型；不调用 DeepSeek。", flush=True)
-                for name in (
-                    [args.only]
-                    if args.only and args.only != "compare"
-                    else []
-                    if args.only
-                    else ("read", "tools", "priority", "cancel", "platform")
-                ):
-                    configured = copy.copy(args)
-                    configured.case, configured.url, configured.second_url = (
-                        name,
-                        topology.client_url,
-                        topology.second_client_url,
-                    )
-                    configured.timeout = 90
-                    configured.no_browser, configured.file, configured.count = True, None, 3
-                    folder = output / name
-                    folder.mkdir()
-                    case = LiveCase(configured, folder)
-                    try:
-                        # Only this disposable topology is configured; user services stay untouched.
-                        for base in (configured.url, configured.second_url):
-                            case.api(
-                                base,
-                                "/api/v1/settings/demo",
-                                {
-                                    "enabled": True,
-                                    "tools": True,
-                                    "models": False,
-                                    "strength": 100,
-                                    "text_reference_ms": 1000,
-                                    "cap_seconds": 5,
-                                },
-                            )
-                        cases[name] = case.run()
-                    finally:
-                        case.http.close()
-                if not args.only or args.only == "compare":
-                    configured = copy.copy(args)
-                    configured.url, configured.days, configured.no_browser = (
-                        topology.client_url,
-                        1,
-                        True,
-                    )
-                    cases["compare"] = comparison(configured)
+                configured.url, configured.second_url = topology.client_url, topology.second_client_url
+                configured.timeout = 90
+                configured.no_browser, configured.file, configured.count = True, None, 3
+                case = LiveCase(configured, output)
+                try:
+                    for base in (configured.url, configured.second_url):
+                        case.api(base, "/api/v1/settings/demo", {
+                            "enabled": True, "tools": True, "models": False,
+                            "strength": 100, "text_reference_ms": 1000, "cap_seconds": 5,
+                        })
+                    if target in {*GROUPS, "all"}:
+                        cases["groups"] = run_groups(configured, output)
+                    elif target in LIVE:
+                        try:
+                            cases[target] = case.run()
+                        except PrerequisiteError as error:
+                            cases[target] = {"status": "NOT_READY", "reason": str(error)}
+                    elif target != "compare":
+                        results = {}
+                        for name in CASES if target == "algorithms" else [target]:
+                            value = CASES[name]()
+                            results[name] = asyncio.run(value) if inspect.isawaitable(value) else value
+                        cases["components"] = {"status": "PASSED", "results": results}
+                    if target in {"all", "compare"}:
+                        configured.days = args.days if target == "compare" else 1
+                        cases["compare"] = comparison(configured)
+                finally:
+                    case.http.close()
             finally:
                 topology.close()
     finally:
@@ -169,10 +162,8 @@ def verify(args: Namespace, output: Path) -> dict[str, Any]:
         thread.join(timeout=3)
     return {
         "case": "verify",
-        "status": "PASSED"
-        if all(case["status"] == "PASSED" for case in cases.values())
-        else "NOT_OBSERVED",
-        "scope": "五个算法组件、独立平台/个人端/实际工具进程，以及既有三策略仿真；模型决策为确定性脚本，不使用真实 API。",
-        "components": components,
+        "status": "FAILED" if any(case["status"] == "FAILED" for case in cases.values())
+        else "PASSED" if all(case["status"] == "PASSED" for case in cases.values()) else "INCOMPLETE",
+        "scope": "按OS算法分组的独立服务及实际工具进程；模型决策为免费脚本。打印的临时访问地址在命令结束后关闭。",
         "cases": cases,
     }

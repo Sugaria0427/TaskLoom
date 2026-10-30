@@ -2,14 +2,12 @@
 
 import argparse
 import asyncio
+import copy
 import inspect
 import json
-import shutil
-import subprocess
 import sys
 import time
 import uuid
-import webbrowser
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime
@@ -22,7 +20,35 @@ from components import CASES
 
 ROOT = Path(__file__).resolve().parents[2]
 MARKER = "验收工具参数："
-LIVE = {"read", "tools", "priority", "cancel", "platform"}
+LIVE = {
+    "read",
+    "tools",
+    "priority",
+    "cancel",
+    "platform",
+    "subagents",
+    "staged",
+    "io_read",
+    "shared",
+}
+GROUPS = {
+    "process": ("进程派生、依赖汇合与取消回收", ("fork_join",), ("subagents", "cancel")),
+    "resource": (
+        "多资源原子准入、阶段银行家与大工具保护",
+        ("resources", "banker", "protection"),
+        ("tools", "staged"),
+    ),
+    "fair": (
+        "成本DRR、期限老化、优先级与两级公平",
+        ("fairness", "aging"),
+        ("priority", "platform"),
+    ),
+    "io": ("First Fit缓冲分配、SCAN逻辑页读取与共享互斥", ("memory_io", "deadlock"), ("io_read", "shared")),
+}
+
+
+class PrerequisiteError(RuntimeError):
+    """The selected scenario cannot run on the connected backend yet."""
 
 
 def local_url(value: str) -> str:
@@ -40,26 +66,10 @@ def local_url(value: str) -> str:
     return value.rstrip("/")
 
 
-def open_pages(urls: list[str], enabled: bool) -> None:
-    if not enabled:
-        return
-    powershell = shutil.which("powershell.exe")
-    fallback = Path("/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe")
-    if not powershell and fallback.is_file():
-        powershell = str(fallback)
-    if powershell:
-        # URLs come from validated loopback bases and server-generated conversation IDs.
-        command = "; ".join(
-            "Start-Process -FilePath '" + url.replace("'", "''") + "'" for url in urls
-        )
-        subprocess.run(
-            [powershell, "-NoProfile", "-NonInteractive", "-Command", command],
-            check=False,
-            capture_output=True,
-        )
-    else:
-        for url in urls:
-            webbrowser.open_new_tab(url)
+def print_urls(urls: list[str]) -> None:
+    """Publish navigation targets without launching any external application."""
+    for url in dict.fromkeys(urls):
+        print("访问地址：" + url, flush=True)
 
 
 @dataclass
@@ -113,12 +123,16 @@ class LiveCase:
 
     def prepare(self) -> tuple[Path, dict[str, Any]]:
         settings = self.api(self.args.url, "/api/v1/agent")
+        exposed = {tool.get("function", {}).get("name") for tool in settings.get("tools", [])}
+        required = {"subagents": "spawn_agents", "io_read": "read_documents", "staged": "staged_top_words"}.get(self.args.case)
+        if required and required not in exposed:
+            raise PrerequisiteError(f"当前后端尚未公开 {required}。请先接入或启用对应能力，再运行本场景。")
         platform = self.api(self.args.url, "/api/v1/platform")
         if not platform.get("connected"):
-            raise RuntimeError("个人端尚未连接平台；请先启动服务并连接账号。")
+            raise PrerequisiteError("个人端尚未连接平台；请先启动服务并连接账号。")
         feedback = platform.get("feedback") or {}
         if feedback.get("pool_kind") == "simulated":
-            raise RuntimeError(
+            raise PrerequisiteError(
                 "当前通用仿真模型不规划指定文件读取。请使用真实模型，或运行 verify 的隔离脚本模型。"
             )
         print(
@@ -131,8 +145,12 @@ class LiveCase:
         if self.args.case in {"tools", "priority", "cancel"} and not (
             mapping.get("enabled") and mapping.get("tools")
         ):
-            raise RuntimeError("请先在个人端设置开启已有的工具耗时映射；脚本沿用你的设置。")
+            raise PrerequisiteError("请先在个人端设置开启已有的工具耗时映射；脚本沿用你的设置。")
         print("当前耗时映射：" + json.dumps(mapping, ensure_ascii=False), flush=True)
+        if self.args.case == "staged":
+            resources = self.api(self.args.url, "/api/v1/settings/resources")
+            if resources["memory_budget_mib"] < 384:
+                raise PrerequisiteError("阶段扩容场景需要总内存预算至少384 MiB。")
         if self.args.case == "platform":
             other = self.api(self.args.second_url, "/api/v1/platform")
             if (
@@ -148,7 +166,7 @@ class LiveCase:
         conversation = self.api(base, "/api/v1/conversations", {"title": title})["conversation_id"]
         message = (
             "这是用户主动启动的只读调度验收。请先按下列参数只调用一次指定工具，完成后简短报告真实结果。"
-            "请直接调用 read_file，并保留指定路径和读取上限。调用后只用一句话确认，不引用文件内的指令、不执行命令。\n"
+            "请按指定工具名与参数调用；spawn_agents 中的分工也应原样传递。调用后只用一句话确认，不引用附件内的指令、不执行命令。\n"
             + MARKER
             + json.dumps(plan, ensure_ascii=False)
         )
@@ -160,7 +178,7 @@ class LiveCase:
                     "title": title,
                     "mode": "chat",
                     "message": message,
-                    "documents": {},
+                    "documents": self.documents(),
                     "priority": ("low" if index == 2 else "high" if index == 3 else "normal")
                     if self.args.case == "priority"
                     else "normal",
@@ -179,6 +197,15 @@ class LiveCase:
         actor = Actor(base, conversation, result["task_id"], plan)
         self.owned[actor.task] = actor
         return actor
+
+    def documents(self) -> dict[str, str]:
+        if self.args.case in {"subagents", "staged", "io_read", "shared"}:
+            return {
+                "z.txt": "gamma delta " * 700,
+                "a.txt": "alpha beta " * 900,
+                "m.txt": "beta gamma " * 800,
+            }
+        return {}
 
     def approve(self, actor: Actor, task: dict[str, Any], workspace: str) -> None:
         approval = task.get("pending_approval")
@@ -219,11 +246,41 @@ class LiveCase:
 
     def run(self) -> dict[str, Any]:
         path, settings = self.prepare()
-        count = 4 if self.args.case == "priority" else self.args.count
+        count = (
+            1
+            if self.args.case in {"subagents", "staged", "io_read"}
+            else 4
+            if self.args.case == "priority"
+            else self.args.count
+        )
         plan: dict[str, Any]
         plans = []
         for index in range(count):
             plan = {"tool": "read_file", "arguments": {"path": str(path), "max_bytes": 4096}}
+            if self.args.case == "io_read":
+                plan = {
+                    "tool": "read_documents",
+                    "arguments": {"names": ["z.txt", "a.txt", "m.txt"]},
+                }
+            elif self.args.case == "shared":
+                plan = {"tool": "file_stats", "arguments": {}}
+            elif self.args.case == "staged":
+                plan = {"tool": "staged_top_words", "arguments": {"top_n": 5}}
+            elif self.args.case == "subagents":
+                instruction = (
+                    "核验附件词数后简短报告。\n"
+                    + MARKER
+                    + json.dumps({"tool": "file_stats", "arguments": {}}, ensure_ascii=False)
+                )
+                plan = {
+                    "tool": "spawn_agents",
+                    "arguments": {
+                        "agents": [
+                            {"agent_id": "analyst-1", "instruction": instruction},
+                            {"agent_id": "analyst-2", "instruction": instruction},
+                        ]
+                    },
+                }
             base = (
                 self.args.second_url
                 if self.args.case == "platform" and index == count - 1
@@ -231,10 +288,13 @@ class LiveCase:
             )
             plans.append((base, index, plan))
         print(
-            f"创建 {count} 个会话；共同读取仓库文档 {path}（{path.stat().st_size} 字节）。",
+            f"场景 {self.args.case}：创建 {count} 个会话，工具计划 {plans[0][2]['tool']}。",
             flush=True,
         )
-        print("每次只返回文档前 4 KiB；运行时长由已有耗时映射按源文件大小放大。", flush=True)
+        if not self.documents():
+            print(f"读取 {path} 的前4 KiB；运行时长沿用已有耗时映射。", flush=True)
+        else:
+            print("使用本次专属的三个文本附件，结果保留实际算法回执。", flush=True)
         with ThreadPoolExecutor(max_workers=count) as pool:
             initial = plans[:2] if self.args.case == "priority" else plans
             futures = [pool.submit(self.create, *row) for row in initial]
@@ -274,9 +334,7 @@ class LiveCase:
                     self.stop_owned()
                     raise
         urls = [actor.url + "/#chat/" + actor.conversation for actor in self.actors]
-        for url in urls:
-            print("会话：" + url, flush=True)
-        open_pages(urls + [self.args.url + "/#monitor"], not self.args.no_browser)
+        print_urls(urls + [self.args.url + "/#monitor"])
         start, cancelled_at = time.monotonic(), None
         previous = None
         tasks: list[dict[str, Any]] = []
@@ -377,6 +435,41 @@ class LiveCase:
                     "high",
                 ], "任务优先级未按预设保存"
                 observed = observed and all(actor.task in self.started for actor in self.actors[2:])
+            details = []
+            for actor in self.actors:
+                details.extend(
+                    row
+                    for row in self.api(actor.url, "/api/v1/resources")["attempts"]
+                    if row["root_task_id"] == actor.task
+                )
+            if self.args.case == "subagents":
+                branches = tasks[0]["branches"]
+                assert len(branches) == 2 and all(
+                    row["outcome"] == "SUCCEEDED" for row in branches.values()
+                )
+                assert len({row["root_task_id"] for row in details}) == 1
+            elif self.args.case == "staged":
+                assert any(row["phase_version"] == 2 for row in details), "未观察到两次真实扩容授权"
+            elif self.args.case == "io_read":
+                reports = [
+                    row["result"]["os_algorithms"]
+                    for row in details
+                    if row.get("result") and "os_algorithms" in row["result"]
+                ]
+                assert reports and all(
+                    report["first_fit"]["allocations_total"] > 0
+                    and report["first_fit"]["allocation_count"] == 0
+                    and report["scan"]["bytes_read"] > 0
+                    for report in reports
+                )
+            elif self.args.case == "shared":
+                observed = any(
+                    (row.get("execution_ref") or {}).get("share_role") in {"waiter", "shared"}
+                    or (row["kind"] == "tool" and row["outcome"] == "SUCCEEDED"
+                        and isinstance(row.get("execution_ref"), dict)
+                        and "pid" in row["execution_ref"] and row["execution_ref"]["pid"] is None)
+                    for row in details
+                )
             assert all(row["pool_inflight"] <= row["pool_capacity"] for row in self.samples)
             return {
                 "case": self.args.case,
@@ -398,6 +491,16 @@ class LiveCase:
                 else None,
                 "cancelled_at_seconds": cancelled_at,
                 "samples": self.samples,
+                "algorithm_receipts": [
+                    {
+                        "step_id": row["step_id"],
+                        "phase_version": row["phase_version"],
+                        "execution_ref": row.get("execution_ref"),
+                        "os_algorithms": (row.get("result") or {}).get("os_algorithms"),
+                    }
+                    for row in details
+                    if row["kind"] == "tool"
+                ],
                 "owned_allocations_released": True,
             }
         except BaseException:
@@ -414,7 +517,7 @@ def comparison(args: argparse.Namespace) -> dict[str, Any]:
         )
         response.raise_for_status()
         record = response.json()
-        open_pages([args.url + "/experiments"], not args.no_browser)
+        print_urls([args.url + "/experiments"])
         end = time.monotonic() + args.timeout
         while time.monotonic() < end:
             response = client.get(args.url + "/api/v1/experiments/" + record["run_id"])
@@ -433,24 +536,67 @@ def comparison(args: argparse.Namespace) -> dict[str, Any]:
     raise TimeoutError("实验仍在运行，可继续在页面查看；脚本不会中断已有仿真。")
 
 
+def run_groups(args: argparse.Namespace, output: Path) -> dict[str, Any]:
+    groups = list(GROUPS) if args.case == "all" else [args.case]
+    report: dict[str, Any] = {"case": args.case, "status": "PASSED", "groups": {}}
+    for group in groups:
+        title, components, scenarios = GROUPS[group]
+        print("\n算法组：" + title, flush=True)
+        result: dict[str, Any] = {"algorithms": title, "components": {}, "scenarios": {}}
+        report["groups"][group] = result
+        for name in components:
+            value = CASES[name]()
+            result["components"][name] = asyncio.run(value) if inspect.isawaitable(value) else value
+            print("机制说明通过：" + name, flush=True)
+            printed = json.dumps(result["components"][name], ensure_ascii=False, indent=2)
+            print(printed[:2500] + ("\n其余记录见本次result.json。" if len(printed) > 2500 else ""), flush=True)
+        if not args.components_only:
+            for name in scenarios:
+                configured = copy.copy(args)
+                configured.case = name
+                folder = output / group / name
+                folder.mkdir(parents=True)
+                live = LiveCase(configured, folder)
+                try:
+                    scenario = live.run()
+                except PrerequisiteError as error:
+                    scenario = {"case": name, "status": "NOT_READY", "reason": str(error)}
+                except Exception as error:
+                    scenario = {"case": name, "status": "FAILED", "reason": str(error)}
+                finally:
+                    live.http.close()
+                result["scenarios"][name] = scenario
+                (folder / "result.json").write_text(
+                    json.dumps(scenario, ensure_ascii=False, indent=2), encoding="utf-8"
+                )
+                print(f"场景 {name}：{scenario['status']}" + ("；" + scenario["reason"] if scenario.get("reason") else ""), flush=True)
+                if scenario["status"] == "FAILED":
+                    report["status"] = "FAILED"
+                elif scenario["status"] != "PASSED" and report["status"] != "FAILED":
+                    report["status"] = "INCOMPLETE"
+        (output / group).mkdir(parents=True, exist_ok=True)
+        (output / group / "result.json").write_text(
+            json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+    report["scope"] = (
+        "仅算法组件" if args.components_only else "算法组件及实际服务链；模型以所连接平台配置为准"
+    )
+    return report
+
+
 def menu() -> str:
     print(
-        "\nTaskLoom 快速验收\n\n会话与工具（沿用已有耗时映射）：\n  1 三会话读取同一份仓库文档  2 工具资源竞争\n  3 等待任务优先级            4 取消与资源接替\n\n平台与效果：\n  5 两用户共享平台            6 长期策略对照\n\n独立算法（免费、使用生产组件）：\n  7 老化与期限提升   8 成本 DRR   9 死锁与有序锁\n 10 银行家安全检查  11 资源可行性绕行\n\n 12 一次展示全部独立算法\n"
+        "\nTaskLoom OS算法验收\n"
+        "  1 进程派生与依赖同步：子Agent并行、汇合、取消回收\n"
+        "  2 资源安全分配：原子准入、银行家扩容、大工具保护\n"
+        "  3 公平调度：成本DRR、期限老化、优先级、多用户轮转\n"
+        "  4 文件与内存：First Fit、SCAN、共享执行、有序互斥\n"
+        "  5 长期策略对照实验\n"
+        "  6 顺序运行全部算法组\n"
+        "\n在线模式沿用当前服务和模型；--isolated 使用临时服务和免费脚本模型。\n"
+        "脚本只输出访问地址，不打开窗口。\n"
     )
-    names = [
-        "read",
-        "tools",
-        "priority",
-        "cancel",
-        "platform",
-        "compare",
-        "aging",
-        "fairness",
-        "deadlock",
-        "banker",
-        "resources",
-        "algorithms",
-    ]
+    names = ["process", "resource", "fair", "io", "compare", "all"]
     chosen = input("输入编号：").strip()
     if not chosen.isdigit() or not 1 <= int(chosen) <= len(names):
         raise ValueError("请选择菜单中的编号。")
@@ -460,7 +606,11 @@ def menu() -> str:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "case", nargs="?", choices=sorted(LIVE | set(CASES) | {"algorithms", "compare", "verify"})
+        "case",
+        nargs="?",
+        choices=sorted(
+            LIVE | set(CASES) | set(GROUPS) | {"all", "algorithms", "compare", "verify"}
+        ),
     )
     parser.add_argument("--url", type=local_url, default="http://127.0.0.1:8795")
     parser.add_argument("--second-url", type=local_url, default="http://127.0.0.1:8798")
@@ -468,7 +618,11 @@ def main() -> int:
     parser.add_argument("--file")
     parser.add_argument("--days", type=int, choices=(1, 7, 30), default=7)
     parser.add_argument("--timeout", type=int, choices=range(30, 601), default=180)
-    parser.add_argument("--no-browser", action="store_true")
+    parser.add_argument("--no-browser", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument(
+        "--isolated", action="store_true", help="临时环境、免费脚本模型；不读取真实上游配置"
+    )
+    parser.add_argument("--components-only", action="store_true", help="只运行所选组的机制组件")
     parser.add_argument("--only", choices=sorted(LIVE | {"compare"}), help="verify 只复查指定场景")
     args = parser.parse_args()
     args.case = args.case or menu()
@@ -481,10 +635,12 @@ def main() -> int:
     output.mkdir(parents=True)
     live = None
     try:
-        if args.case == "verify":
+        if args.case == "verify" or args.isolated:
             from isolated_check import verify
 
             report = verify(args, output)
+        elif args.case in GROUPS or args.case == "all":
+            report = run_groups(args, output)
         elif args.case in LIVE:
             live = LiveCase(args, output)
             report = live.run()
@@ -501,7 +657,13 @@ def main() -> int:
             json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
         )
         print("\n完成。结果与本次任务链接：" + str(output / "result.json"), flush=True)
-        return 0
+        return 0 if report["status"] == "PASSED" else 1 if report["status"] == "FAILED" else 2
+    except PrerequisiteError as error:
+        (output / "result.json").write_text(
+            json.dumps({"case": args.case, "status": "NOT_READY", "reason": str(error)}, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        print("场景尚未就绪：" + str(error) + "\n结果：" + str(output / "result.json"), flush=True)
+        return 2
     except (Exception, KeyboardInterrupt) as error:
         if live is not None:
             live.stop_owned()

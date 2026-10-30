@@ -6,6 +6,7 @@ from typing import Any
 
 from taskloom.client.dispatcher import Dispatcher
 from taskloom.domain.model import Resources
+from taskloom.experiments.resource_bench import protection_trial
 from taskloom.policies.access import KeyedMutex
 from taskloom.policies.aging import AgingQueue
 from taskloom.policies.banker import PhaseBanker
@@ -215,10 +216,74 @@ async def resources() -> dict[str, Any]:
         await dispatcher.close()
 
 
+async def protection() -> dict[str, Any]:
+    baseline, protected = await protection_trial(False), await protection_trial(True)
+    for run in (baseline, protected):
+        assert run["submitted"] == run["completed"]
+        assert run["allocations_remaining"] == 0
+        assert run["peak_memory_units"] <= run["capacity_memory_units"]
+    assert baseline["workload_hash"] == protected["workload_hash"]
+    return {"scope": "生产Dispatcher的受控回调，不调用模型API",
+            "unprotected": baseline, "protected": protected}
+
+
+async def fork_join() -> dict[str, Any]:
+    slots = asyncio.Semaphore(2)
+    active = peak = 0
+    events: list[str] = []
+
+    async def branch(name: str) -> str:
+        nonlocal active, peak
+        async with slots:
+            active += 1
+            peak = max(peak, active)
+            events.append(name + "开始")
+            try:
+                await asyncio.sleep(0.01)
+                return name + "完成"
+            finally:
+                active -= 1
+                events.append(name + "释放执行许可")
+
+    results = await asyncio.gather(branch("子任务一"), branch("子任务二"))
+    events.append("父任务收到全部结果并继续")
+    assert peak == 2 and active == 0 and len(results) == 2
+    return {"scope": "异步Fork/Join机制示例；模型实际派生由subagents场景核对",
+            "max_active_children": peak, "resources_released": active == 0,
+            "events": events, "results": results}
+
+
+def memory_io() -> dict[str, Any]:
+    from taskloom.policies.disk import DiskRequest, schedule_disk
+    from taskloom.policies.first_fit import FirstFit
+
+    arena = FirstFit(100)
+    blocks = [arena.allocate(30) for _ in range(3)]
+    assert all(block is not None for block in blocks)
+    left, middle, right = blocks
+    assert left is not None and middle is not None and right is not None
+    arena.write(middle.identity, b"agent-buffer".ljust(30, b" "))
+    arena.release(left.identity)
+    arena.release(right.identity)
+    fragmented = arena.snapshot()
+    assert arena.allocate(50) is None
+    assert arena.read(middle.identity).startswith(b"agent-buffer")
+    arena.release(middle.identity)
+    merged = arena.snapshot()
+    assert merged["largest_free_bytes"] == 100
+    requests = [DiskRequest(str(i), track) for i, track in enumerate([98, 183, 37, 122, 14, 124, 65, 67])]
+    return {"scope": "独立课程模型；实际Agent接入由io_read场景核对",
+            "first_fit": {"fragmented": fragmented, "coalesced": merged},
+            "disk": [schedule_disk(requests, head=53, policy=policy) for policy in ("fifo", "scan")]}
+
+
 CASES = {
+    "fork_join": fork_join,
     "aging": aging,
     "fairness": fairness,
     "banker": banker,
     "deadlock": deadlock,
     "resources": resources,
+    "protection": protection,
+    "memory_io": memory_io,
 }
