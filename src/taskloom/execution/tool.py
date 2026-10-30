@@ -23,7 +23,7 @@ from typing import Any
 from taskloom.domain.identity import digest
 from taskloom.execution.access import local_path, readable
 from taskloom.execution.catalog import tool_names
-from taskloom.execution.coordination import AccessPermit, FileLease, check_permit
+from taskloom.execution.coordination import SECRET_BYTES, AccessPermit, FileLease, check_permit
 from taskloom.execution.images import inspect_image, model_image
 
 
@@ -83,6 +83,8 @@ def admit(spec: dict[str, Any]) -> FileLease | None:
         return None
     permit = AccessPermit(**access["permit"])
     secret = Path(access["secret_path"]).read_bytes()
+    if len(secret) < SECRET_BYTES:
+        raise ValueError("Access permit secret is too short")
     check_permit(
         permit,
         secret,

@@ -14,6 +14,10 @@ from typing import Any, TypeVar
 T = TypeVar("T")
 
 
+class CapacityExhausted(RuntimeError):
+    """A SingleFlight already tracks its maximum number of distinct keys."""
+
+
 class SingleFlight:
     """Run one shared operation per key; concurrent callers await the same result."""
 
@@ -30,7 +34,7 @@ class SingleFlight:
         task = self._inflight.get(key)
         if task is None or task.done():
             if task is None and len(self._inflight) >= self._max_inflight:
-                raise RuntimeError("SingleFlight capacity exhausted")
+                raise CapacityExhausted("SingleFlight capacity exhausted")
             task = asyncio.create_task(operation())
             self._inflight[key] = task
             task.add_done_callback(lambda done: self._completed(key, done))
@@ -89,17 +93,22 @@ class KeyedMutex:
 
 
 class ReadWriteLock:
-    """Readers-writer lock built on ``asyncio.Condition``."""
+    """Readers-writer lock built on ``asyncio.Condition`` that prefers writers.
+
+    A new reader waits while a writer is waiting, so a steady stream of readers
+    cannot starve a writer; readers already inside finish first.
+    """
 
     def __init__(self) -> None:
         self._readers = 0
         self._writing = False
+        self._waiting_writers = 0
         self._condition = asyncio.Condition()
 
     @asynccontextmanager
     async def read(self) -> AsyncIterator[None]:
         async with self._condition:
-            await self._condition.wait_for(lambda: not self._writing)
+            await self._condition.wait_for(lambda: not self._writing and self._waiting_writers == 0)
             self._readers += 1
         try:
             yield
@@ -112,7 +121,15 @@ class ReadWriteLock:
     @asynccontextmanager
     async def write(self) -> AsyncIterator[None]:
         async with self._condition:
-            await self._condition.wait_for(lambda: not self._writing and self._readers == 0)
+            self._waiting_writers += 1
+            try:
+                await self._condition.wait_for(lambda: not self._writing and self._readers == 0)
+            except BaseException:
+                self._waiting_writers -= 1
+                # Readers held back for this writer may proceed now.
+                self._condition.notify_all()
+                raise
+            self._waiting_writers -= 1
             self._writing = True
         try:
             yield

@@ -17,7 +17,16 @@ from taskloom.adapters.linux import (
 )
 from taskloom.contracts.models import JsonObject, ToolRun, ToolState, digest
 from taskloom.domain.model import DomainError, Outcome
-from taskloom.execution.coordination import AccessCoordinator, PublishedOutcome, ResourceKey
+from taskloom.execution.coordination import (
+    AccessCoordinator,
+    PublishedOutcome,
+    ResourceKey,
+    SharedPreparationFailed,
+    SharingUnavailable,
+)
+
+# How many times a waiter re-applies after the owner it waited for failed.
+REJOIN_LIMIT = 3
 
 
 class ProcessExecutor:
@@ -30,6 +39,7 @@ class ProcessExecutor:
         slots: int = 2,
         workspace_root: str | None = None,
         access: AccessCoordinator | None = None,
+        max_waiters: int = 64,
     ) -> None:
         """Open the executor state of one client profile.
 
@@ -40,14 +50,21 @@ class ProcessExecutor:
             workspace_root: Root that read_file and run_command may serve;
                 defaults to a directory under the profile.
             access: Shared-access coordinator; one is created when omitted.
+            max_waiters: How many attempts may wait for another attempt's
+                preparation at once; waiters hold no slot, and an attempt
+                beyond this bound runs unshared in the slot it was admitted to.
         """
         self.directory = profile_dir
         self.cgroups = cgroups
         self.slots = slots
+        self.max_waiters = max_waiters
         self.access = access if access is not None else AccessCoordinator(profile_dir / "access")
         self.states: dict[str, ToolState] = {}
         self.processes: dict[str, subprocess.Popen[bytes]] = {}
         self.watchers: dict[str, asyncio.Task[None]] = {}
+        # Attempts between admission and a settled launch decision: cancel
+        # waits for these instead of reporting a process that may still start.
+        self.starting: dict[str, asyncio.Future[None]] = {}
         self.cancelled: dict[str, int] = {}
         self.permits: dict[str, str] = {}
         self.lock = asyncio.Lock()
@@ -74,14 +91,21 @@ class ProcessExecutor:
         for path in (self.directory / "executions").glob("*.json"):
             state = ToolState.model_validate_json(path.read_text())
             if not state.quiescent:
-                stopped = await asyncio.to_thread(self._stop, state)
-                state.quiescent = stopped
-                state.outcome = Outcome.FAILED if stopped else Outcome.UNKNOWN
-                state.error = (
-                    "Executor restarted; prior execution reconciled"
-                    if stopped
-                    else "Launch ownership unresolved"
-                )
+                if state.share_role == "waiter" and state.pid is None:
+                    # A waiter never starts a process of its own, so nothing
+                    # of it can still run; it fails cleanly and may be retried.
+                    state.quiescent = True
+                    state.outcome = Outcome.FAILED
+                    state.error = "EXECUTOR_RESTARTED: shared wait ended before any launch"
+                else:
+                    stopped = await asyncio.to_thread(self._stop, state)
+                    state.quiescent = stopped
+                    state.outcome = Outcome.FAILED if stopped else Outcome.UNKNOWN
+                    state.error = (
+                        "Executor restarted; prior execution reconciled"
+                        if stopped
+                        else "Launch ownership unresolved"
+                    )
                 self._save(state)
             self.states[state.request.attempt_id] = state
 
@@ -106,6 +130,43 @@ class ProcessExecutor:
                 return False
         return stopped
 
+    def _key(self, request: ToolRun) -> ResourceKey:
+        return ResourceKey.of(request, workspace_root=str(self.workspace_root))
+
+    def _is_cancelled(self, request: ToolRun) -> bool:
+        return self.cancelled.get(request.attempt_id, -1) >= request.generation
+
+    def _running(self) -> int:
+        """Count attempts that hold a slot; waiters run no process and hold none."""
+        return sum(
+            not item.quiescent and item.share_role != "waiter" for item in self.states.values()
+        )
+
+    def _waiting(self) -> int:
+        return sum(
+            not item.quiescent and item.share_role == "waiter" for item in self.states.values()
+        )
+
+    def _require_slot(self) -> None:
+        """Reject a launch of an admitted attempt that would exceed the slots.
+
+        The attempt itself is already counted, so only a surplus is rejected;
+        that happens when it was admitted as a likely waiter.
+
+        Raises:
+            DomainError: ``EXECUTOR_FULL`` (retryable).
+        """
+        if self._running() > self.slots:
+            raise DomainError("EXECUTOR_FULL", "Executor capacity exhausted", True)
+
+    def _settle_cancelled(self, state: ToolState) -> ToolState:
+        """Settle an attempt that was cancelled before any process started."""
+        self.permits.pop(state.request.attempt_id, None)
+        state.outcome = Outcome.CANCELLED
+        state.quiescent = True
+        self._save(state)
+        return state.model_copy(deep=True)
+
     async def run(self, request: ToolRun) -> ToolState:
         """Admit one tool attempt, then launch or share its execution.
 
@@ -121,7 +182,7 @@ class ProcessExecutor:
             DomainError: The attempt conflicts, exceeds the slot count, or its
                 staged workspace no longer matches the requested input version.
         """
-        key = ResourceKey.of(request)
+        key = self._key(request)
         async with self.lock:
             previous = self.states.get(request.attempt_id)
             if previous is not None:
@@ -137,38 +198,70 @@ class ProcessExecutor:
                 )
             if request.tool_name == "run_command" and not request.command_approved:
                 raise DomainError("APPROVAL_REQUIRED", "Command was not approved")
-            if self.cancelled.get(request.attempt_id, -1) >= request.generation:
+            if self._is_cancelled(request):
                 state.outcome = Outcome.CANCELLED
                 state.quiescent = True
                 self.states[request.attempt_id] = state
                 self._save(state)
                 return state
-            if sum(not item.quiescent for item in self.states.values()) >= self.slots:
+            # An attempt that will most likely wait for an in-flight preparation
+            # needs no slot; _admit re-checks before it launches anything.
+            joins = key.shareable and self.access.in_flight(key)
+            if not joins and self._running() >= self.slots:
                 raise DomainError("EXECUTOR_FULL", "Executor capacity exhausted", True)
             self.states[request.attempt_id] = state
+            starting = asyncio.get_running_loop().create_future()
+            self.starting[request.attempt_id] = starting
+        try:
+            return await self._admit(state, request, key)
+        finally:
+            if self.starting.get(request.attempt_id) is starting:
+                self.starting.pop(request.attempt_id, None)
+            starting.set_result(None)
+
+    async def _admit(self, state: ToolState, request: ToolRun, key: ResourceKey) -> ToolState:
+        """Decide whether an admitted attempt reuses, waits, or launches."""
         claimed = False
         try:
             workspace = self._staged_workspace(request)
             output_dir = workspace / "attempts" / request.attempt_id
             output_dir.mkdir(parents=True, exist_ok=True)
+            if not key.shareable:
+                # read_file, run_command and anything approved touch more than
+                # the staged inputs: they always run themselves.
+                return await self._launch(state, request, workspace, output_dir, key, shared=False)
             published = await self.access.lookup(key)
+            if self._is_cancelled(request):
+                return self._settle_cancelled(state)
             if published is not None:
+                state.share_role = "shared"
                 self._reuse(state, request, output_dir, published, role="shared", waited_ms=0.0)
                 return state.model_copy(deep=True)
             if not self.access.claim(key, request.attempt_id):
+                if self._waiting() >= self.max_waiters:
+                    self._require_slot()
+                    return await self._launch(
+                        state, request, workspace, output_dir, key, shared=False
+                    )
+                # Persist the waiter before reporting it, so a restart can tell
+                # that this attempt never started a process.
+                state.share_role = "waiter"
+                self._save(state)
                 self.watchers[request.attempt_id] = asyncio.create_task(
-                    self._wait_for_shared(state, request, output_dir, key)
+                    self._wait_for_shared(state, request, workspace, output_dir, key)
                 )
                 return state.model_copy(deep=True)
             claimed = True
-            return await self._launch(state, request, workspace, output_dir, key)
+            self._require_slot()
+            state.share_role = "owner"
+            return await self._launch(state, request, workspace, output_dir, key, shared=True)
         except BaseException as error:
             self._forget_unlaunched(request.attempt_id)
             if claimed:
                 # Release the claim so the next attempt for this key can own it
-                # again. _launch's Popen branch reports its own failure without
-                # raising; fail() is idempotent, so no path fails the key twice
-                # with a stale future left behind.
+                # again. _launch reports its own Popen failure and cancellation
+                # without raising; fail() is idempotent, so no path fails the
+                # key twice with a stale future left behind.
                 await self.access.fail(key, f"{type(error).__name__}: {error}")
             raise
 
@@ -246,7 +339,7 @@ class ProcessExecutor:
         """
         if published.payload.get("input_version") != request.input_version:
             raise DomainError("INPUT_VERSION_MISMATCH", "Shared preparation version differs")
-        key = ResourceKey.of(request)
+        key = self._key(request)
         result = json.loads(json.dumps(published.payload))
         result["artifact_id"] = request.attempt_id
         result["access"] = self._evidence(
@@ -256,48 +349,118 @@ class ProcessExecutor:
         (output_dir / "result.json").write_text(
             json.dumps(result, ensure_ascii=False), encoding="utf-8"
         )
-        state.result = result
-        state.outcome = Outcome.SUCCEEDED
-        state.quiescent = True
-        state.artifact_bytes = sum(
+        artifact_bytes = sum(
             path.stat().st_size for path in output_dir.rglob("*") if path.is_file()
         )
+        state.result = result
+        state.artifact_bytes = artifact_bytes
+        state.outcome = Outcome.SUCCEEDED
+        state.quiescent = True
         self._save(state)
-        self.watchers.pop(request.attempt_id, None)
+
+    def _fail_waiter(self, state: ToolState, error: str) -> None:
+        state.error = error
+        state.outcome = Outcome.FAILED
+        state.quiescent = True
+        self._save(state)
 
     async def _wait_for_shared(
         self,
         state: ToolState,
         request: ToolRun,
+        workspace: Path,
         output_dir: Path,
         key: ResourceKey,
     ) -> None:
-        """Wait for another attempt's preparation and reuse it."""
+        """Wait for another attempt's preparation and reuse it.
+
+        When the owner fails or is cancelled the waiter applies again: if it
+        wins the claim it launches the preparation itself, otherwise it waits
+        for the new owner. When the coordinator cannot track one more shared
+        wait, the waiter runs the tool unshared.
+        """
         started = time.monotonic()
+        current = asyncio.current_task()
+        failure = "Shared preparation failed"
         try:
-            published = await self.access.await_outcome(key)
+            for _ in range(REJOIN_LIMIT):
+                try:
+                    published = await self.access.await_outcome(key)
+                except SharingUnavailable:
+                    await self._promote(state, request, workspace, output_dir, key, shared=False)
+                    return
+                except SharedPreparationFailed as error:
+                    failure = str(error)
+                    if self._is_cancelled(request):
+                        self._settle_cancelled(state)
+                        return
+                    if self.access.claim(key, request.attempt_id):
+                        await self._promote(state, request, workspace, output_dir, key, shared=True)
+                        return
+                    continue
+                waited_ms = round((time.monotonic() - started) * 1000, 3)
+                self._staged_workspace(request)
+                self._reuse(
+                    state, request, output_dir, published, role="waiter", waited_ms=waited_ms
+                )
+                return
+            self._fail_waiter(state, "SHARED_PREPARATION_FAILED: " + failure)
         except asyncio.CancelledError:
-            state.outcome = Outcome.CANCELLED
-            state.quiescent = True
-            self._save(state)
+            if state.pid is None and not state.quiescent:
+                state.outcome = Outcome.CANCELLED
+                state.quiescent = True
+                self._save(state)
             raise
-        except Exception as error:
-            state.outcome = Outcome.FAILED
-            state.quiescent = True
-            state.error = "Shared preparation failed: " + str(error)
-            self._save(state)
-            self.watchers.pop(request.attempt_id, None)
-            return
-        waited_ms = round((time.monotonic() - started) * 1000, 3)
-        try:
-            self._staged_workspace(request)
-            self._reuse(state, request, output_dir, published, role="waiter", waited_ms=waited_ms)
         except DomainError as error:
-            state.outcome = Outcome.FAILED
-            state.quiescent = True
-            state.error = error.code + ": " + str(error)
-            self._save(state)
-            self.watchers.pop(request.attempt_id, None)
+            if state.pid is None and not state.quiescent:
+                self._fail_waiter(state, error.code + ": " + str(error))
+        except Exception as error:
+            if state.pid is None and not state.quiescent:
+                self._fail_waiter(state, "SHARED_WAIT_FAILED: " + type(error).__name__)
+        finally:
+            if self.watchers.get(request.attempt_id) is current:
+                self.watchers.pop(request.attempt_id, None)
+
+    async def _promote(
+        self,
+        state: ToolState,
+        request: ToolRun,
+        workspace: Path,
+        output_dir: Path,
+        key: ResourceKey,
+        *,
+        shared: bool,
+    ) -> None:
+        """Launch the tool for a former waiter, as the new owner or unshared.
+
+        Raises:
+            DomainError: No slot is free for the launch, or the staged
+                workspace changed while the attempt waited.
+        """
+        starting = asyncio.get_running_loop().create_future()
+        self.starting[request.attempt_id] = starting
+        try:
+            if self._is_cancelled(request):
+                if shared:
+                    await self.access.fail(key, "Attempt cancelled before launch")
+                self._settle_cancelled(state)
+                return
+            if self._running() >= self.slots:
+                if shared:
+                    await self.access.fail(key, "Executor capacity exhausted")
+                raise DomainError("EXECUTOR_FULL", "Executor capacity exhausted", True)
+            state.share_role = "owner" if shared else None
+            try:
+                self._staged_workspace(request)
+                await self._launch(state, request, workspace, output_dir, key, shared=shared)
+            except BaseException as error:
+                if shared:
+                    await self.access.fail(key, f"{type(error).__name__}: {error}")
+                raise
+        finally:
+            if self.starting.get(request.attempt_id) is starting:
+                self.starting.pop(request.attempt_id, None)
+            starting.set_result(None)
 
     async def _launch(
         self,
@@ -306,8 +469,15 @@ class ProcessExecutor:
         workspace: Path,
         output_dir: Path,
         key: ResourceKey,
+        *,
+        shared: bool,
     ) -> ToolState:
-        """Start the owned tool process of the attempt that prepares the resource."""
+        """Start the owned tool process of one attempt.
+
+        The saved cancellation intent is checked right before and right after
+        the process starts, so a cancel that arrives while the process is being
+        created stops it instead of reporting a process that never existed.
+        """
         group = self.cgroups.create(
             request.attempt_id, request.memory_bytes, request.cpu_quota, request.cpu_period
         )
@@ -316,7 +486,7 @@ class ProcessExecutor:
             key,
             holder=request.attempt_id,
             owner=request.attempt_id,
-            mode="write",
+            mode="write" if shared else "read",
             input_version=request.input_version,
         )
         self.permits[request.attempt_id] = permit.permit_id
@@ -340,12 +510,18 @@ class ProcessExecutor:
                 "secret_path": str(self.access.secret_path),
                 "locks": [
                     {"path": str(path), "mode": mode}
-                    for path, mode in self.access.tool_locks(key, request.root_task_id)
+                    for path, mode in (self.access.tool_locks(key) if shared else [])
                 ],
             },
         }
         atomic_json(output_dir / "spec.json", spec)
         self._save(state)
+        if self._is_cancelled(request):
+            if state.cgroup_path:
+                self.cgroups.cleanup(state.cgroup_path)
+            if shared:
+                await self.access.fail(key, "Attempt cancelled before launch")
+            return self._settle_cancelled(state)
         try:
             process = await asyncio.to_thread(
                 subprocess.Popen,
@@ -364,17 +540,23 @@ class ProcessExecutor:
         except OSError as error:
             if state.cgroup_path:
                 self.cgroups.cleanup(state.cgroup_path)
+            self.permits.pop(request.attempt_id, None)
+            state.error = str(error)
             state.outcome = Outcome.FAILED
             state.quiescent = True
-            state.error = str(error)
             self._save(state)
-            await self.access.fail(key, str(error))
-            return state
+            if shared:
+                await self.access.fail(key, str(error))
+            return state.model_copy(deep=True)
         state.pid = process.pid
         state.start_ticks = process_ticks(process.pid)
         state.boot_id = boot_id()
         self.processes[request.attempt_id] = process
         self._save(state)
+        if self._is_cancelled(request):
+            # Cancelled while the process was being created: stop it now; the
+            # watcher below settles it as CANCELLED once it has exited.
+            await asyncio.to_thread(self._stop, state)
         assert process.stdout is not None and process.stderr is not None
         readers = [
             Thread(
@@ -391,7 +573,7 @@ class ProcessExecutor:
         for reader in readers:
             reader.start()
         self.watchers[request.attempt_id] = asyncio.create_task(
-            self._watch(state, process, readers, output_dir)
+            self._watch(state, process, readers, output_dir, key, shared)
         )
         return state.model_copy(deep=True)
 
@@ -416,9 +598,22 @@ class ProcessExecutor:
         process: subprocess.Popen[bytes],
         readers: list[Thread],
         output: Path,
+        key: ResourceKey,
+        shared: bool,
     ) -> None:
+        """Settle one launched attempt once its process group is gone.
+
+        Every terminal field is computed into locals first (including the
+        stderr diagnostic and the shared publish, which await). The state is
+        then written without any await in between: error and result, then
+        outcome, then quiescent last. A poller therefore never sees a final
+        outcome with quiescent still False, nor quiescent with a PENDING
+        outcome.
+        """
         quiescent = False
         try:
+            error: str | None = None
+            result: JsonObject | None = None
             try:
                 code = await asyncio.wait_for(
                     asyncio.to_thread(process.wait), state.request.timeout_seconds
@@ -426,7 +621,7 @@ class ProcessExecutor:
             except TimeoutError:
                 await asyncio.to_thread(self._stop, state)
                 code = await asyncio.to_thread(process.wait)
-                state.error = "TOOL_TIMEOUT"
+                error = "TOOL_TIMEOUT"
             # A tool's root exiting does not prove its descendants exited.
             if state.pid is not None and live_group(state.pid, state.start_ticks, state.boot_id):
                 await asyncio.to_thread(self._stop, state)
@@ -444,21 +639,21 @@ class ProcessExecutor:
             if state.cgroup_path:
                 quiescent = await asyncio.to_thread(self.cgroups.cleanup, state.cgroup_path)
             if not quiescent:
-                state.outcome = Outcome.UNKNOWN
-                state.error = "Owned descendants remain"
-            elif self.cancelled.get(state.request.attempt_id, -1) >= state.request.generation:
-                state.outcome = Outcome.CANCELLED
+                outcome = Outcome.UNKNOWN
+                error = "Owned descendants remain"
+            elif self._is_cancelled(state.request):
+                outcome = Outcome.CANCELLED
             elif state.oom:
-                state.outcome = Outcome.FAILED
-                state.error = "TOOL_OOM"
-            elif code != 0 or state.error:
-                state.outcome = Outcome.FAILED
-                if not state.error and state.request.tool_name in ("read_file", "run_command"):
+                outcome = Outcome.FAILED
+                error = "TOOL_OOM"
+            elif code != 0 or error:
+                if not error and state.request.tool_name in ("read_file", "run_command"):
                     diagnostic = await asyncio.to_thread(
                         lambda: (output / "stderr.log").read_text(errors="replace")[-2000:]
                     )
-                    state.error = f"Tool exited with {code}: " + diagnostic
-                state.error = state.error or f"Tool exited with {code}"
+                    error = f"Tool exited with {code}: " + diagnostic
+                error = error or f"Tool exited with {code}"
+                outcome = Outcome.FAILED
             else:
                 result_path = output / "result.json"
                 if result_path.stat().st_size > 1048576:
@@ -466,33 +661,31 @@ class ProcessExecutor:
                 raw = json.loads(result_path.read_text())
                 if raw["input_version"] != state.request.input_version:
                     raise ValueError("Result input version mismatch")
-                key = ResourceKey.of(state.request)
-                published = await self.access.publish(key, raw, state.request.attempt_id)
                 result = json.loads(json.dumps(raw))
                 result["artifact_id"] = state.request.attempt_id
-                result["access"] = self._evidence(
-                    key,
-                    published,
-                    role="owner",
-                    waited_ms=0.0,
-                    permit_id=self.permits.get(state.request.attempt_id),
-                )
+                if shared:
+                    published = await self.access.publish(key, raw, state.request.attempt_id)
+                    result["access"] = self._evidence(
+                        key,
+                        published,
+                        role="owner",
+                        waited_ms=0.0,
+                        permit_id=self.permits.get(state.request.attempt_id),
+                    )
                 result["artifact_sha256"] = digest(result)
-                state.result = result
-                state.outcome = Outcome.SUCCEEDED
-            # Publish the settled state in one step: a poller (the client
-            # service) must never observe quiescent=True while the outcome is
-            # still PENDING, even though publishing above really awaits.
+                outcome = Outcome.SUCCEEDED
+            # No await from here on: the settled fields appear together.
+            state.error = error
+            state.result = result
+            state.outcome = outcome
             state.quiescent = quiescent
-        except Exception as error:
+        except Exception as failure:
+            state.error = type(failure).__name__ + ": " + str(failure)
             state.outcome = Outcome.FAILED if quiescent else Outcome.UNKNOWN
-            state.error = type(error).__name__ + ": " + str(error)
             state.quiescent = quiescent
         finally:
-            if state.outcome != Outcome.SUCCEEDED:
-                await self.access.fail(
-                    ResourceKey.of(state.request), state.error or "Tool execution failed"
-                )
+            if shared and state.outcome != Outcome.SUCCEEDED:
+                await self.access.fail(key, state.error or "Tool execution failed")
             state.artifact_bytes = await asyncio.to_thread(
                 lambda: sum(path.stat().st_size for path in output.rglob("*") if path.is_file())
             )
@@ -507,6 +700,11 @@ class ProcessExecutor:
 
     async def cancel(self, attempt_id: str, generation: int) -> bool:
         """Cancel one attempt and report whether its resources are released.
+
+        The cancellation intent is saved first. An attempt that is still being
+        admitted or launched is waited for: the launch re-checks the saved
+        intent and stops a process it has just created, so ``True`` is never
+        returned for a process that starts afterwards.
 
         Args:
             attempt_id: Attempt to stop.
@@ -524,13 +722,25 @@ class ProcessExecutor:
             state = self.states.get(attempt_id)
             if state is None or state.quiescent:
                 return True
+        starting = self.starting.get(attempt_id)
+        if starting is not None:
+            await asyncio.shield(starting)
+            state = self.states.get(attempt_id)
+            if state is None or state.quiescent:
+                return True
         if state.pid is None:
+            if attempt_id in self.starting:
+                # A waiter began its own launch meanwhile; wait for it again.
+                return await self.cancel(attempt_id, generation)
+            # A waiter: it never started a process of its own.
             watcher = self.watchers.get(attempt_id)
             if watcher is not None:
                 watcher.cancel()
-            state.outcome = Outcome.CANCELLED
-            state.quiescent = True
-            self._save(state)
+                await asyncio.gather(watcher, return_exceptions=True)
+            if not state.quiescent:
+                state.outcome = Outcome.CANCELLED
+                state.quiescent = True
+                self._save(state)
             return True
         stopped = await asyncio.to_thread(self._stop, state)
         watcher = self.watchers.get(attempt_id)

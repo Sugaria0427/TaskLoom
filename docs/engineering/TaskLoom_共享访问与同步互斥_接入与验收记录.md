@@ -2,7 +2,7 @@
 
 - 工作包：IKR9K3（共享访问与同步互斥）
 - 分支：`feat/access-coordination`（本分支基于 9b95850；已合并 `origin/main` = 644aae0d2cd24489c69ac38e36bd74b71af3ae67，见 §5.1）
-- 记录日期：2026-10-27（初次接入）；2026-10-29（IKR9K3 审查修复，见 §5.1）；2026-10-30（合并 origin/main，协调者模块改名 `coordination.py`）
+- 记录日期：2026-10-27（初次接入）；2026-10-29（IKR9K3 审查修复，见 §5.1）；2026-10-30（合并 origin/main，协调者模块改名 `coordination.py`）；2026-10-30（PR #15 审查修复，见 §5.2）
 - 验证环境：Linux 容器（`docker.m.daocloud.io/library/python:3.12-slim`，Python 3.12.15，x86_64/arm64 均可），`uv sync --locked --group dev`
 
 ## 1. 本次解决的实际问题
@@ -21,9 +21,9 @@
 
 | 位置 | 职责 |
 | --- | --- |
-| `src/taskloom/policies/access.py` | 并发原语：SingleFlight（合并同键在途工作）、ReadWriteLock（多读者并行 / 写独占）、KeyedMutex（多资源固定顺序）。本次开始被生产代码真实调用。 |
+| `src/taskloom/policies/access.py` | 并发原语：SingleFlight（合并同键在途工作，容量耗尽抛 `CapacityExhausted`）、ReadWriteLock（多读者并行 / 写独占 / 写者优先）。协调者调用前两者；KeyedMutex 仍保留但协调者不再使用（多资源按排序逐个取读写锁即可避免互锁）。 |
 | `src/taskloom/execution/coordination.py` | 协调者：规范化资源键、许可签发与校验、跨进程文件租约、共享成果存储、账本。（原 `execution/access.py`；因 main PR #11 在同一新建了同名但完全不同的路径助手模块 `execution/access.py`（`local_path`/`readable`），合并时本模块改名为 `coordination.py`，公共接口签名无变化。） |
-| `src/taskloom/adapters/executor.py` | 执行器接线：判断 owner / waiter / 复用，签发许可，回收共享成果，写入证据。 |
+| `src/taskloom/adapters/executor.py` | 执行器接线：判断 owner / waiter / 复用，签发许可，回收共享成果，写入证据。协调者由 `ProcessExecutor.__init__` 在未注入时按 `profile/access` 默认构造；`bootstrap/apps.py` 的 `executor_app` 只构造 `ProcessExecutor`，没有单独的协调者装配点。 |
 | `src/taskloom/execution/tool.py` | 工具子进程接线：校验许可、检查文件身份与权限、持锁执行、发布前复核输入版本。 |
 | `src/taskloom/client/service.py` | 本 commit 未修改该文件：共享证据随 result 透传（`service.py:971` `attempt.result = state.result`）进入工具链记录。 |
 
@@ -32,37 +32,52 @@
 ### 3.1 规范化资源键
 
 ```python
-ResourceKey.of(request)  # input_version + tool_name + arguments_digest + work_iterations
+ResourceKey.of(request, workspace_root=...)
+# tenant_id + workspace_root + input_version + tool_name + arguments_digest
+# + work_iterations + approved_external_path + command_approved + approved_command_cwd
 ```
 
 - `input_version` 是暂存文档的内容摘要，相同资料得到相同键；
+- `tenant_id`、执行器 `workspace_root` 与全部审批字段参与键，任何一项不同都不是同一资源；
 - `arguments_digest` 让不同参数（如 grep 的 pattern）落到不同资源；
 - `work_iterations` 参与键，因为重活轮数不同意味着成果不同。
 
-键相同即视为「同一份准备工作」。
+**只有纯函数工具共享**（`coordination.SHAREABLE_TOOLS` 白名单：`file_stats`、`grep`、`list_files`、`top_words`），
+判断标准是结果只由暂存输入 + 参数决定、无副作用、不读外部路径、不需要审批。`read_file`（读工作区或外部文件，内容可随时改变，且受审批约束）
+与 `run_command`（有副作用）以及任何带审批字段的请求一律不共享：不查共享缓存、不申领、不发布、不持共享锁，每次都真实执行。
 
 ### 3.2 owner / waiter / 复用 三种角色
 
 执行器收到 `POST /execute` 后：
 
-1. 先做短临界区登记（占用工具位、写入状态），随即释放全局账本锁——文件检查与进程启动都不在锁内。
+1. 先做短临界区登记（写入状态；同键已有 owner 在途时不占工具位，因为它多半会成为 waiter），随即释放全局账本锁——文件检查与进程启动都不在锁内。
 2. 校验暂存工作区（输入版本、租户、文件身份）。
 3. 查共享存储：命中且未过期 → 直接复用成果，角色 `shared`，不启动任何进程。
 4. 未命中则向协调者申领资源键：
    - 申领成功 → 角色 `owner`，真实启动工具进程；
-   - 申领失败 → 角色 `waiter`，不启动进程，等待 owner 的成果。
+   - 申领失败 → 角色 `waiter`，不启动进程、不占工具位，**先持久化（`share_role="waiter"`）再返回**，等待 owner 的成果；
+     同时等待者超过 `max_waiters`（默认 64）时退化为不共享，直接在已占的工具位上执行。
 
 等待者拿到成果后按自己的 attempt 重新写产物，`artifact_id` 与 `artifact_sha256` 各自独立。
 
 ### 3.3 取消与失败
 
+- 取消意图先落盘；执行器在 `Popen` 前、后各复查一次，`Popen` 后发现已取消立即停止进程组。
+  `cancel` 遇到仍在登记/启动中的 attempt 会等待其启动决定完成，绝不在进程可能稍后启动时宣告已停止；
 - 等待者可以单独取消：它只是退出等待，owner 继续跑，成果照常发布；
 - 拥有者负责共享工作的结束与回收：成果发布后等待者被唤醒，等待者各自拿一份；
-- 失败按明确规则重新申请：owner 失败时协调者把该键标记为可再次申领，等待者收到失败后可以重新申领并真正执行。
+- owner 失败或被取消时，等待者重新申领（最多 3 轮）：申领成功则自己成为 owner 真实执行（需有空闲工具位，否则 `EXECUTOR_FULL` 可重试失败），
+  否则继续等待新的 owner；SingleFlight 容量耗尽时等待者退化为不共享直接执行；
+- 执行器重启时，从未启动进程的 waiter 判 `FAILED` + quiescent（错误码前缀 `EXECUTOR_RESTARTED`），客户端按普通失败处理，不进入 `TOOL_UNKNOWN` 隔离。
+- 结算时序：`_watch` 先把 outcome / error（含 stderr 诊断）/ result（含共享发布）全部算进局部变量，再无 await 地依次写 error、result、outcome，最后写 quiescent。
 
 ### 3.4 访问许可
 
-协调者为每次工具执行签发一张许可（HMAC-SHA256 签名，密钥保存在 profile 目录，权限 0600）：
+协调者为每次工具执行签发一张许可（HMAC-SHA256 签名，密钥保存在 profile 目录，权限 0600）。
+启动时校验密钥：须为本用户的普通文件、无组/其他权限位、至少 32 字节，否则重建（无法重建时报 `ACCESS_SECRET_INVALID`）。
+
+**许可只是防误用的完整性校验，不是安全边界**：工具进程（含 `run_command` 启动的命令）与执行器同一 uid，能读取密钥自行签发；
+许可也不记录已用，有效期内可重放。它防的是脱离执行器直接启动工具、或拿错 attempt 的 spec，而不是恶意进程。
 
 | 字段 | 含义 |
 | --- | --- |
@@ -78,14 +93,20 @@ ResourceKey.of(request)  # input_version + tool_name + arguments_digest + work_i
 ### 3.5 文件访问
 
 - 工具子进程对暂存输入做身份与权限检查：必须是不链接的普通文件、属于当前用户、可读；
-- 执行期间持有文件租约（`fcntl.flock`）：读模式 `LOCK_SH`（多读者并行），写模式 `LOCK_EX`（写独占）；
+- 共享准备的 owner 执行期间持有该共享成果的文件租约（`fcntl.flock`，写模式 `LOCK_EX`）；不共享的工具不持锁。
+  原先的 `workspace:<root>` 读锁没有任何写者（客户端写暂存输入不加锁），形同虚设，已删除；暂存输入的一致性改由执行前后两次核对输入版本保证；
 - 多资源按路径排序后依次取锁，因此反向请求不会互锁；
 - 发布产物前再次核对输入版本，防止执行期间暂存内容被改动。
 
 ### 3.6 记账
 
 协调者在 `access/ledger.jsonl` 追加一行行记录：`permit_issued`、`lock_wait`（含等待毫秒与排序后的键）、
-`shared_published`（拥有者与共享次数）、`shared_failed`。
+`shared_published`（拥有者与共享次数）、`shared_failed`、`secret_replaced`。
+
+上限：账本超过 1 MiB 轮转为 `ledger.jsonl.1`（只保留一份，总量 < 2 MiB）；已发布成果最多 256 份，过期（`share_ttl`）或超量最旧者连同文件删除，
+启动时清扫过期/损坏的共享文件；失败记录超过 `share_ttl` 遗忘；使用者集合只为在途/等待/已发布的键保留；读写锁对象无人持有即回收。
+
+成本归属：共享准备的执行成本只记在 owner 的 attempt（及其根任务）上，waiter 记 0；同账户不同根任务之间不做分摊，这是有意的简化。
 
 ## 4. 共享证据如何出现在工具链记录里
 
@@ -179,10 +200,21 @@ uv sync --locked --group dev
 | lint-imports | Contracts: 3 kept, 0 broken. |
 | pytest tests/linux | 未执行（非特权容器无 cgroup v2） |
 
+### 5.2 PR #15 审查修复（2026-10-30）
+
+| 问题 | 修复 | 回归测试（`tests/integration/test_shared_access.py` 除注明外） |
+| --- | --- | --- |
+| 共享键缺字段、所有工具一律共享 | `SHAREABLE_TOOLS` 白名单 + `ResourceKey` 补 tenant/workspace_root/审批字段；`read_file`/`run_command` 不查缓存不发布 | `test_an_unapproved_external_read_is_never_served_from_cache`、`test_a_rewritten_workspace_file_is_read_again`、`test_the_same_approved_append_runs_every_time`；单测 `test_resource_key_covers_account_workspace_and_approvals`、`test_only_pure_staged_input_tools_share` |
+| 取消与启动竞态 | `Popen` 前后复查取消意图；`cancel` 等待 `starting` 中的 attempt | `test_cancel_during_process_creation_stops_the_late_process`、`test_cancel_before_admission_starts_nothing` |
+| waiter 不持久化 | 等待前 `_save`（`share_role="waiter"`），重启判 FAILED+quiescent | `test_a_waiter_survives_an_executor_restart_as_a_clean_failure` |
+| `_watch` 结算时序 | 局部变量算好后无 await 写入 | `test_a_failed_read_never_shows_a_settled_outcome_before_quiescent`；`tests/integration/test_chat_tools.py::test_missing_file_is_observation_and_agent_can_respond` |
+| 无上限表/账本、waiter 不重新竞争、容量耗尽失败、密钥校验、读锁虚设、无写者优先、waiter 占槽 | 见 §3 | `test_a_waiter_takes_over_when_the_owner_is_cancelled`、`test_an_exhausted_single_flight_runs_the_waiter_unshared`；`tests/unit/test_execution_access.py` 上限/密钥/锁回收用例；`tests/unit/test_access.py` 写者优先用例 |
+
 ## 6. 已知边界
 
 - 共享判定以内容摘要为准：两份内容完全相同但文件名不同的资料会被视为不同资源，不共享。
 - 共享成果只在协调者的保留期内有效（默认 600 秒），过期后重新执行。
 - 跨进程互斥依赖 POSIX 文件锁，仅在 Linux 目标平台可用；macOS 上工具执行本身不可运行（`/proc` 依赖）。
 - 许可校验发生在工具子进程入口，不替代执行器侧的输入版本与租户校验，两者同时生效。
-- 等待者不启动进程，但占用工具槽：槽位统计按非 quiescent 状态计数（`executor.py:146`），等待者在等到成果前一直计入占用。
+- 等待者不启动进程、不占工具槽（`ProcessExecutor._running` 不计 waiter），数量由 `max_waiters` 限制。
+- 共享只覆盖单个执行器进程内的在途合并；跨执行器重启只复用已落盘且未过期的成果。

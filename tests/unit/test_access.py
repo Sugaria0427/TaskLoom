@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from taskloom.policies.access import KeyedMutex, ReadWriteLock, SingleFlight
+from taskloom.policies.access import CapacityExhausted, KeyedMutex, ReadWriteLock, SingleFlight
 
 
 async def test_single_flight_runs_shared_operation_once() -> None:
@@ -157,3 +157,83 @@ async def test_multilock_rolls_back_acquired_locks_on_cancel() -> None:
     async with asyncio.timeout(1):
         async with mutex.locks(["b", "a"]):
             pass
+
+
+async def test_read_write_lock_prefers_a_waiting_writer() -> None:
+    lock = ReadWriteLock()
+    order: list[str] = []
+    release = asyncio.Event()
+
+    async def first_reader() -> None:
+        async with lock.read():
+            order.append("reader-1")
+            await release.wait()
+
+    async def writer() -> None:
+        async with lock.write():
+            order.append("writer")
+
+    async def late_reader() -> None:
+        async with lock.read():
+            order.append("reader-2")
+
+    holding = asyncio.create_task(first_reader())
+    await asyncio.sleep(0)
+    writing = asyncio.create_task(writer())
+    await asyncio.sleep(0)
+    reading = asyncio.create_task(late_reader())
+    await asyncio.sleep(0.02)
+    assert order == ["reader-1"]
+
+    release.set()
+    await asyncio.wait_for(asyncio.gather(holding, writing, reading), timeout=1)
+    assert order == ["reader-1", "writer", "reader-2"]
+
+
+async def test_read_write_lock_cancelled_writer_releases_held_back_readers() -> None:
+    lock = ReadWriteLock()
+    release = asyncio.Event()
+    entered = asyncio.Event()
+
+    async def holder() -> None:
+        async with lock.read():
+            await release.wait()
+
+    async def writer() -> None:
+        async with lock.write():
+            pass
+
+    async def reader() -> None:
+        async with lock.read():
+            entered.set()
+
+    holding = asyncio.create_task(holder())
+    await asyncio.sleep(0)
+    writing = asyncio.create_task(writer())
+    await asyncio.sleep(0)
+    reading = asyncio.create_task(reader())
+    await asyncio.sleep(0.02)
+    assert not entered.is_set()
+
+    writing.cancel()
+    await asyncio.gather(writing, return_exceptions=True)
+    await asyncio.wait_for(entered.wait(), timeout=1)
+    release.set()
+    await asyncio.gather(holding, reading)
+
+
+async def test_single_flight_capacity_error_is_typed() -> None:
+    flight = SingleFlight(max_inflight=1)
+    started = asyncio.Event()
+
+    async def operation() -> None:
+        started.set()
+        await asyncio.Event().wait()
+
+    task = asyncio.create_task(flight.run("a", operation))
+    await started.wait()
+    with pytest.raises(CapacityExhausted):
+        await flight.run("b", operation)
+    task.cancel()
+    await asyncio.gather(task, return_exceptions=True)
+    await flight.close()

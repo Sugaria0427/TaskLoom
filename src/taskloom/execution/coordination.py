@@ -7,13 +7,22 @@ permits. It gives the executor three things:
   preparation of the same staged inputs point at one artifact;
 * a single-flight claim, so the real initialization runs once while the other
   attempts wait for the published outcome and reuse it;
-* ordered resource locks plus a ledger, so readers run in parallel, a writer
-  runs alone, lock waits and shared ownership are recorded, and the execution
-  cost of a shared preparation is charged once.
+* ordered resource locks plus a bounded ledger, so readers run in parallel, a
+  writer runs alone (writers are preferred over new readers), lock waits and
+  shared ownership are recorded, and the execution cost of a shared
+  preparation is charged once.
+
+Only pure tools share: tools whose result is decided by the staged inputs and
+the arguments alone, with no side effect, no external path and no approval
+(``SHAREABLE_TOOLS``). ``read_file`` and ``run_command`` never share and never
+read the shared cache.
 
 Tool processes are separate OS processes, so the coordinator hands each of them
 a signed permit; the process verifies the permit and then takes advisory file
-locks in the same canonical order before it touches the workspace.
+locks in the same canonical order before it touches the shared artifact. The
+permit is an integrity check against misuse (a tool started without the
+executor, or with another attempt's spec), not a security boundary: tool
+processes run as the same user and could read the secret themselves.
 """
 
 import asyncio
@@ -21,9 +30,9 @@ import fcntl
 import hmac
 import json
 import os
+import stat
 import time
 import uuid
-from collections import defaultdict
 from collections.abc import AsyncIterator, Iterable, Sequence
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
@@ -34,44 +43,83 @@ from typing import IO, Any, Literal
 
 from taskloom.contracts.models import JsonObject, ToolRun
 from taskloom.domain.identity import digest
-from taskloom.policies.access import KeyedMutex, ReadWriteLock, SingleFlight
+from taskloom.domain.model import DomainError
+from taskloom.policies.access import CapacityExhausted, ReadWriteLock, SingleFlight
 
 AccessMode = Literal["read", "write"]
 LEDGER_NAME = "ledger.jsonl"
 SECRET_NAME = "secret"
 SHARED_NAME = "shared"
 LOCKS_NAME = "locks"
+SECRET_BYTES = 32
+LEDGER_LIMIT_BYTES = 1048576
+MAX_SHARED_ENTRIES = 256
+
+# Tools whose result is decided by the staged inputs and the arguments alone:
+# no side effect, no path outside the staged workspace, no approval. Only these
+# may share a preparation or be served from the shared cache.
+SHAREABLE_TOOLS = frozenset({"file_stats", "grep", "list_files", "top_words"})
+
+
+class SharedPreparationFailed(RuntimeError):
+    """The attempt that owned a shared preparation failed or was cancelled."""
+
+
+class SharingUnavailable(RuntimeError):
+    """The coordinator cannot track one more shared wait; run unshared instead."""
 
 
 @dataclass(frozen=True)
 class ResourceKey:
     """Normalized identity of one shared read-only preparation.
 
-    The staged inputs are pinned by ``input_version``; the tool name, the
-    arguments and the work factor complete the identity because they decide
-    what the preparation produces.
+    The staged inputs are pinned by ``input_version``; the account, the
+    executor workspace root, the tool name, the arguments, the work factor and
+    every approval field complete the identity because each of them can change
+    what the tool is allowed to read or what it produces.
     """
 
+    tenant_id: str
+    workspace_root: str
     input_version: str
     tool_name: str
     arguments_digest: str
     work_iterations: int
+    approved_external_path: str | None
+    command_approved: bool
+    approved_command_cwd: str | None
 
     @classmethod
-    def of(cls, request: ToolRun) -> "ResourceKey":
+    def of(cls, request: ToolRun, *, workspace_root: str) -> "ResourceKey":
         """Build the key of one tool request.
 
         Args:
             request: Tool request whose outcome may be shared.
+            workspace_root: Resolved workspace root of the serving executor.
 
         Returns:
             The normalized resource key of that request.
         """
         return cls(
+            tenant_id=request.tenant_id,
+            workspace_root=workspace_root,
             input_version=request.input_version,
             tool_name=request.tool_name,
             arguments_digest=digest(request.arguments),
             work_iterations=request.work_iterations,
+            approved_external_path=request.approved_external_path,
+            command_approved=request.command_approved,
+            approved_command_cwd=request.approved_command_cwd,
+        )
+
+    @property
+    def shareable(self) -> bool:
+        """Return whether attempts with this key may share one preparation."""
+        return (
+            self.tool_name in SHAREABLE_TOOLS
+            and self.approved_external_path is None
+            and not self.command_approved
+            and self.approved_command_cwd is None
         )
 
     @property
@@ -79,10 +127,15 @@ class ResourceKey:
         """Return the full identity of the resource, stable across processes."""
         return digest(
             {
+                "tenant_id": self.tenant_id,
+                "workspace_root": self.workspace_root,
                 "input_version": self.input_version,
                 "tool_name": self.tool_name,
                 "arguments": self.arguments_digest,
                 "work_iterations": self.work_iterations,
+                "approved_external_path": self.approved_external_path,
+                "command_approved": self.command_approved,
+                "approved_command_cwd": self.approved_command_cwd,
             }
         )
 
@@ -232,6 +285,8 @@ class AccessCoordinator:
         *,
         permit_ttl: float = 300.0,
         share_ttl: float = 600.0,
+        max_entries: int = MAX_SHARED_ENTRIES,
+        ledger_limit_bytes: int = LEDGER_LIMIT_BYTES,
     ) -> None:
         """Open the coordinator state directory.
 
@@ -239,7 +294,16 @@ class AccessCoordinator:
             directory: Directory that holds the secret, the shared artifacts,
                 the lock files and the ledger.
             permit_ttl: Seconds an issued permit stays valid.
-            share_ttl: Seconds a published preparation may be reused.
+            share_ttl: Seconds a published preparation may be reused; failure
+                records are forgotten after the same time.
+            max_entries: Most published preparations kept at once; the oldest
+                are evicted first.
+            ledger_limit_bytes: Size at which the ledger rotates; one rotated
+                file is kept, so the ledger stays below twice this size.
+
+        Raises:
+            DomainError: ``ACCESS_SECRET_INVALID`` when the permit secret
+                exists but cannot be validated or replaced.
         """
         self.directory = directory
         self.directory.mkdir(parents=True, exist_ok=True)
@@ -251,23 +315,56 @@ class AccessCoordinator:
         self.locks_directory = self.directory / LOCKS_NAME
         self.locks_directory.mkdir(parents=True, exist_ok=True)
         self.ledger_path = self.directory / LEDGER_NAME
+        self.max_entries = max_entries
+        self.ledger_limit_bytes = ledger_limit_bytes
         self._secret = self._load_secret()
         self._flight = SingleFlight()
-        self._mutex = KeyedMutex()
         self._locks: dict[str, ReadWriteLock] = {}
+        self._lock_users: dict[str, int] = {}
         self._inflight: dict[str, str] = {}
         self._ready: dict[str, asyncio.Future[PublishedOutcome]] = {}
         self._published: dict[str, PublishedOutcome] = {}
-        self._failed: dict[str, str] = {}
-        self._users: dict[str, set[str]] = defaultdict(set)
+        self._failed: dict[str, tuple[str, float]] = {}
+        self._users: dict[str, set[str]] = {}
+        self._sweep_shared()
 
     # ------------------------------------------------------------------ permits
 
     def _load_secret(self) -> bytes:
-        if self.secret_path.exists():
-            return self.secret_path.read_bytes()
-        secret = os.urandom(32)
-        descriptor = os.open(self.secret_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        """Return the permit secret, replacing one that fails validation.
+
+        A valid secret is a regular file of this user, readable by nobody
+        else (no group/other bits) and at least ``SECRET_BYTES`` long. A
+        secret that fails the check is replaced; permits signed with the old
+        one stop verifying, which only affects attempts already in flight
+        while the coordinator restarts.
+        """
+        try:
+            info = os.lstat(self.secret_path)
+        except FileNotFoundError:
+            info = None
+        if info is not None:
+            if (
+                stat.S_ISREG(info.st_mode)
+                and info.st_uid == os.getuid()
+                and stat.S_IMODE(info.st_mode) & 0o077 == 0
+                and info.st_size >= SECRET_BYTES
+            ):
+                return self.secret_path.read_bytes()
+            try:
+                self.secret_path.unlink()
+            except OSError as error:
+                raise DomainError(
+                    "ACCESS_SECRET_INVALID", "Access permit secret cannot be replaced"
+                ) from error
+            self.record("secret_replaced", mode=oct(stat.S_IMODE(info.st_mode)), size=info.st_size)
+        secret = os.urandom(SECRET_BYTES)
+        try:
+            descriptor = os.open(self.secret_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        except OSError as error:
+            raise DomainError(
+                "ACCESS_SECRET_INVALID", "Access permit secret cannot be created"
+            ) from error
         with os.fdopen(descriptor, "wb") as handle:
             handle.write(secret)
         return secret
@@ -337,12 +434,16 @@ class AccessCoordinator:
             ``True`` when this attempt owns the preparation, ``False`` when
             another attempt is already preparing the same resource.
         """
-        self._users[key.value].add(holder)
+        self._users.setdefault(key.value, set()).add(holder)
         if key.value in self._inflight:
             return False
         self._inflight[key.value] = holder
         self._failed.pop(key.value, None)
         return True
+
+    def in_flight(self, key: ResourceKey) -> bool:
+        """Return whether some attempt currently prepares this resource."""
+        return key.value in self._inflight
 
     def release(self, key: ResourceKey) -> None:
         """Drop the in-flight claim of one resource without publishing."""
@@ -356,6 +457,12 @@ class AccessCoordinator:
 
         Returns:
             The published outcome once the owner finished it.
+
+        Raises:
+            SharedPreparationFailed: The owner failed or was cancelled; the
+                key is free to be claimed again.
+            SharingUnavailable: Too many distinct shared waits are in flight;
+                the caller should run without sharing.
         """
 
         async def wait() -> PublishedOutcome:
@@ -364,7 +471,7 @@ class AccessCoordinator:
                 return published
             failed = self._failed.get(key.value)
             if failed is not None:
-                raise RuntimeError(failed)
+                raise SharedPreparationFailed(failed[0])
             # Registering the future runs without an await after the checks, so
             # a publish/fail that happens next always finds this future.
             future = self._ready.get(key.value)
@@ -373,7 +480,10 @@ class AccessCoordinator:
                 self._ready[key.value] = future
             return await asyncio.shield(future)
 
-        return await self._flight.run(key.value, wait)
+        try:
+            return await self._flight.run(key.value, wait)
+        except CapacityExhausted as error:
+            raise SharingUnavailable(str(error)) from error
 
     async def publish(self, key: ResourceKey, payload: JsonObject, owner: str) -> PublishedOutcome:
         """Publish the shared artifact and hand it to every waiter.
@@ -393,7 +503,7 @@ class AccessCoordinator:
             owner=owner,
             published_at=now,
             expires_at=now + self.share_ttl,
-            users=len(self._users[key.value]),
+            users=len(self._users.get(key.value, ())),
         )
         async with self.resources([self.shared_name(key)], "write"):
             self._published[key.value] = outcome
@@ -403,6 +513,7 @@ class AccessCoordinator:
             future = self._ready.pop(key.value, None)
             if future is not None and not future.done():
                 future.set_result(outcome)
+        self._prune(now)
         self.record(
             "shared_published",
             resource=key.value,
@@ -421,10 +532,14 @@ class AccessCoordinator:
         """
         async with self.resources([self.shared_name(key)], "write"):
             self._inflight.pop(key.value, None)
-            self._failed[key.value] = error
+            self._failed[key.value] = (error, time.time())
             future = self._ready.pop(key.value, None)
             if future is not None and not future.done():
-                future.set_exception(RuntimeError(error))
+                future.set_exception(SharedPreparationFailed(error))
+                # Every waiter may have left already; retrieve the error so the
+                # loop does not report it as never retrieved.
+                future.exception()
+        self._prune(time.time())
         self.record("shared_failed", resource=key.value, error=error)
 
     async def lookup(self, key: ResourceKey) -> PublishedOutcome | None:
@@ -446,7 +561,33 @@ class AccessCoordinator:
 
     def users(self, key: ResourceKey) -> int:
         """Return how many attempts used one shared preparation."""
-        return len(self._users[key.value])
+        return len(self._users.get(key.value, ()))
+
+    def _prune(self, now: float) -> None:
+        """Bound the in-memory tables and the shared directory.
+
+        Expired publications and their files go first, then the oldest ones
+        beyond ``max_entries``; failure records older than ``share_ttl`` are
+        forgotten; user sets survive only while their key is still claimed,
+        awaited or published.
+        """
+        expired = [name for name, item in self._published.items() if item.expires_at <= now]
+        overflow = len(self._published) - len(expired) - self.max_entries
+        if overflow > 0:
+            alive = sorted(
+                (item.published_at, name)
+                for name, item in self._published.items()
+                if item.expires_at > now
+            )
+            expired.extend(name for _, name in alive[:overflow])
+        for name in expired:
+            self._published.pop(name, None)
+            (self.shared_directory / (self._slug(name) + ".json")).unlink(missing_ok=True)
+        for name in [name for name, (_, at) in self._failed.items() if at + self.share_ttl <= now]:
+            self._failed.pop(name, None)
+        keep = set(self._inflight) | set(self._ready) | set(self._published)
+        for name in [name for name in self._users if name not in keep]:
+            self._users.pop(name, None)
 
     # -------------------------------------------------------------- file access
 
@@ -455,25 +596,22 @@ class AccessCoordinator:
         """Return the lock name of the shared artifact of one resource."""
         return "shared:" + key.slug
 
-    @staticmethod
-    def workspace_name(root_task_id: str) -> str:
-        """Return the lock name of one staged task workspace."""
-        return "workspace:" + root_task_id
-
-    def tool_locks(self, key: ResourceKey, root_task_id: str) -> list[tuple[Path, AccessMode]]:
+    def tool_locks(self, key: ResourceKey) -> list[tuple[Path, AccessMode]]:
         """Return the lock files a tool process must hold while it works.
+
+        Only a shared preparation is locked: its owner holds the artifact
+        exclusively. Staged inputs are not locked; the tool verifies their
+        version before and after it reads them instead.
 
         Args:
             key: Resource the tool prepares.
-            root_task_id: Task whose staged inputs the tool reads.
 
         Returns:
             Lock files paired with the access mode, in canonical order.
         """
-        return [
-            (self.lock_file(self.shared_name(key)), "write"),
-            (self.lock_file(self.workspace_name(root_task_id)), "read"),
-        ]
+        if not key.shareable:
+            return []
+        return [(self.lock_file(self.shared_name(key)), "write")]
 
     @asynccontextmanager
     async def resources(self, keys: Iterable[str], mode: AccessMode) -> AsyncIterator[None]:
@@ -488,19 +626,12 @@ class AccessCoordinator:
         """
         ordered = sorted(set(keys))
         started = time.monotonic()
-        if mode == "write":
-            # A writer takes its whole key set as one unit; readers do not need
-            # the mutex, so they run side by side on the same resource.
-            async with self._mutex.locks(ordered):
-                async with AsyncExitStack() as stack:
-                    for name in ordered:
-                        await stack.enter_async_context(self._resource(name, mode))
-                    yield
-        else:
-            async with AsyncExitStack() as stack:
-                for name in ordered:
-                    await stack.enter_async_context(self._resource(name, mode))
-                yield
+        # Every caller takes its locks in the same sorted order, so two callers
+        # that ask for the same set in opposite order cannot deadlock.
+        async with AsyncExitStack() as stack:
+            for name in ordered:
+                await stack.enter_async_context(self._resource(name, mode))
+            yield
         self.record(
             "lock_wait",
             mode=mode,
@@ -511,12 +642,21 @@ class AccessCoordinator:
     @asynccontextmanager
     async def _resource(self, name: str, mode: AccessMode) -> AsyncIterator[None]:
         lock = self._locks.setdefault(name, ReadWriteLock())
-        if mode == "read":
-            async with lock.read():
-                yield
-        else:
-            async with lock.write():
-                yield
+        self._lock_users[name] = self._lock_users.get(name, 0) + 1
+        try:
+            if mode == "read":
+                async with lock.read():
+                    yield
+            else:
+                async with lock.write():
+                    yield
+        finally:
+            # Drop the lock object once nobody holds or waits for it, so the
+            # table only holds names in use.
+            self._lock_users[name] -= 1
+            if self._lock_users[name] == 0:
+                self._lock_users.pop(name, None)
+                self._locks.pop(name, None)
 
     # ------------------------------------------------------------------- ledger
 
@@ -528,23 +668,59 @@ class AccessCoordinator:
             **fields: Structured details of that event.
         """
         line = json.dumps({"event": event, "at": time.time(), **fields}, ensure_ascii=False)
+        try:
+            if self.ledger_path.stat().st_size >= self.ledger_limit_bytes:
+                self.ledger_path.replace(self._rotated_ledger)
+        except FileNotFoundError:
+            pass
         with self.ledger_path.open("a", encoding="utf-8") as handle:
             handle.write(line + "\n")
 
+    @property
+    def _rotated_ledger(self) -> Path:
+        return self.ledger_path.with_name(LEDGER_NAME + ".1")
+
     def ledger(self) -> list[dict[str, Any]]:
-        """Return every recorded ledger entry in write order."""
-        if not self.ledger_path.exists():
-            return []
+        """Return the retained ledger entries (rotated file first) in write order."""
         rows = []
-        for line in self.ledger_path.read_text(encoding="utf-8").splitlines():
-            if line.strip():
-                rows.append(json.loads(line))
+        for path in (self._rotated_ledger, self.ledger_path):
+            if not path.exists():
+                continue
+            for line in path.read_text(encoding="utf-8").splitlines():
+                if line.strip():
+                    rows.append(json.loads(line))
         return rows
 
     # ------------------------------------------------------------ shared storage
 
+    @staticmethod
+    def _slug(value: str) -> str:
+        return sha256(value.encode()).hexdigest()[:32]
+
     def _shared_path(self, key: ResourceKey) -> Path:
         return self.shared_directory / (key.slug + ".json")
+
+    def _sweep_shared(self) -> None:
+        """Drop expired, unreadable and surplus shared files left by earlier runs."""
+        now = time.time()
+        for path in self.shared_directory.glob("*.tmp"):
+            path.unlink(missing_ok=True)
+        alive: list[tuple[float, Path]] = []
+        for path in self.shared_directory.glob("*.json"):
+            try:
+                body = json.loads(path.read_text(encoding="utf-8"))
+                published_at = float(body["published_at"])
+                expires_at = float(body["expires_at"])
+            except (OSError, ValueError, KeyError, TypeError):
+                path.unlink(missing_ok=True)
+                continue
+            if expires_at <= now:
+                path.unlink(missing_ok=True)
+            else:
+                alive.append((published_at, path))
+        alive.sort()
+        for _, path in alive[: max(0, len(alive) - self.max_entries)]:
+            path.unlink(missing_ok=True)
 
     def _write_shared(self, key: ResourceKey, outcome: PublishedOutcome) -> None:
         target = self._shared_path(key)
@@ -572,6 +748,8 @@ class AccessCoordinator:
         try:
             body = json.loads(path.read_text(encoding="utf-8"))
         except ValueError:
+            return None
+        if not hmac.compare_digest(str(body.get("resource", "")), key.value):
             return None
         return PublishedOutcome(
             payload=body["payload"],

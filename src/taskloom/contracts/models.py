@@ -339,6 +339,10 @@ class ToolState(Contract):
     cpu_seconds: float | None = None
     artifact_bytes: int | None = None
     oom: bool = False
+    # How the attempt takes part in a shared preparation: it runs the tool
+    # ("owner"), waits for another attempt without a process ("waiter"), or was
+    # served from a published preparation ("shared"); None runs unshared.
+    share_role: Literal["owner", "waiter", "shared"] | None = None
     created_at: str = Field(default_factory=utc_now)
 
 
