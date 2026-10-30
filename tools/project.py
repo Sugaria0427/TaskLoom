@@ -33,6 +33,10 @@ WP6 scenarios (tool slots / model pool capacity):
   api_constrained    2 / 1
   both_constrained   1 / 1
 
+--upstream-config PATH reads a private upstream JSON file and runs real model calls
+through the platform. Its provider/model ledger is separate from the simulation.
+Pass the same flag to stop when ending this real-model topology.
+
 --tool-slots and --pool-capacity may repeat the selected scenario's values;
 mismatches and unknown scenarios are rejected by taskloom dev.
 """
@@ -121,6 +125,8 @@ def verify() -> None:
         names = package.namelist()
         assert any(name.endswith("web/index.html") for name in names)
         assert any(name.endswith("web/admin/index.html") for name in names)
+        assert any(name.endswith("web/experiments.html") for name in names)
+        assert any(name.endswith("web/experiments.js") for name in names)
         assert not any(
             part in name.split("/")
             for name in names

@@ -10,7 +10,7 @@ from taskloom.adapters.executor import ProcessExecutor
 from taskloom.adapters.linux import CgroupDomain
 from taskloom.contracts.models import JsonObject, ToolRun, ToolState, digest
 from taskloom.domain.model import Outcome
-from taskloom.execution.access import AccessCoordinator, PublishedOutcome, ResourceKey
+from taskloom.execution.coordination import AccessCoordinator, PublishedOutcome, ResourceKey
 
 DOCUMENTS = {"notes.txt": "one two three", "log.txt": "four five"}
 WORK = 200_000

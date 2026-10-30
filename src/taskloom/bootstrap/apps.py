@@ -46,12 +46,16 @@ from taskloom.contracts.models import (
     ToolState,
     digest,
     mock_tokens,
+    utc_now,
 )
 from taskloom.domain.model import DomainError
 from taskloom.domain.ports import StoredRecord
 from taskloom.execution.ports import ToolBackend
+from taskloom.experiments.comparison import ComparisonSpec
+from taskloom.experiments.service import ComparisonService
 from taskloom.gateway.service import GatewayService
 from taskloom.policies.reservation import Prices
+from taskloom.runtime.prompts import GENERAL_PROMPT, SKILLS
 
 
 def application(name: str, lifespan: Any) -> FastAPI:
@@ -152,6 +156,7 @@ def platform_app(base: Path, config: PlatformConfig) -> FastAPI:
             for account in config.pool_accounts
         },
         Prices(config.output_price, config.cache_read_price, config.cache_write_price),
+        thinking=config.thinking,
     )
     service = GatewayService(store, provider, config)
 
@@ -253,11 +258,18 @@ class CancelTool(BaseModel):
     generation: int = Field(ge=0)
 
 
+class ApprovalDecision(BaseModel):
+    generation: int = Field(ge=0)
+    allowed: bool
+
+
 def executor_app(base: Path, config: ClientConfig) -> FastAPI:
     profile = base / "clients" / config.profile
     group_root = os.environ.get("TASKLOOM_CGROUP_ROOT")
     cgroups = CgroupDomain(Path(group_root) if group_root else None)
-    backend: ToolBackend = ProcessExecutor(profile, cgroups, config.tool_slots)
+    backend: ToolBackend = ProcessExecutor(
+        profile, cgroups, config.tool_slots, config.workspace_root
+    )
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
@@ -312,14 +324,17 @@ def client_app(base: Path, config: ClientConfig) -> FastAPI:
         connection.api_key if connection else os.environ.get("TASKLOOM_API_KEY", ""),
     )
     service = ClientService(store, gateway, executor, profile, config)
+    comparisons = ComparisonService(store, config.tenant_id)
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         lock = OwnerLock(profile / "client.lock")
         try:
             await service.start()
+            await comparisons.start()
             yield
         finally:
+            await comparisons.close()
             await service.close()
             await store.close()
             lock.close()
@@ -409,6 +424,19 @@ def client_app(base: Path, config: ClientConfig) -> FastAPI:
     async def create(body: TaskCreate) -> TaskState:
         return await service.create(body)
 
+    @app.get("/api/v1/agent")
+    async def agent_settings() -> JsonObject:
+        return {
+            "workspace": str(service.workspace_root),
+            "system_prompt": GENERAL_PROMPT,
+            "skills": [{"id": key, **value} for key, value in SKILLS.items()],
+            "tools": service.chat_registry.schemas(),
+        }
+
+    @app.post("/api/v1/tasks/{task_id}/approvals/{approval_id}")
+    async def approve(task_id: str, approval_id: str, body: ApprovalDecision) -> TaskState:
+        return await service.decide_approval(task_id, approval_id, body.allowed, body.generation)
+
     @app.get("/api/v1/conversations")
     async def conversations() -> list[JsonObject]:
         return service.conversation_summaries()
@@ -494,12 +522,72 @@ def client_app(base: Path, config: ClientConfig) -> FastAPI:
             raise DomainError("NOT_FOUND", "No verified summary has been published")
         return FileResponse(path, media_type="application/json", filename="summary.json")
 
+    @app.post("/api/v1/experiments", status_code=202)
+    async def experiment(body: ComparisonSpec) -> JsonObject:
+        return await comparisons.submit(body)
+
+    @app.get("/api/v1/experiments")
+    async def experiments() -> list[JsonObject]:
+        return await comparisons.history()
+
+    @app.get("/api/v1/experiments/{run_id}")
+    async def experiment_record(run_id: str) -> JsonObject:
+        return await comparisons.get(run_id)
+
+    @app.get("/api/v1/experiments/{run_id}/export")
+    async def export_experiment(run_id: str) -> JSONResponse:
+        return JSONResponse(
+            await comparisons.get(run_id),
+            headers={
+                "Content-Disposition": f'attachment; filename="taskloom-comparison-{run_id}.json"',
+            },
+        )
+
+    @app.get("/api/v1/observations/export")
+    async def export_observations() -> JSONResponse:
+        observations: list[JsonObject] = []
+        cursor = 0
+        page: list[JsonObject] = []
+        for _ in range(20):
+            page = await store.events(config.tenant_id, cursor)
+            observations.extend(page)
+            if not page or len(page) < 100:
+                break
+            cursor = page[-1]["event_seq"]
+        truncated = (
+            bool(await store.events(config.tenant_id, cursor, limit=1))
+            if len(observations) == 2000
+            else False
+        )
+        return JSONResponse(
+            {
+                "schema_version": 1,
+                "source": "real-client-snapshot",
+                "captured_at": utc_now(),
+                "platform": service.platform_status(),
+                "tasks": [task.model_dump(mode="json") for task in service.tasks.values()],
+                "resources": service.resources(),
+                "events": observations,
+                "events_truncated": truncated,
+                "event_limit": 2000,
+            },
+            headers={
+                "Content-Disposition": 'attachment; filename="taskloom-execution-records.json"'
+            },
+        )
+
     web = files("taskloom").joinpath("web")
     app.mount("/static", StaticFiles(directory=str(web)), name="static")
 
     @app.get("/")
     async def index() -> FileResponse:
         return FileResponse(str(web.joinpath("index.html")), headers={"Cache-Control": "no-store"})
+
+    @app.get("/experiments")
+    async def comparison_page() -> FileResponse:
+        return FileResponse(
+            str(web.joinpath("experiments.html")), headers={"Cache-Control": "no-store"}
+        )
 
     return app
 
@@ -628,6 +716,10 @@ def pool_app(base: Path, config: PoolConfig) -> FastAPI:
             await asyncio.sleep(config.latency_seconds)
             tool_messages = [message for message in body.messages if message.get("role") == "tool"]
             available = [tool["function"]["name"] for tool in body.tools]
+            chat_mode = "read_file" in available
+            if chat_mode:
+                prompt = str(body.messages[0].get("content", ""))
+                available = ["file_stats"] if "本轮启用「资料统计」" in prompt else []
             called: list[str] = []
             for call_message in body.messages:
                 if call_message.get("role") == "assistant" and call_message.get("tool_calls"):
@@ -660,7 +752,9 @@ def pool_app(base: Path, config: PoolConfig) -> FastAPI:
             elif not tool_messages:
                 message = {
                     "role": "assistant",
-                    "content": json.dumps(
+                    "content": "当前为仿真模型。消息已收到；连接真实模型后可进行分析、读取文件和调用指令。"
+                    if chat_mode
+                    else json.dumps(
                         {
                             "files": 0,
                             "words": 0,
@@ -682,7 +776,9 @@ def pool_app(base: Path, config: PoolConfig) -> FastAPI:
                 result = stats_result or json.loads(tool_messages[-1]["content"])
                 message = {
                     "role": "assistant",
-                    "content": json.dumps(
+                    "content": f"已核对 {result['files']} 份文本附件，共 {result['words']} 个词。"
+                    if chat_mode
+                    else json.dumps(
                         {
                             "files": result["files"],
                             "words": result["words"],

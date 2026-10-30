@@ -4,8 +4,15 @@ from taskloom.contracts.models import ToolRun
 from taskloom.execution.catalog import max_demand, tool_demand, tool_names
 
 
-def test_catalog_covers_all_four_registered_tools() -> None:
-    assert set(tool_names()) == {"file_stats", "grep", "list_files", "top_words"}
+def test_catalog_covers_agent_and_statistics_tools() -> None:
+    assert set(tool_names()) == {
+        "file_stats",
+        "grep",
+        "list_files",
+        "top_words",
+        "read_file",
+        "run_command",
+    }
 
 
 def test_profiles_span_light_to_heavy() -> None:
@@ -41,9 +48,9 @@ def test_unknown_tool_name_raises() -> None:
 
 
 def test_runtime_registry_uses_executor_resource_profiles() -> None:
-    from taskloom.runtime.registry import default_registry
+    from taskloom.runtime.registry import agent_registry
 
-    registry = default_registry()
+    registry = agent_registry()
     assert set(registry.names()) == set(tool_names())
     for name in registry.names():
         assert registry.require(name).demand == tool_demand(name)

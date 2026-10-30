@@ -256,9 +256,15 @@ class GatewayService:
 
     async def submit(self, tenant: str, request: ModelRequest) -> GatewayRecord:
         async with self.lock:
+            if self.config.pool_kind == "fixed-http":
+                request = request.model_copy(update={"token_count_mode": "utf8-bound"})
             account = self.accounts.get(tenant)
             key = self.key(tenant, request.request_id)
-            payload_hash = digest(request.model_dump(mode="json"))
+            payload = request.model_dump(mode="json")
+            if request.token_count_mode == "fixture":
+                # Preserve duplicate identities written before token-count modes existed.
+                payload.pop("token_count_mode", None)
+            payload_hash = digest(payload)
             previous = self.requests.get(key)
             if previous is None:
                 # Duplicates of pruned (finished) records are answered from the store.

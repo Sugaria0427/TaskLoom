@@ -12,6 +12,7 @@ import httpx
 
 from taskloom.adapters.linux import OwnerLock, atomic_json
 from taskloom.adapters.supervisor import process_record, stop_record, write_configuration
+from taskloom.bootstrap.config import load_upstream
 from taskloom.contracts.models import ClientConfig, PlatformConfig, PoolConfig
 from taskloom.runtime.registry import default_registry
 
@@ -43,6 +44,7 @@ class Topology:
         scenario: str = "unconstrained",
         tool_slots: int | None = None,
         pool_capacity: int | None = None,
+        upstream_config: Path | None = None,
     ) -> None:
         if scenario not in WP6_CAPACITIES:
             raise ValueError(f"Unknown WP6 scenario: {scenario}")
@@ -55,6 +57,7 @@ class Topology:
         self.tool_slots = expected_tool_slots
         self.pool_capacity = expected_pool_capacity
         self.base = base
+        self.upstream = load_upstream(upstream_config) if upstream_config else None
         chosen: set[int] = set()
 
         def port(value: int | None, default: int) -> int:
@@ -88,6 +91,7 @@ class Topology:
             client_port=port,
             platform_url=self.platform_url,
             tool_slots=self.tool_slots,
+            workspace_root=str(Path.cwd()),
         )
 
     def pool_config(self) -> PoolConfig:
@@ -95,12 +99,14 @@ class Topology:
 
     def platform_config(self) -> PlatformConfig:
         return PlatformConfig(
-            pool_url=self.pool_url,
-            pool_key=self.pool_key,
+            pool_url=self.upstream.base_url if self.upstream else self.pool_url,
+            pool_key=self.upstream.api_key if self.upstream else self.pool_key,
+            pool_kind="fixed-http" if self.upstream else "simulated",
             admin_key=self.admin_key,
             pool_capacity=self.pool_capacity,
             account_max_inflight=self.pool_capacity,
-            model=self.pool_config().model,
+            model=self.upstream.model if self.upstream else self.pool_config().model,
+            thinking=self.upstream.thinking if self.upstream else None,
         )
 
     def _spawn(
@@ -221,10 +227,11 @@ class Topology:
                 self.pool_key = tomllib.loads(pool_path.read_text())["key"]
             else:
                 self.pool_key = secrets.token_urlsafe(32)
-            pool = self.pool_config()
-            write_configuration(pool_path, pool)
-            self._spawn("model-pool", pool_path, self.pool_port)
-            self.wait(self.pool_url)
+            if self.upstream is None:
+                pool = self.pool_config()
+                write_configuration(pool_path, pool)
+                self._spawn("model-pool", pool_path, self.pool_port)
+                self.wait(self.pool_url)
             # The console's admin key persists like the pool key, in the private platform.toml.
             if self.platform_path.exists():
                 import tomllib
@@ -296,6 +303,7 @@ def develop(
     scenario: str = "unconstrained",
     tool_slots: int | None = None,
     pool_capacity: int | None = None,
+    upstream_config: Path | None = None,
 ) -> None:
     topology = Topology(
         base,
@@ -307,6 +315,7 @@ def develop(
         scenario=scenario,
         tool_slots=tool_slots,
         pool_capacity=pool_capacity,
+        upstream_config=upstream_config,
     )
     stopping = False
 
@@ -327,7 +336,9 @@ def develop(
                 # The key itself is not printed: it is admin_key in this private file.
                 "admin_key_file": str(topology.platform_path),
                 "state_dir": str(base),
-                "model_pool": "platform-owned fixed-capacity simulation",
+                "model_pool": "platform-owned fixed HTTP concurrency"
+                if topology.upstream
+                else "platform-owned fixed-capacity simulation",
                 "scenario": topology.scenario,
                 "tool_slots": topology.tool_slots,
                 "pool_capacity": topology.pool_capacity,

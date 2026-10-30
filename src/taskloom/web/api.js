@@ -7,7 +7,7 @@ const state = {
   conversations: [], tasks: [], events: [], resources: null, platform: null, status: null,
   after: 0, refreshing: false, submitting: false, archived: false, filter: "all",
   samples: [], drafts: new Map(), attachments: [], signatures: new Map(),
-  inspector: true, error: "", toastTimer: null, ready: false,
+  skill: null, agent: null, inspector: true, error: "", toastTimer: null, ready: false,
 };
 
 function node(tag, className = "", text = "") {
@@ -133,7 +133,7 @@ function toast(message) {
 
 function persistDraft() {
   const key = state.conversationId || "new";
-  const draft = {text: $("message").value, attachments: [...state.attachments]};
+  const draft = {text: $("message").value, attachments: [...state.attachments], skill: state.skill};
   state.drafts.set(key, draft);
   try {
     localStorage.setItem("taskloom.draft", JSON.stringify({conversationId: state.conversationId, text: draft.text}));
@@ -144,7 +144,8 @@ function restoreDraft() {
   const draft = state.drafts.get(state.conversationId || "new");
   $("message").value = draft?.text || "";
   state.attachments = [...(draft?.attachments || [])];
-  renderAttachments();
+  state.skill = draft?.skill || null;
+  renderSkill(); renderAttachments();
   updateSend();
 }
 
@@ -190,7 +191,8 @@ function outcomeBadge(task) {
 }
 
 function phase(task) {
-  if (task.outcome === "SUCCEEDED") return "结果校验完成";
+  if (task.outcome === "SUCCEEDED") return "回复已完成";
+  if (task.pending_approval?.status === "PENDING") return "等待操作确认";
   if (task.outcome === "CANCELLED") return task.quiescent ? "执行已停止" : "正在确认退出";
   if (task.outcome === "FAILED") return "执行已结束";
   if (task.outcome === "UNKNOWN") return "正在核对执行结果";
@@ -205,7 +207,7 @@ function phase(task) {
 
 function stepLabel(attempt, index) {
   if (attempt.kind === "tool") return "执行工具";
-  return index === 0 ? "模型规划工具调用" : "模型生成统计结果";
+  return index === 0 ? "模型理解与规划" : "模型分析与回复";
 }
 
 function renderSidebar() {
@@ -265,7 +267,7 @@ function renderHeader() {
   const running = tasks.filter(isActive).length;
   $("conversation-summary").hidden = !running;
   if (running) {
-    $("conversation-summary").replaceChildren(node("span", "live-dot"), node("span", "", `${running} 项任务正在推进 · 可继续提交独立任务`));
+    $("conversation-summary").replaceChildren(node("span", "live-dot"), node("span", "", `${running} 项任务正在推进 · 新建会话可并行处理其他任务`));
   }
   updateSend();
 }
@@ -301,6 +303,12 @@ function executionDetails(task) {
     row.append(icon(item.kind === "tool" ? "file" : "bolt"), node("span", "", stepLabel(item, index)), outcomeBadge(item), node("span", "step-cost", item.kind === "model" ? number(item.consumed_units) : "本地"));
     row.title = `${item.attempt_id} · ${item.state}`;
     list.append(row);
+    if (item.kind === "tool") {
+      const info = node("details", "tool-output");
+      info.append(node("summary", "", item.request_payload?.tool_name || "工具调用"));
+      info.append(node("pre", "", JSON.stringify({arguments: item.request_payload?.arguments, result: item.result ? Object.fromEntries(Object.entries(item.result).filter(([key]) => key !== "image_data_url")) : null, error: item.error}, null, 2)));
+      list.append(info);
+    }
   });
   if (!steps.length) list.append(node("p", "empty-small", "任务已保存，调度器正在准备执行。"));
   details.append(summary, list);
@@ -318,12 +326,17 @@ function renderMessage(task) {
   const turn = node("article", "message-turn");
   turn.dataset.taskId = task.task_id;
   const user = node("div", "message-user");
-  const content = task.specification.instruction || Object.values(task.specification.documents).join("\n\n");
+  const content = task.specification.message || task.specification.instruction || "请查看附件。";
   user.append(node("pre", "", content));
   const files = node("div", "message-files");
   Object.keys(task.specification.documents).forEach((name) => {
     const file = node("span", "file-chip"); file.append(icon("file"), node("span", "", name)); files.append(file);
   });
+  for (const image of task.specification.images || []) {
+    const preview = node("img", "message-image"); preview.alt = image.name;
+    preview.src = `data:${image.mime_type};base64,${image.data_base64}`; files.append(preview);
+  }
+  if (task.specification.skill) files.append(node("span", "file-chip", state.agent?.skills.find((item) => item.id === task.specification.skill)?.name || task.specification.skill));
   user.append(files);
   turn.append(user, node("div", "message-time", time(task.created_at)));
   const assistant = node("div", "message-assistant");
@@ -332,22 +345,25 @@ function renderMessage(task) {
   const head = node("div", "assistant-head"); head.append(node("strong", "", "TaskLoom"), outcomeBadge(task));
   body.append(head);
   if (task.result) {
-    body.append(node("p", "assistant-text", task.result.summary || "文档统计已完成，结果已通过工具校验。"));
+    body.append(node("p", "assistant-text", task.result.content || task.result.summary || "任务已完成。"));
+    if (task.result.files !== undefined && task.result.words !== undefined) {
     const counts = node("div", "result-counts");
     for (const [label, value] of [["文件数量", task.result.files], ["词数统计", task.result.words]]) {
       const item = node("div"); item.append(node("span", "", label), node("strong", "", number(value))); counts.append(item);
     }
     body.append(counts);
+    }
   } else {
     body.append(node("p", "assistant-text", task.error ? errorMessages[task.error] || task.error : phase(task)));
   }
+  if (task.pending_approval?.status === "PENDING") body.append(approvalCard(task));
   body.append(executionDetails(task));
   const actions = node("div", "message-actions");
   actions.append(node("span", "", `消耗 ${number(task.consumed_units)} ${usageLabel()}${task.reserved_units ? ` · 预留 ${number(task.reserved_units)}` : ""}`));
   actions.append(priorityControl(task));
   if (isActive(task)) actions.append(taskButton(task, "cancel", "取消", "stop"));
   else if (task.outcome !== "SUCCEEDED") actions.append(taskButton(task, "resume", "核对并续作", "refresh"));
-  if (task.result) {
+  if (task.result && task.specification.mode !== "chat") {
     const link = node("a", "", "成果"); link.prepend(icon("download")); link.href = `/api/v1/artifacts/${task.task_id}`; link.target = "_blank"; link.rel = "noopener"; actions.append(link);
   }
   const inspect = node("button", "", "执行详情"); inspect.prepend(icon("panel"));
@@ -576,10 +592,70 @@ async function refresh() {
 }
 
 function updateSend() {
-  $("submit").disabled = !state.ready || !state.platform?.connected || state.submitting || (!$("message").value.trim() && !state.attachments.length) || Boolean(conversation()?.archived);
+  $("submit").disabled = !state.ready || !state.platform?.connected || state.submitting || (!$("message").value.trim() && !state.attachments.length) || sessionTasks().some(isActive) || Boolean(conversation()?.archived);
   $("message").required = !state.attachments.length;
   $("new-chat").disabled = state.submitting;
-  setText("workflow-note", state.platform?.connected ? "文档统计与结果校验 · 每条消息独立执行" : "连接平台账号后即可开始");
+  setText("workflow-note", state.platform?.connected ? sessionTasks().some(isActive) ? "当前会话正在执行；可新建会话并行处理" : "多轮对话 · 按需调用工具 · / 选择技能" : "连接平台账号后即可开始");
+}
+
+
+function renderSkill() {
+  const value = $("message").value.trim();
+  const query = /^\/[a-z]*$/i.test(value) ? value.toLowerCase() : null;
+  const choices = (state.agent?.skills || []).filter((item) => query !== null && item.command.startsWith(query));
+  $("skill-menu").hidden = !choices.length;
+  $("skill-menu").replaceChildren(...choices.map((skill) => {
+    const button = node("button", "skill-option"); button.type = "button";
+    button.append(node("strong", "", `${skill.command} · ${skill.name}`), node("span", "", skill.description));
+    button.onclick = () => { state.skill = skill.id; $("message").value = ""; renderSkill(); persistDraft(); updateSend(); $("message").focus(); };
+    return button;
+  }));
+  const skill = state.agent?.skills.find((item) => item.id === state.skill);
+  $("selected-skill").hidden = !skill;
+  $("selected-skill").replaceChildren();
+  if (skill) {
+    const details = node("details"); details.append(node("summary", "", `${skill.command} · ${skill.name}（本轮）`), node("p", "", skill.prompt));
+    const remove = node("button", "text-button", "移除技能"); remove.type = "button";
+    remove.onclick = () => { state.skill = null; renderSkill(); persistDraft(); };
+    $("selected-skill").append(details, remove);
+  }
+}
+
+function approvalCard(task) {
+  const approval = task.pending_approval;
+  const card = node("section", "approval-card");
+  card.append(node("strong", "", approval.tool === "run_command" ? "确认执行指令" : "确认读取文件"));
+  card.append(node("pre", "", approval.tool === "run_command" ? `${approval.command}\n工作目录：${approval.cwd}` : approval.path));
+  card.append(node("p", "", approval.tool === "run_command" ? "这条指令将在本机 WSL 执行，可能修改文件或访问网络。请确认指令内容。" : "读取后，文件内容将发送给当前模型用于分析。"));
+  const actions = node("div", "approval-actions");
+  for (const [allowed, label] of [[true, "允许本次操作"], [false, "拒绝"]]) {
+    const button = node("button", allowed ? "primary-button" : "secondary-button", label);
+    button.onclick = async () => {
+      actions.querySelectorAll("button").forEach((item) => item.disabled = true);
+      try {
+        const updated = await api(`/api/v1/tasks/${task.task_id}/approvals/${approval.approval_id}`, {method: "POST", body: JSON.stringify({allowed, generation: approval.generation})});
+        state.tasks = state.tasks.map((item) => item.task_id === task.task_id ? updated : item); render();
+      } catch (error) { toast(error.message); await refresh(); }
+    };
+    actions.append(button);
+  }
+  card.append(actions); return card;
+}
+
+async function imageAttachment(file) {
+  if (!["image/png", "image/jpeg", "image/webp", "image/gif"].includes(file.type)) throw new Error("图片支持 PNG、JPEG、WebP 和 GIF。");
+  if (file.size > 16 * 1048576) throw new Error("原始图片上限为 16 MiB。");
+  const bitmap = await createImageBitmap(file);
+  try {
+    if (bitmap.width * bitmap.height > 8000000) throw new Error("图片像素上限为 800 万，请先缩小图片。");
+    const scale = Math.min(1, 1280 / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas"); canvas.width = Math.max(1, Math.round(bitmap.width * scale)); canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const context = canvas.getContext("2d"); context.fillStyle = "white"; context.fillRect(0, 0, canvas.width, canvas.height); context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const url = canvas.toDataURL("image/jpeg", 0.8); const data_base64 = url.split(",")[1];
+    const size = Math.floor(data_base64.length * 3 / 4);
+    if (size > 393216) throw new Error("压缩后的图片超过 384 KiB，请先缩小图片。");
+    return {name: file.name, mime_type: "image/jpeg", data_base64, size};
+  } finally { bitmap.close(); }
 }
 
 function renderAttachments() {
@@ -587,7 +663,11 @@ function renderAttachments() {
     const chip = node("span", "file-chip");
     const remove = node("button"); remove.type = "button"; remove.setAttribute("aria-label", `移除文件 ${file.name}`); remove.append(icon("close"));
     remove.onclick = () => { state.attachments.splice(index, 1); renderAttachments(); persistDraft(); updateSend(); };
-    chip.append(icon("file"), node("span", "", `${file.name} · ${bytes(file.size)}`), remove); return chip;
+    if (file.mime_type) {
+      const preview = node("img", "attachment-image"); preview.alt = file.name;
+      preview.src = `data:${file.mime_type};base64,${file.data_base64}`; chip.append(preview);
+    } else chip.append(icon("file"));
+    chip.append(node("span", "", `${file.name} · ${bytes(file.size)}`), remove); return chip;
   }));
 }
 
@@ -595,16 +675,22 @@ async function addFiles(files) {
   const next = [...state.attachments];
   try {
     for (const file of files) {
-      if (next.length >= 16) throw new Error("每次任务最多添加 16 份文本文件。");
+      if (next.length >= 16) throw new Error("每次最多添加 16 个附件。");
       if (next.some((item) => item.name === file.name)) throw new Error(`文件名重复：${file.name}`);
       if (!/^[^/\\\x00-\x1f]{1,80}$/.test(file.name) || [".", ".."].includes(file.name)) throw new Error("文件名需要在 80 个字符以内，且不包含路径。");
-      if (next.reduce((sum, item) => sum + item.size, 0) + file.size > 524288) throw new Error("每次任务的文本文件总量上限为 512 KiB。");
+      if (file.type.startsWith("image/")) {
+        if (next.filter((item) => item.mime_type).length >= 4) throw new Error("每次最多添加 4 张图片。");
+        next.push(await imageAttachment(file));
+        continue;
+      }
+      if (file.size > 524288) throw new Error("单个文本附件上限为 512 KiB。");
       let content;
       try { content = new TextDecoder("utf-8", {fatal: true}).decode(await file.arrayBuffer()); }
       catch { throw new Error(`${file.name} 不是有效的 UTF-8 文本文件。`); }
       if (content.includes("\u0000")) throw new Error(`${file.name} 含有二进制内容，请选择文本文件。`);
       next.push({name: file.name, content, size: new TextEncoder().encode(content).length});
     }
+    if (next.reduce((sum, item) => sum + item.size, 0) > 524288) throw new Error("附件总量上限为 512 KiB，请减少附件或缩小图片。");
     state.attachments = next;
     state.error = "";
     renderAttachments(); persistDraft(); updateSend();
@@ -620,8 +706,9 @@ async function sendMessage(event) {
   const attachments = [...state.attachments];
   const iterations = Number($("iterations").value);
   const budget = Number($("task-budget").value);
-  const title = content.replace(/\s+/g, " ").slice(0, 40) || `统计 ${attachments.length} 份文本资料`;
-  const documents = attachments.length ? Object.fromEntries(attachments.map((item) => [item.name, item.content])) : {"notes.txt": content};
+  const title = content.replace(/\s+/g, " ").slice(0, 40) || `分析 ${attachments.length} 个附件`;
+  const documents = Object.fromEntries(attachments.filter((item) => !item.mime_type).map((item) => [item.name, item.content]));
+  const images = attachments.filter((item) => item.mime_type).map(({name, mime_type, data_base64}) => ({name, mime_type, data_base64}));
   state.submitting = true; state.error = ""; updateSend();
   try {
     if (!state.conversationId) {
@@ -631,14 +718,14 @@ async function sendMessage(event) {
       history.replaceState(null, "", `#chat/${created.conversation_id}`);
     }
     const task = await api(`/api/v1/conversations/${state.conversationId}/messages`, {method: "POST", body: JSON.stringify({
-      title, instruction: content || "请统计所附文本文件并校验结果。", documents,
+      title, mode: "chat", message: content, documents, images, skill: state.skill, deadline_seconds: 600,
       work_iterations: iterations, budget_units: budget, priority: $("task-priority").value,
     })});
     if (!state.tasks.some((item) => item.task_id === task.task_id)) state.tasks.unshift(task);
     state.drafts.delete("new"); state.drafts.delete(state.conversationId);
     if ($("message").value.trim() === content) $("message").value = "";
     state.attachments = state.attachments.filter((item) => !attachments.includes(item));
-    persistDraft(); renderAttachments();
+    state.skill = null; renderSkill(); persistDraft(); renderAttachments();
     state.selectedTaskId = task.task_id;
     state.archived = false;
     state.signatures.delete("messages");
@@ -704,8 +791,8 @@ document.querySelector(".brand").onclick = (event) => { event.preventDefault(); 
 $("session-search").oninput = renderSidebar;
 $("show-archived").onclick = () => { state.archived = !state.archived; renderSidebar(); };
 $("form").onsubmit = sendMessage;
-$("message").oninput = () => { persistDraft(); updateSend(); $("message").style.height = "auto"; $("message").style.height = `${Math.min(180, $("message").scrollHeight)}px`; };
-$("message").onkeydown = (event) => { if (event.key === "Enter" && !event.shiftKey && !event.isComposing) { event.preventDefault(); if (!$("submit").disabled) $("form").requestSubmit(); } };
+$("message").oninput = () => { renderSkill(); persistDraft(); updateSend(); $("message").style.height = "auto"; $("message").style.height = `${Math.min(180, $("message").scrollHeight)}px`; };
+$("message").onkeydown = (event) => { if (event.key === "Escape") { $("skill-menu").hidden = true; return; } if (event.key === "Enter" && !event.shiftKey && !event.isComposing) { event.preventDefault(); if (!$("skill-menu").hidden) { $("skill-menu").querySelector("button")?.click(); return; } if (!$("submit").disabled) $("form").requestSubmit(); } };
 $("attach-file").onclick = () => $("file-input").click();
 $("file-input").onchange = () => addFiles([...$("file-input").files]);
 $("task-options").onclick = () => { const open = $("options-panel").hidden; $("options-panel").hidden = !open; $("task-options").setAttribute("aria-expanded", String(open)); };
@@ -735,8 +822,8 @@ $("task-filters").onclick = (event) => { const button = event.target.closest("bu
 document.querySelectorAll("[data-example]").forEach((button) => button.onclick = () => {
   const example = button.dataset.example;
   if (example === "files") { $("file-input").click(); return; }
-  $("message").value = example === "notes" ? "Operating systems manage processes, memory, files and resources.\nTaskLoom coordinates local tools and model requests." : "Task scheduling coordinates independent work with limited resources.\nFair allocation protects short tasks while long tasks keep progressing.";
-  $("iterations").value = example === "load" ? "5000000" : "1";
+  $("message").value = example === "notes" ? "请解释信号量如何协调多个工具的并发执行，给一个简短例子。" : "请读取 README.md，概括项目的启动方式和主要功能。";
+  $("iterations").value = "1";
   if (example === "load") { $("options-panel").hidden = false; $("task-options").setAttribute("aria-expanded", "true"); }
   persistDraft(); updateSend(); $("message").focus();
 });
@@ -752,5 +839,10 @@ try {
 shell.classList.toggle("inspector-hidden", !state.inspector);
 readRoute();
 restoreDraft();
+api("/api/v1/agent").then((data) => {
+  state.agent = data; renderSkill();
+  $("agent-prompt").textContent = data.system_prompt;
+  $("agent-workspace").textContent = `工作目录：${data.workspace}。命令在本机 WSL 中执行，可读写文件并访问网络；每条命令须确认。`;
+}).catch((error) => toast(error.message));
 refresh();
 setInterval(refresh, 1000);

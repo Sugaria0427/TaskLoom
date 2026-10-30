@@ -34,6 +34,7 @@ class HTTPProvider:
         kind: str = "simulated",
         accounts: Mapping[str, tuple[str, str]] | None = None,
         prices: Prices | None = None,
+        thinking: str | None = None,
     ) -> None:
         """`accounts` maps upstream account id -> (base_url, key); empty is a single account.
 
@@ -43,6 +44,7 @@ class HTTPProvider:
         self.kind = kind
         self.model = model
         self.prices = prices or Prices()
+        self.thinking = thinking
         self.client = _client(base_url, key)
         self.accounts = {
             name: _client(url, account_key) for name, (url, account_key) in (accounts or {}).items()
@@ -56,15 +58,25 @@ class HTTPProvider:
         return self.accounts[account]
 
     async def generate(self, request: ModelRequest, account: str | None = None) -> ModelReply:
+        body: dict[str, Any] = {
+            "model": self.model,
+            "messages": request.messages,
+            "tools": request.tools,
+            "max_tokens": request.max_tokens,
+        }
+        if self.thinking is not None:
+            body["thinking"] = {"type": self.thinking}
+        # Both https://host and https://host/v1 are common OpenAI-compatible base URLs.
+        route = self._route(account)
+        path = (
+            "chat/completions"
+            if route.base_url.path.rstrip("/").endswith("/v1")
+            else "v1/chat/completions"
+        )
         try:
-            response = await self._route(account).post(
-                "/v1/chat/completions",
-                json={
-                    "model": self.model,
-                    "messages": request.messages,
-                    "tools": request.tools,
-                    "max_tokens": request.max_tokens,
-                },
+            response = await route.post(
+                path,
+                json=body,
                 headers={"X-TaskLoom-Request-Id": request.request_id},
             )
         except (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout) as error:

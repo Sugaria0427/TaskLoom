@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from taskloom.contracts.models import ToolRun
-from taskloom.execution.access import (
+from taskloom.execution.coordination import (
     AccessCoordinator,
     AccessPermit,
     FileLease,

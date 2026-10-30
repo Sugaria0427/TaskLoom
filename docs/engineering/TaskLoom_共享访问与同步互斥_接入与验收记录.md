@@ -1,8 +1,8 @@
 # TaskLoom 共享访问与同步互斥 接入与验收记录
 
 - 工作包：IKR9K3（共享访问与同步互斥）
-- 分支：`feat/access-coordination`（本分支基于 9b95850；当前真实 `origin/main` = 644aae0d2cd24489c69ac38e36bd74b71af3ae67，合并前需确认与最新 main 的可合性）
-- 记录日期：2026-10-27（初次接入）；2026-10-29（IKR9K3 审查修复，见 §5.1）
+- 分支：`feat/access-coordination`（本分支基于 9b95850；已合并 `origin/main` = 644aae0d2cd24489c69ac38e36bd74b71af3ae67，见 §5.1）
+- 记录日期：2026-10-27（初次接入）；2026-10-29（IKR9K3 审查修复，见 §5.1）；2026-10-30（合并 origin/main，协调者模块改名 `coordination.py`）
 - 验证环境：Linux 容器（`docker.m.daocloud.io/library/python:3.12-slim`，Python 3.12.15，x86_64/arm64 均可），`uv sync --locked --group dev`
 
 ## 1. 本次解决的实际问题
@@ -22,7 +22,7 @@
 | 位置 | 职责 |
 | --- | --- |
 | `src/taskloom/policies/access.py` | 并发原语：SingleFlight（合并同键在途工作）、ReadWriteLock（多读者并行 / 写独占）、KeyedMutex（多资源固定顺序）。本次开始被生产代码真实调用。 |
-| `src/taskloom/execution/access.py` | 协调者：规范化资源键、许可签发与校验、跨进程文件租约、共享成果存储、账本。 |
+| `src/taskloom/execution/coordination.py` | 协调者：规范化资源键、许可签发与校验、跨进程文件租约、共享成果存储、账本。（原 `execution/access.py`；因 main PR #11 在同一新建了同名但完全不同的路径助手模块 `execution/access.py`（`local_path`/`readable`），合并时本模块改名为 `coordination.py`，公共接口签名无变化。） |
 | `src/taskloom/adapters/executor.py` | 执行器接线：判断 owner / waiter / 复用，签发许可，回收共享成果，写入证据。 |
 | `src/taskloom/execution/tool.py` | 工具子进程接线：校验许可、检查文件身份与权限、持锁执行、发布前复核输入版本。 |
 | `src/taskloom/client/service.py` | 本 commit 未修改该文件：共享证据随 result 透传（`service.py:971` `attempt.result = state.result`）进入工具链记录。 |
@@ -146,7 +146,7 @@ uv sync --locked --group dev
 
 | 缺陷 | 修复 | 回归测试 |
 | --- | --- | --- |
-| P1 `await_outcome` 丢失唤醒：`publish`/`fail` 解析旧 future 后又补一个全新的未解析 future，且 `wait()` 挂起前不查已发布结果，错过调度间隙的 waiter 永久挂起（`service.py:872` 轮询随之死循环） | `execution/access.py`：`wait()` 先查 `lookup` 与新增的失败记录 `_failed`，均未命中才注册 future，检查与注册之间无 await 间隙；`publish`/`fail` 只 pop 并解析已有 future，不再补空 future；`claim` 清除历史失败记录 | `tests/unit/test_execution_access.py::test_await_outcome_after_publish_is_served_immediately`、`::test_await_outcome_after_fail_raises_immediately` |
+| P1 `await_outcome` 丢失唤醒：`publish`/`fail` 解析旧 future 后又补一个全新的未解析 future，且 `wait()` 挂起前不查已发布结果，错过调度间隙的 waiter 永久挂起（`service.py:872` 轮询随之死循环） | `execution/coordination.py`（当时为 `execution/access.py`，合并后改名）：`wait()` 先查 `lookup` 与新增的失败记录 `_failed`，均未命中才注册 future，检查与注册之间无 await 间隙；`publish`/`fail` 只 pop 并解析已有 future，不再补空 future；`claim` 清除历史失败记录 | `tests/unit/test_execution_access.py::test_await_outcome_after_publish_is_served_immediately`、`::test_await_outcome_after_fail_raises_immediately` |
 | P1 `_watch` 成功路径先置 `quiescent` 后置 `outcome`：两次赋值之间有 `await access.publish`（写锁+原子写）的真实窗口，`service.py:872` 轮询观察到 quiescent=True + PENDING 即误报 TOOL_PENDING | `adapters/executor.py` `_watch()`：`state.quiescent` 移到全部终态字段落定之后、同一同步块内置位；except 分支改用局部变量 `quiescent` 判定 FAILED/UNKNOWN，不读半更新状态 | `tests/integration/test_shared_access.py::test_settling_never_shows_quiescent_pending_to_poller`（SlowPublish 子类把 publish 加宽 0.3s，按 service 方式轮询，断言从不观察到脏中间态，最终 SUCCEEDED 且 role=owner） |
 | P2 claim 成功后 `_launch` 抛异常（`cgroups.create`/`issue_permit`/spec 落盘）不通知协调者，键滞留 in-flight，此后同键 run() 全部沦为 waiter 永久等待 | `adapters/executor.py` `run()`：新增 `claimed` 标志，异常路径对已 claim 的键调用 `access.fail(key, "类型名: 消息")` 再抛；`_launch` 的 Popen OSError 分支自行上报且不抛异常，`fail()` 幂等，不会重复失败 | `tests/integration/test_shared_access.py::test_launch_failure_frees_the_claim_for_the_next_attempt`（断言恰好一条 shared_failed 账本记录，随后同键 run() 成为 owner 并成功） |
 
@@ -159,17 +159,25 @@ uv sync --locked --group dev
   修复前（对 f570222 原始树）输出 `DIRTY MIDSTATE (bug) PENDING`；
   修复后输出 `CLEAN SUCCEEDED`。
 
-验证（head = 本修复 commit 的工作树，环境与上文相同的 Linux 容器 Python 3.12.15，
-`uv sync --locked --group dev`，命令与 §5 相同）：
+已合并 origin/main 644aae0（PR #9–#12）并重跑全量验证；协调者模块因与 main PR #11 的
+`execution/access.py`（Windows/WSL 路径助手）同名撞车而改名为 `execution/coordination.py`，
+公共接口签名无变化，`tests/unit/test_execution_access.py` 与 `tests/integration/test_shared_access.py`
+文件名保持不变。三个冲突文件（`execution/access.py`、`execution/tool.py`、`adapters/executor.py`）
+均按「两侧功能都保留」融合。
+
+验证（head = 本 merge commit（f319ddf × origin/main 644aae0）的工作树，sha 见推送/PR 记录；
+环境与上文相同的 Linux 容器 Python 3.12.15，`uv sync --locked --group dev`，命令与 §5 相同）：
 
 | 项目 | 结果 |
 | --- | --- |
-| pytest tests/unit tests/integration tests/l4 | 345 passed, 1 skipped in 162.78s（基线 341 + 新增 4 例回归，无回退） |
-| pytest tests/smoke | 6 passed in 55.48s |
-| ruff format --check | 207 files already formatted |
+| pytest tests/unit/test_execution_access.py tests/integration/test_shared_access.py（定向） | 22 passed in 5.67s |
+| pytest tests/unit tests/integration tests/l4 | 376 passed, 1 skipped in 177.56s（修复 commit 基线 345 + main 侧 PR #11/#12 新增测试，0 failed，无回退） |
+| pytest tests/smoke | 7 passed in 67.00s（基线 6 + main 侧新增 test_chat_workbench） |
+| ruff format --check | 221 files already formatted |
 | ruff check | All checks passed! |
-| mypy src | Success: no issues found in 53 source files |
+| mypy src | Success: no issues found in 58 source files |
 | lint-imports | Contracts: 3 kept, 0 broken. |
+| pytest tests/linux | 未执行（非特权容器无 cgroup v2） |
 
 ## 6. 已知边界
 
@@ -177,4 +185,4 @@ uv sync --locked --group dev
 - 共享成果只在协调者的保留期内有效（默认 600 秒），过期后重新执行。
 - 跨进程互斥依赖 POSIX 文件锁，仅在 Linux 目标平台可用；macOS 上工具执行本身不可运行（`/proc` 依赖）。
 - 许可校验发生在工具子进程入口，不替代执行器侧的输入版本与租户校验，两者同时生效。
-- 等待者不启动进程，但占用工具槽：槽位统计按非 quiescent 状态计数（`executor.py:129`），等待者在等到成果前一直计入占用。
+- 等待者不启动进程，但占用工具槽：槽位统计按非 quiescent 状态计数（`executor.py:146`），等待者在等到成果前一直计入占用。

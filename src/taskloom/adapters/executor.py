@@ -17,7 +17,7 @@ from taskloom.adapters.linux import (
 )
 from taskloom.contracts.models import JsonObject, ToolRun, ToolState, digest
 from taskloom.domain.model import DomainError, Outcome
-from taskloom.execution.access import AccessCoordinator, PublishedOutcome, ResourceKey
+from taskloom.execution.coordination import AccessCoordinator, PublishedOutcome, ResourceKey
 
 
 class ProcessExecutor:
@@ -28,6 +28,7 @@ class ProcessExecutor:
         profile_dir: Path,
         cgroups: CgroupDomain,
         slots: int = 2,
+        workspace_root: str | None = None,
         access: AccessCoordinator | None = None,
     ) -> None:
         """Open the executor state of one client profile.
@@ -36,6 +37,8 @@ class ProcessExecutor:
             profile_dir: Client profile directory shared with the client.
             cgroups: Cgroup domain used to bound and measure tool processes.
             slots: How many tool processes may run at the same time.
+            workspace_root: Root that read_file and run_command may serve;
+                defaults to a directory under the profile.
             access: Shared-access coordinator; one is created when omitted.
         """
         self.directory = profile_dir
@@ -48,6 +51,12 @@ class ProcessExecutor:
         self.cancelled: dict[str, int] = {}
         self.permits: dict[str, str] = {}
         self.lock = asyncio.Lock()
+        self.workspace_root = (
+            Path(workspace_root).resolve()
+            if workspace_root
+            else (profile_dir / "workspace").resolve()
+        )
+        self.workspace_root.mkdir(parents=True, exist_ok=True)
         (self.directory / "executions").mkdir(parents=True, exist_ok=True)
         (self.directory / "cancelled").mkdir(exist_ok=True)
 
@@ -120,6 +129,14 @@ class ProcessExecutor:
                     raise DomainError("ATTEMPT_CONFLICT", "Tool attempt changed")
                 return previous.model_copy(deep=True)
             state = ToolState(request=request)
+            if request.workspace_root is not None and request.workspace_root != str(
+                self.workspace_root
+            ):
+                raise DomainError(
+                    "WORKSPACE_CONFLICT", "Tool workspace differs from executor configuration"
+                )
+            if request.tool_name == "run_command" and not request.command_approved:
+                raise DomainError("APPROVAL_REQUIRED", "Command was not approved")
             if self.cancelled.get(request.attempt_id, -1) >= request.generation:
                 state.outcome = Outcome.CANCELLED
                 state.quiescent = True
@@ -312,6 +329,11 @@ class ProcessExecutor:
             "cgroup_path": state.cgroup_path,
             "tool_name": request.tool_name,
             "arguments": request.arguments,
+            "workspace_root": str(self.workspace_root),
+            "tasks_root": str((self.directory / "tasks").resolve()),
+            "approved_external_path": request.approved_external_path,
+            "command_approved": request.command_approved,
+            "approved_command_cwd": request.approved_command_cwd,
             "attempt_id": request.attempt_id,
             "access": {
                 "permit": {**permit.body(), "signature": permit.signature},
@@ -431,6 +453,11 @@ class ProcessExecutor:
                 state.error = "TOOL_OOM"
             elif code != 0 or state.error:
                 state.outcome = Outcome.FAILED
+                if not state.error and state.request.tool_name in ("read_file", "run_command"):
+                    diagnostic = await asyncio.to_thread(
+                        lambda: (output / "stderr.log").read_text(errors="replace")[-2000:]
+                    )
+                    state.error = f"Tool exited with {code}: " + diagnostic
                 state.error = state.error or f"Tool exited with {code}"
             else:
                 result_path = output / "result.json"
