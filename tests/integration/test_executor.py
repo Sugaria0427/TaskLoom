@@ -183,3 +183,43 @@ async def test_unknown_tool_fails_without_publishing_result(tmp_path) -> None:
         assert not (profile / "tasks/root/attempts/unknown/result.json").exists()
     finally:
         await executor.close()
+
+
+async def test_failed_tool_publishes_error_with_its_terminal_outcome(tmp_path) -> None:
+    """Regression for the watcher settlement order: while stderr is read for the
+    diagnostic, no observer may see a terminal outcome without its error, or a
+    quiescent receipt that is still PENDING."""
+    profile, version = staged(tmp_path)
+    (profile / "workspace").mkdir()
+    executor = ProcessExecutor(profile, CgroupDomain(None))
+    await executor.start()
+    observed = []
+    try:
+        await executor.run(
+            ToolRun(
+                attempt_id="missing",
+                root_task_id="root",
+                tenant_id="alice",
+                generation=0,
+                input_version=version,
+                tool_name="read_file",
+                arguments={"path": "missing.txt", "max_bytes": 1024},
+                workspace_root=str(profile / "workspace"),
+            )
+        )
+        async with asyncio.timeout(10):
+            while True:
+                state = await executor.get("missing")
+                observed.append(state)
+                if state.quiescent:
+                    break
+                await asyncio.sleep(0)
+        for snapshot in observed:
+            if snapshot.outcome != Outcome.PENDING:
+                assert snapshot.quiescent and snapshot.error, snapshot
+            if snapshot.quiescent:
+                assert snapshot.outcome != Outcome.PENDING
+        assert observed[-1].outcome == Outcome.FAILED
+        assert "File not found" in observed[-1].error
+    finally:
+        await executor.close()

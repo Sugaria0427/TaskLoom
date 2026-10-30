@@ -31,6 +31,7 @@ from taskloom.contracts.models import (
     ToolClaim,
     ToolRun,
     ToolState,
+    branch_agent_id,
     digest,
     identity,
     tool_step_id,
@@ -69,7 +70,6 @@ class ClientService:
         self.conversations: dict[str, ConversationState] = {}
         self.attempts: dict[str, AttemptState] = {}
         self.runners: dict[str, asyncio.Task[None]] = {}
-        self.branch_runners: dict[tuple[str, str], asyncio.Task[None]] = {}
         self.lock = asyncio.Lock()
         self.registry: ToolRegistry = default_registry()
         self.chat_registry = agent_registry()
@@ -259,6 +259,12 @@ class ClientService:
         ):
             raise DomainError("PRIVATE_BUDGET", "Root task budget exhausted")
         task.quiescent = all(a.quiescent for a in related)
+        for name, branch in task.branches.items():
+            owner = branch_agent_id(task.task_id, name)
+            owned = [a for a in related if a.agent_id == owner]
+            branch.consumed_units = sum(a.consumed_units for a in owned)
+            branch.reserved_units = sum(a.reserved_units for a in owned)
+            branch.quiescent = all(a.quiescent for a in owned)
         if task.cancel_requested and task.quiescent:
             task.state = WorkState.FINISHED
         await self.store.apply(
@@ -447,12 +453,12 @@ class ClientService:
         kind: Literal["model", "tool"],
         request_payload: JsonObject | None = None,
         model_round: int | None = None,
-        agent_id: str | None = None,
+        branch: str | None = None,
     ) -> AttemptState:
         async with self.lock:
             task = self.get(task_id)
-            identity_agent = agent_id or task.agent_id
-            prefix = agent_id or task_id
+            identity_agent = branch_agent_id(task_id, branch) if branch else task.agent_id
+            prefix = identity_agent if branch else task_id
             old_id = task.step_attempts.get(step)
             if old_id:
                 old = self.attempts[old_id]
@@ -487,16 +493,10 @@ class ClientService:
                 request_payload=request_payload,
             )
             task.step_attempts[step] = attempt.attempt_id
+            checkpoint = task.branches[branch].checkpoint if branch else task.checkpoint
             tool_model_round = (
-                model_round
-                if model_round is not None
-                else (
-                    task.branches[agent_id].checkpoint.model_round - 1
-                    if agent_id
-                    else task.checkpoint.model_round - 1
-                )
+                model_round if model_round is not None else checkpoint.model_round - 1
             )
-            checkpoint = task.branches[agent_id].checkpoint if agent_id else task.checkpoint
             predecessors = (
                 tuple(task.tool_step_aliases.get(key, key) for key in checkpoint.completed_tools)
                 if kind == "model"
@@ -608,9 +608,12 @@ class ClientService:
         except Exception as error:
             async with self.lock:
                 current = self.get(task_id)
-                current.outcome = Outcome.FAILED if current.quiescent else Outcome.UNKNOWN
+                # A branch with an unknown result keeps the root in reconciliation
+                # even when its attempt has already stopped.
+                settled = current.quiescent and getattr(error, "code", "") != "BRANCH_UNRECONCILED"
+                current.outcome = Outcome.FAILED if settled else Outcome.UNKNOWN
                 current.completed_at = utc_now()
-                current.state = WorkState.FINISHED if current.quiescent else WorkState.RECONCILING
+                current.state = WorkState.FINISHED if settled else WorkState.RECONCILING
                 current.error = getattr(error, "code", type(error).__name__) + ": " + str(error)
                 await self._save_task(current)
         finally:
@@ -634,13 +637,17 @@ class ClientService:
         execution permit is safely yielded to the branches. Every branch
         request keeps ``root_task_id=task_id``: no matter how many branches run,
         budget and L3/L4 fair share stay on the root task.
+
+        Confluence is fixed once the parent summary has written its checkpoint;
+        until then every new generation retries the branches that did not succeed.
         """
         async with self.lock:
             task = self.get(task_id)
-            changed = False
+            confluent = bool(task.checkpoint.messages)
             agent_records: list[StoredRecord] = []
             for spec in task.specification.branches:
-                if spec.agent_id not in task.branches:
+                branch = task.branches.get(spec.agent_id)
+                if branch is None:
                     task.branches[spec.agent_id] = BranchState(
                         agent_id=spec.agent_id,
                         root_task_id=task_id,
@@ -649,153 +656,180 @@ class ClientService:
                         required=spec.required,
                         depends_on=list(spec.depends_on),
                     )
+                    agent = Agent(
+                        agent_id=branch_agent_id(task_id, spec.agent_id),
+                        root_task_id=task_id,
+                        parent_agent_id=task.agent_id,
+                        label=spec.agent_id,
+                    )
                     agent_records.append(
-                        StoredRecord(
-                            "agent",
-                            spec.agent_id,
-                            task.tenant_id,
-                            asdict(
-                                Agent(
-                                    agent_id=spec.agent_id,
-                                    root_task_id=task_id,
-                                    parent_agent_id=task.agent_id,
-                                )
-                            ),
-                        )
+                        StoredRecord("agent", agent.agent_id, task.tenant_id, asdict(agent))
                     )
-                    changed = True
-            if changed:
-                await self._save_task(task, agent_records)
-            task.state = WorkState.WAIT_DEPENDENCY
-            await self._save_task(task)
-        pending = {
-            agent_id
-            for agent_id, branch in self.get(task_id).branches.items()
-            if branch.outcome != Outcome.SUCCEEDED
-        }
-        runners: dict[str, asyncio.Task[None]] = {}
-        try:
-            while pending:
-                async with self.lock:
-                    task = self.get(task_id)
-                    if task.cancel_generation != generation or task.cancel_requested:
-                        raise asyncio.CancelledError
-                    for agent_id in list(runners):
-                        if runners[agent_id].done():
-                            runners.pop(agent_id)
-                            pending.discard(agent_id)
-                    # Deadlock: a pending branch whose dependencies are all
-                    # terminal but not SUCCEEDED can never start.
-                    for agent_id in list(pending):
-                        if agent_id in runners or not task.branches[agent_id].depends_on:
-                            continue
-                        branch = task.branches[agent_id]
-                        outcomes = [task.branches[dep].outcome for dep in branch.depends_on]
-                        if not all(o == Outcome.SUCCEEDED for o in outcomes) and all(
-                            o in (Outcome.SUCCEEDED, Outcome.FAILED, Outcome.CANCELLED)
-                            for o in outcomes
-                        ):
-                            failed = next(
-                                dep
-                                for dep in branch.depends_on
-                                if task.branches[dep].outcome != Outcome.SUCCEEDED
-                            )
-                            if branch.required:
-                                raise DomainError(
-                                    "BRANCH_DEPENDENCY_FAILED",
-                                    f"Branch {agent_id} waits on failed branch {failed}",
-                                )
-                            branch.outcome = Outcome.FAILED
-                            branch.state = WorkState.FINISHED
-                            branch.error = f"dependency {failed} did not succeed"
-                            branch.completed_at = utc_now()
-                            pending.discard(agent_id)
-                            await self._save_task(task)
-                    startable = [
-                        agent_id
-                        for agent_id in pending
-                        if agent_id not in runners
-                        and all(
-                            task.branches[dep].outcome == Outcome.SUCCEEDED
-                            for dep in task.branches[agent_id].depends_on
-                        )
-                    ]
-                for agent_id in startable:
-                    runners[agent_id] = asyncio.create_task(
-                        self._run_branch(task_id, agent_id, generation)
-                    )
-                    self.branch_runners[(task_id, agent_id)] = runners[agent_id]
-                if not runners:
-                    continue
-                await asyncio.wait(runners.values(), return_when=asyncio.FIRST_COMPLETED)
+                elif branch.outcome != Outcome.SUCCEEDED and not confluent:
+                    # Keep the checkpoint: an unknown attempt is then confirmed under
+                    # its original identity instead of being replayed.
+                    branch.state = WorkState.READY
+                    branch.outcome = Outcome.PENDING
+                    branch.result = None
+                    branch.error = None
+                    branch.completed_at = None
+            task.state = WorkState.RUNNING if confluent else WorkState.WAIT_DEPENDENCY
+            await self._save_task(task, agent_records)
+        results: JsonObject | None = None
+        if not confluent:
+            results = await self._await_branches(task_id, generation)
             async with self.lock:
                 task = self.get(task_id)
                 if task.cancel_generation != generation or task.cancel_requested:
                     raise asyncio.CancelledError
                 task.state = WorkState.RUNNING
                 await self._save_task(task)
-                failed_branches = [
-                    agent_id
-                    for agent_id, branch in task.branches.items()
-                    if branch.required and branch.outcome in (Outcome.FAILED, Outcome.CANCELLED)
-                ]
-                if failed_branches:
-                    branch = task.branches[failed_branches[0]]
-                    raise DomainError(
-                        "BRANCH_FAILED",
-                        f"Required branch {failed_branches[0]} failed: {branch.error or branch.outcome}",
-                    )
-                branches = {
-                    agent_id: branch.result
-                    for agent_id, branch in task.branches.items()
-                    if branch.outcome == Outcome.SUCCEEDED and branch.result is not None
-                }
-                task.checkpoint.messages.append(
-                    {
-                        "role": "user",
-                        "content": json.dumps({"branch_results": branches}, ensure_ascii=False),
-                    }
-                )
-                await self._save_task(task)
-            return await run_agent(
-                TaskHost(self, task_id, generation),
-                task_id,
-                task.specification,
-                task.checkpoint,
-                self.config.max_steps,
-                self.registry,
-            )
+        task = self.get(task_id)
+        return await run_agent(
+            TaskHost(self, task_id, generation),
+            task_id,
+            task.specification,
+            task.checkpoint,
+            self.config.max_steps,
+            self.registry,
+            branch_results=results,
+        )
+
+    async def _await_branches(self, task_id: str, generation: int) -> JsonObject:
+        """Start branches in dependency order until every one is terminal.
+
+        A required branch that ends without success fails the root at once and
+        the ``finally`` cancels its siblings. Returns the successful results.
+        """
+        pending = {
+            name
+            for name, branch in self.get(task_id).branches.items()
+            if branch.outcome != Outcome.SUCCEEDED
+        }
+        runners: dict[str, asyncio.Task[None]] = {}
+        try:
+            while pending:
+                progressed = False
+                async with self.lock:
+                    task = self.get(task_id)
+                    if task.cancel_generation != generation or task.cancel_requested:
+                        raise asyncio.CancelledError
+                    for name in [name for name, runner in runners.items() if runner.done()]:
+                        runners.pop(name)
+                        pending.discard(name)
+                        progressed = True
+                        branch = task.branches[name]
+                        if branch.required and branch.outcome != Outcome.SUCCEEDED:
+                            raise self._branch_error(name, branch)
+                    startable: list[str] = []
+                    for name in sorted(pending - runners.keys()):
+                        branch = task.branches[name]
+                        blocked = next(
+                            (
+                                dependency
+                                for dependency in branch.depends_on
+                                if dependency not in pending
+                                and task.branches[dependency].outcome != Outcome.SUCCEEDED
+                            ),
+                            None,
+                        )
+                        if blocked is None:
+                            if all(
+                                task.branches[dependency].outcome == Outcome.SUCCEEDED
+                                for dependency in branch.depends_on
+                            ):
+                                startable.append(name)
+                            continue
+                        if branch.required:
+                            raise DomainError(
+                                "BRANCH_DEPENDENCY_FAILED",
+                                f"Branch {name} waits on unsuccessful branch {blocked}",
+                            )
+                        # An optional branch whose dependency ended without success
+                        # never starts, so it owns no attempt to reconcile.
+                        branch.outcome = Outcome.FAILED
+                        branch.state = WorkState.FINISHED
+                        branch.error = f"BRANCH_DEPENDENCY_FAILED: {blocked} did not succeed"
+                        branch.completed_at = utc_now()
+                        pending.discard(name)
+                        progressed = True
+                        await self._save_task(task)
+                for name in startable:
+                    runners[name] = asyncio.create_task(self._run_branch(task_id, name, generation))
+                    progressed = True
+                if not runners:
+                    if pending and not progressed:
+                        raise DomainError(
+                            "BRANCH_DEADLOCK",
+                            "Branches can never start: " + ", ".join(sorted(pending)),
+                        )
+                    continue
+                await asyncio.wait(runners.values(), return_when=asyncio.FIRST_COMPLETED)
         finally:
             for runner in runners.values():
                 runner.cancel()
             if runners:
                 await asyncio.gather(*runners.values(), return_exceptions=True)
-            for key in list(self.branch_runners):
-                if key[0] == task_id:
-                    self.branch_runners.pop(key, None)
+        task = self.get(task_id)
+        unreconciled = sorted(
+            name for name, branch in task.branches.items() if branch.outcome == Outcome.UNKNOWN
+        )
+        if unreconciled:
+            # Optional or not, unconfirmed work must be reconciled before any summary.
+            raise DomainError(
+                "BRANCH_UNRECONCILED",
+                "Branches hold unreconciled work: " + ", ".join(unreconciled),
+            )
+        return {
+            name: branch.result
+            for name, branch in task.branches.items()
+            if branch.outcome == Outcome.SUCCEEDED and branch.result is not None
+        }
 
-    async def _run_branch(self, task_id: str, agent_id: str, generation: int) -> None:
+    @staticmethod
+    def _branch_error(name: str, branch: BranchState) -> DomainError:
+        if branch.outcome == Outcome.UNKNOWN:
+            return DomainError("BRANCH_UNRECONCILED", f"Required branch {name} holds unknown work")
+        return DomainError(
+            "BRANCH_FAILED", f"Required branch {name} failed: {branch.error or branch.outcome}"
+        )
+
+    def _branch_unreconciled(self, task_id: str, name: str) -> bool:
+        """Whether a branch still owns a dispatched attempt with an unknown result."""
+        owner = branch_agent_id(task_id, name)
+        return any(
+            attempt.root_task_id == task_id
+            and attempt.agent_id == owner
+            and (
+                not attempt.quiescent
+                or (attempt.outcome == Outcome.UNKNOWN and not attempt.settled)
+            )
+            for attempt in self.attempts.values()
+        )
+
+    async def _run_branch(self, task_id: str, name: str, generation: int) -> None:
         """Execute one controlled sub-agent to its own bounded loop and record
         its durable outcome inside TaskState.branches."""
         try:
             async with self.lock:
                 task = self.get(task_id)
-                branch = task.branches[agent_id]
+                branch = task.branches[name]
                 branch.state = WorkState.RUNNING
+                branch.cancel_generation = generation
                 await self._save_task(task)
             result = await run_agent(
-                BranchHost(self, task_id, agent_id, generation),
+                BranchHost(self, task_id, name, generation),
                 task_id,
                 task.specification,
                 branch.checkpoint,
                 self.config.max_steps,
                 self.registry,
-                agent_id=agent_id,
+                agent_id=branch_agent_id(task_id, name),
                 instruction=branch.instruction,
             )
             async with self.lock:
                 task = self.get(task_id)
-                branch = task.branches[agent_id]
+                branch = task.branches[name]
                 if task.cancel_generation != generation or task.cancel_requested:
                     return
                 branch.result = result
@@ -804,22 +838,30 @@ class ClientService:
                 branch.state = WorkState.FINISHED
                 await self._save_task(task)
         except asyncio.CancelledError:
-            async with self.lock:
-                task = self.get(task_id)
-                branch = task.branches[agent_id]
-                branch.outcome = Outcome.CANCELLED if task.cancel_requested else Outcome.UNKNOWN
-                branch.completed_at = utc_now()
-                branch.state = WorkState.FINISHED if branch.quiescent else WorkState.RECONCILING
-                await self._save_task(task)
+            await self._finish_branch(task_id, name, None)
+            raise
         except Exception as error:
-            async with self.lock:
-                task = self.get(task_id)
-                branch = task.branches[agent_id]
-                branch.outcome = Outcome.FAILED if branch.quiescent else Outcome.UNKNOWN
-                branch.completed_at = utc_now()
-                branch.state = WorkState.FINISHED if branch.quiescent else WorkState.RECONCILING
+            await self._finish_branch(task_id, name, error)
+
+    async def _finish_branch(self, task_id: str, name: str, error: Exception | None) -> None:
+        """Record a branch that stopped without a result.
+
+        The outcome follows the branch's own attempts: any dispatched attempt whose
+        result is still unknown makes the branch UNKNOWN/RECONCILING, never FAILED.
+        """
+        async with self.lock:
+            task = self.get(task_id)
+            branch = task.branches[name]
+            unreconciled = self._branch_unreconciled(task_id, name)
+            if error is None:
+                cancelled = task.cancel_requested or not unreconciled
+                branch.outcome = Outcome.CANCELLED if cancelled else Outcome.UNKNOWN
+            else:
+                branch.outcome = Outcome.UNKNOWN if unreconciled else Outcome.FAILED
                 branch.error = getattr(error, "code", type(error).__name__) + ": " + str(error)
-                await self._save_task(task)
+            branch.completed_at = utc_now()
+            branch.state = WorkState.RECONCILING if unreconciled else WorkState.FINISHED
+            await self._save_task(task)
 
     async def cancel(self, task_id: str) -> TaskState:
         async with self.lock:
@@ -964,11 +1006,11 @@ class ClientService:
         task_id: str,
         messages: list[JsonObject],
         round_index: int,
-        agent_id: str | None = None,
+        branch: str | None = None,
     ) -> ModelReply:
-        prefix = agent_id or task_id
+        prefix = branch_agent_id(task_id, branch) if branch else task_id
         attempt = await self._attempt(
-            task_id, f"{prefix}-model-{round_index}", "model", agent_id=agent_id
+            task_id, f"{prefix}-model-{round_index}", "model", branch=branch
         )
         if attempt.result is not None and attempt.outcome == Outcome.SUCCEEDED:
             return ModelReply.model_validate(attempt.result)
@@ -1135,19 +1177,19 @@ class ClientService:
         return Resources(claim.slots, claim.memory_bytes, claim.artifact_bytes), request
 
     async def tool(
-        self, task_id: str, call: ToolCall, model_round: int, agent_id: str | None = None
+        self, task_id: str, call: ToolCall, model_round: int, branch: str | None = None
     ) -> JsonObject:
         task = self.get(task_id)
         spec = (self.chat_registry if task.specification.mode == "chat" else self.registry).require(
             call.name
         )
         spec.check(call)
-        prefix = agent_id or task_id
+        prefix = branch_agent_id(task_id, branch) if branch else task_id
         canonical = tool_step_id(prefix, model_round, call.call_id)
         step_id = self.get(task_id).tool_step_aliases.get(canonical, canonical)
         request_payload = {"tool_name": call.name, "arguments": call.arguments}
         attempt = await self._attempt(
-            task_id, step_id, "tool", request_payload, model_round, agent_id=agent_id
+            task_id, step_id, "tool", request_payload, model_round, branch=branch
         )
         if attempt.outcome == Outcome.SUCCEEDED and attempt.result is not None:
             return attempt.result
@@ -1636,29 +1678,27 @@ class TaskHost:
 class BranchHost:
     """AgentHost adapter for one controlled sub-agent.
 
-    Steps and the checkpoint are scoped to the branch ``agent_id`` while every
-    model request keeps ``root_task_id`` on the root task, so budget and
-    service share never grow with the branch count.
+    Steps and the checkpoint are scoped to the branch while every model request
+    keeps ``root_task_id`` on the root task, so budget and service share never
+    grow with the branch count. ``branch`` is the task-local label.
     """
 
-    def __init__(
-        self, service: ClientService, task_id: str, agent_id: str, generation: int
-    ) -> None:
+    def __init__(self, service: ClientService, task_id: str, branch: str, generation: int) -> None:
         self.service = service
         self.task_id = task_id
-        self.agent_id = agent_id
+        self.branch = branch
         self.generation = generation
 
     async def model(self, messages: list[JsonObject], round_index: int) -> ModelReply:
-        return await self.service.model(self.task_id, messages, round_index, agent_id=self.agent_id)
+        return await self.service.model(self.task_id, messages, round_index, branch=self.branch)
 
     async def tool(self, call: ToolCall, model_round: int) -> JsonObject:
-        return await self.service.tool(self.task_id, call, model_round, agent_id=self.agent_id)
+        return await self.service.tool(self.task_id, call, model_round, branch=self.branch)
 
     async def checkpoint(self, checkpoint: Checkpoint) -> None:
         async with self.service.lock:
             task = self.service.get(self.task_id)
             if task.cancel_generation != self.generation or task.cancel_requested:
                 raise asyncio.CancelledError
-            task.branches[self.agent_id].checkpoint = checkpoint.model_copy(deep=True)
+            task.branches[self.branch].checkpoint = checkpoint.model_copy(deep=True)
             await self.service._save_task(task)

@@ -21,6 +21,16 @@ def tool_step_id(task_id: str, model_round: int, call_id: str) -> str:
     return f"{task_id}-model-{model_round}-tool-{call_id}"
 
 
+def branch_agent_id(task_id: str, name: str) -> str:
+    """Internal identity of a branch sub-agent, namespaced by its root task.
+
+    ``BranchSpec.agent_id`` is only a label unique inside one task; agent and
+    step records are keyed globally, so two tasks may both name ``branch-a``.
+    ``:`` never appears in a label, so the identity cannot collide with a root step.
+    """
+    return f"{task_id}:{name}"
+
+
 def mock_tokens(value: object) -> int:
     """The fixture contract explicitly defines its own deterministic token unit."""
     return max(1, (len(json.dumps(value, ensure_ascii=False).encode()) + 3) // 4)
@@ -241,6 +251,10 @@ class TaskCreate(Contract):
 
     @model_validator(mode="after")
     def consistent_branches(self) -> "TaskCreate":
+        if self.branches and self.mode == "chat":
+            # Branches and the parent summary use the legacy registry and prompt;
+            # chat history, workspace and attachments are not carried into them.
+            raise ValueError("Branches are not supported in chat mode")
         ids = [b.agent_id for b in self.branches]
         if len(set(ids)) != len(ids):
             raise ValueError("Branch agent ids must be unique")
@@ -251,6 +265,17 @@ class TaskCreate(Contract):
                     raise ValueError("A branch cannot depend on itself")
                 if dependency not in known:
                     raise ValueError(f"Branch depends on unknown branch {dependency!r}")
+        # A dependency cycle would leave every branch on it waiting forever:
+        # repeatedly peel branches whose dependencies are all peeled (Kahn).
+        remaining = {b.agent_id: set(b.depends_on) for b in self.branches}
+        while remaining:
+            ready = [name for name, deps in remaining.items() if not deps & remaining.keys()]
+            if not ready:
+                raise ValueError(
+                    "Branch dependencies form a cycle among " + ", ".join(sorted(remaining))
+                )
+            for name in ready:
+                del remaining[name]
         return self
 
 
@@ -267,7 +292,14 @@ class Checkpoint(Contract):
 
 
 class BranchState(Contract):
-    """Durable runtime state of one branch; persisted inside TaskState.branches."""
+    """Durable runtime state of one branch; persisted inside TaskState.branches.
+
+    ``agent_id`` is the task-local label from ``BranchSpec``; attempts, steps and
+    the agent record use ``branch_agent_id(root_task_id, agent_id)``.
+    ``quiescent``/``consumed_units``/``reserved_units`` are derived from the
+    branch's attempts on every attempt save; ``cancel_generation`` is the root
+    generation the branch last ran under.
+    """
 
     agent_id: str
     root_task_id: str

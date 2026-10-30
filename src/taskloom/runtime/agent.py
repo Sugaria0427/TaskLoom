@@ -20,6 +20,7 @@ async def run_agent(
     attachments: dict[str, str] | None = None,
     agent_id: str | None = None,
     instruction: str | None = None,
+    branch_results: JsonObject | None = None,
 ) -> JsonObject:
     """Run one bounded model-tool loop for a single agent identity.
 
@@ -27,7 +28,9 @@ async def run_agent(
     backward compatibility) is the identity that scopes step ids, attempts and
     the checkpoint. Controlled sub-agents pass their own ``agent_id`` and
     ``instruction`` so their steps and prompts stay independent while their
-    budget and service share remain on the root task.
+    budget and service share remain on the root task. A parent summarising
+    its branches passes ``branch_results``; like the prompt it is written only
+    into a fresh checkpoint, so a resumed summary never receives it twice.
     """
     if registry is None:
         registry = default_registry()
@@ -66,22 +69,19 @@ async def run_agent(
             # Existing recorded statistics workflows keep their bounded verification
             # contract; controlled sub-agents pass their own instruction.
             prompt = instruction if instruction is not None else specification.instruction
+            request: JsonObject = {
+                "title": specification.title,
+                "instruction": prompt,
+                "files": list(specification.documents),
+            }
+            if branch_results is not None:
+                request["branch_results"] = branch_results
             state.messages = [
                 {
                     "role": "system",
                     "content": "请核验附件并返回 JSON，包含 files、words、summary；统计以 file_stats 回执为准。",
                 },
-                {
-                    "role": "user",
-                    "content": json.dumps(
-                        {
-                            "title": specification.title,
-                            "instruction": prompt,
-                            "files": list(specification.documents),
-                        },
-                        ensure_ascii=False,
-                    ),
-                },
+                {"role": "user", "content": json.dumps(request, ensure_ascii=False)},
             ]
         await host.checkpoint(state)
     while state.model_round + len(state.completed_tools) < max_steps:
