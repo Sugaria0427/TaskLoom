@@ -1636,6 +1636,8 @@ class ClientService:
                     if record.state == "FINISHED":
                         await self._settle_model(attempt, record)
                 elif attempt.kind == "tool":
+                    if attempt.attempt_id in self.tools.active:
+                        continue
                     state = await self.executor.query(attempt.attempt_id)
                     if state is not None and state.quiescent:
                         await self._settle_tool(attempt, state)

@@ -102,6 +102,7 @@ class FakeExecutor:
         self.fail_when: Callable[[ToolRun], bool] = lambda _request: fail
         self.healed = False
         self.lost: set[str] = set()
+        self.running: set[str] = set()
         self.runs: list[ToolRun] = []
         self.started_at: list[float] = []
         self.finished_at: list[float] = []
@@ -124,6 +125,7 @@ class FakeExecutor:
 
     async def run(self, request: ToolRun) -> ToolState:
         self.runs.append(request)
+        self.running.add(request.attempt_id)
         self.started_at.append(time.monotonic())
         self.active += 1
         self.peak_active = max(self.peak_active, self.active)
@@ -135,6 +137,7 @@ class FakeExecutor:
                 raise RuntimeError("tool boom")
             return self._state(request)
         finally:
+            self.running.discard(request.attempt_id)
             self.active -= 1
             self.finished_at.append(time.monotonic())
 
@@ -143,6 +146,17 @@ class FakeExecutor:
             return None
         for request in self.runs:
             if request.attempt_id == attempt_id:
+                if attempt_id in self.running:
+                    return ToolState(
+                        request=request,
+                        outcome=Outcome.PENDING,
+                        quiescent=False,
+                        result=None,
+                        pid=1,
+                        start_ticks="1",
+                        boot_id="1",
+                        cgroup_path="/sys/fs/cgroup",
+                    )
                 return self._state(request)
         return None
 
