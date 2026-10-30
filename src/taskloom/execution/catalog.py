@@ -14,7 +14,9 @@ from taskloom.domain.model import Resources
 MEBIBYTE = 1048576
 KIBIBYTE = 1024
 
-ToolName = Literal["file_stats", "grep", "list_files", "top_words", "read_file", "run_command"]
+ToolName = Literal[
+    "file_stats", "grep", "list_files", "top_words", "read_file", "run_command", "staged_top_words"
+]
 
 
 @dataclass(frozen=True)
@@ -23,9 +25,15 @@ class ToolProfile:
     demand: Resources
     cpu_quota: int = 100000  # microseconds per period; 100000 == one full CPU
     cpu_period: int = 100000
+    maximum: Resources | None = None
 
 
 TOOL_PROFILES: dict[str, ToolProfile] = {
+    "staged_top_words": ToolProfile(
+        name="staged_top_words",
+        demand=Resources(slots=1, memory_bytes=128 * MEBIBYTE, artifact_bytes=2 * MEBIBYTE),
+        maximum=Resources(slots=1, memory_bytes=384 * MEBIBYTE, artifact_bytes=2 * MEBIBYTE),
+    ),
     "read_file": ToolProfile(
         name="read_file",
         demand=Resources(slots=1, memory_bytes=256 * MEBIBYTE, artifact_bytes=2 * MEBIBYTE),
@@ -72,7 +80,11 @@ def tool_demand(name: str) -> Resources:
 def max_demand() -> Resources:
     """Element-wise catalog maximum for capacity planning, never an Attempt claim."""
     return Resources(
-        slots=max(profile.demand.slots for profile in TOOL_PROFILES.values()),
-        memory_bytes=max(profile.demand.memory_bytes for profile in TOOL_PROFILES.values()),
-        artifact_bytes=max(profile.demand.artifact_bytes for profile in TOOL_PROFILES.values()),
+        slots=max((profile.maximum or profile.demand).slots for profile in TOOL_PROFILES.values()),
+        memory_bytes=max(
+            (profile.maximum or profile.demand).memory_bytes for profile in TOOL_PROFILES.values()
+        ),
+        artifact_bytes=max(
+            (profile.maximum or profile.demand).artifact_bytes for profile in TOOL_PROFILES.values()
+        ),
     )

@@ -12,6 +12,7 @@ def test_catalog_covers_agent_and_statistics_tools() -> None:
         "top_words",
         "read_file",
         "run_command",
+        "staged_top_words",
     }
 
 
@@ -38,6 +39,11 @@ def test_tool_run_accepts_every_catalog_tool() -> None:
             generation=0,
             tool_name=name,
             input_version="v",
+            **(
+                {"resource_protocol": "phase-v1", "maximum_memory_bytes": 384 * 1048576}
+                if name == "staged_top_words"
+                else {}
+            ),
         )
         assert run.tool_name == name
 
@@ -50,7 +56,7 @@ def test_unknown_tool_name_raises() -> None:
 def test_runtime_registry_uses_executor_resource_profiles() -> None:
     from taskloom.runtime.registry import agent_registry
 
-    registry = agent_registry()
+    registry = agent_registry(staged=True)
     assert set(registry.names()) == set(tool_names())
     for name in registry.names():
         assert registry.require(name).demand == tool_demand(name)

@@ -28,10 +28,10 @@ Agent 支持普通多轮对话、文本与图片附件。新增 read_file 与 ru
 | WP2，许世浩，[PR #3](https://gitee.com/Sugaria/TaskLoom/pulls/3)。 | 四工具目录、参数校验和检查点恢复已经接入，保留原请求、资源声明与执行身份。 | 下一步提供受控子 Agent 与不同成本的多根任务，扩展调度实验负载。 |
 | WP3，杜金泽，[PR #1](https://gitee.com/Sugaria/TaskLoom/pulls/1)，后续取消修复由冀托 [PR #9](https://gitee.com/Sugaria/TaskLoom/pulls/9) 补齐。 | 请求公平、等待唤醒、消费校正及启动前取消清理已经接入。 | 扩展真实混合负载与反馈消融。 |
 | WP5，方震，[PR #5](https://gitee.com/Sugaria/TaskLoom/pulls/5)、[PR #8](https://gitee.com/Sugaria/TaskLoom/pulls/8)。 | 平台分层策略、上游放置、调度控制台与热切换已接入。 | 使用相同初始状态进行策略效果比较。 |
-| WP4，冀托，[PR #7](https://gitee.com/Sugaria/TaskLoom/pulls/7)。 | 已整合工具画像、真实执行测量、恢复与并发安全修复。 | 银行家和访问锁为可复用基础组件，继续接入实际资源共享场景。 |
+| WP4，冀托，[PR #7](https://gitee.com/Sugaria/TaskLoom/pulls/7)。 | 已整合工具画像、真实执行测量、恢复与并发安全修复，新增真实阶段银行家及大工具保护。 | 访问锁仍为可复用组件；资源增量的入口与边界见下文。 |
 | WP6，戴淋，[PR #6](https://gitee.com/Sugaria/TaskLoom/pulls/6)。 | 已整合实验清单、采集、校准、仿真及本地优先级。 | 补齐五组消融的统一开关、混合工作流、重复测量和报告。 |
 
-受控并行子 Agent 已实现（见 [受控并行子 Agent 与依赖汇合](TaskLoom_受控并行子Agent与依赖汇合.md)）；阶段银行家的正式接入、自适应反馈与原版 OpenClaw 对照继续作为后续工作。PR #2 已关闭，由 #3 接替；PR #4 的文档协作基线保留。
+阶段银行家已接入显式启用的真实分阶段词频工具，工具资源采用统一占用记录；大工具等待/旁路保护已接入 Dispatcher。First Fit 与 SCAN 提供受控缓冲区和教学磁盘模型，入口、恢复协议、验证和能力边界见[资源分配说明](TaskLoom_阶段资源分配与大工具保护.md)。受控并行子 Agent 已实现（见 [受控并行子 Agent 与依赖汇合](TaskLoom_受控并行子Agent与依赖汇合.md)），分支共享同一工具资源协议。共享访问协调、自适应反馈与原版 OpenClaw 对照继续作为后续工作。PR #2 已关闭，由 #3 接替；PR #4 的文档协作基线保留。
 
 ## 3. 验证与实验顺序
 

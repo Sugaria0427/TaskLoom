@@ -6,6 +6,8 @@
 
 查看[已接入能力与待开发工作](README_v1.7.md#1-当前实现)。
 
+阶段银行家、大工具接纳保护及 First Fit/SCAN 课程扩展见[资源分配说明](docs/engineering/TaskLoom_阶段资源分配与大工具保护.md)。可用 `python tools/project.py resources-demo` 复现机制对照；真实阶段工具需显式启用。
+
 ## 2. 本机启动
 
 查看[Windows/WSL2 启动步骤及开发地址](README_v1.7.md#2-本机启动)。

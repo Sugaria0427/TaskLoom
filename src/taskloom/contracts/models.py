@@ -391,6 +391,8 @@ class AttemptState(Contract):
     result: JsonObject | None = None
     request_payload: JsonObject | None = None
     tool_claim: ToolClaim | None = None
+    phase_allocation: ToolClaim | None = None
+    phase_version: int = Field(default=0, ge=0, le=2)
     execution_ref: JsonObject | None = None
     error: str | None = None
 
@@ -401,7 +403,13 @@ class ToolRun(Contract):
     tenant_id: str
     generation: int = Field(ge=0)
     tool_name: Literal[
-        "file_stats", "grep", "list_files", "top_words", "read_file", "run_command"
+        "file_stats",
+        "grep",
+        "list_files",
+        "top_words",
+        "read_file",
+        "run_command",
+        "staged_top_words",
     ] = "file_stats"
     input_version: str
     work_iterations: int = Field(default=1, ge=1, le=5000000)
@@ -415,6 +423,39 @@ class ToolRun(Contract):
     approved_external_path: str | None = None
     command_approved: bool = False
     approved_command_cwd: str | None = None
+    resource_protocol: Literal["one-shot", "phase-v1"] = "one-shot"
+    maximum_memory_bytes: int | None = Field(default=None, ge=16777216)
+
+    @model_validator(mode="after")
+    def consistent_resources(self) -> "ToolRun":
+        staged = self.tool_name == "staged_top_words"
+        if staged != (self.resource_protocol == "phase-v1"):
+            raise ValueError("Staged tools require phase-v1; ordinary tools remain one-shot")
+        if staged:
+            if self.memory_bytes != 128 * 1048576 or self.maximum_memory_bytes != 384 * 1048576:
+                raise ValueError("staged_top_words requires the registered 128/384 MiB claim")
+        elif self.maximum_memory_bytes is not None:
+            raise ValueError("One-shot tools cannot declare phase expansion")
+        return self
+
+
+class ExecutorCapabilities(Contract):
+    ready: bool
+    protection: str
+    resource_protocols: list[Literal["one-shot", "phase-v1"]] = Field(
+        default=["one-shot"], max_length=2
+    )
+
+
+class ToolPhase(Contract):
+    attempt_id: str = Field(pattern=r"^[a-zA-Z0-9_-]{1,96}$")
+    generation: int = Field(ge=0)
+    version: int = Field(ge=1, le=2)
+    memory_bytes: int = Field(ge=16777216)
+
+    @property
+    def request_id(self) -> str:
+        return f"{self.attempt_id}:phase:{self.version}"
 
 
 class ToolState(Contract):
@@ -435,6 +476,8 @@ class ToolState(Contract):
     artifact_bytes: int | None = None
     oom: bool = False
     created_at: str = Field(default_factory=utc_now)
+    pending_phase: ToolPhase | None = None
+    phase_grants: list[ToolPhase] = Field(default_factory=list, max_length=2)
 
 
 class ClientConfig(Contract):
@@ -450,6 +493,11 @@ class ClientConfig(Contract):
     artifact_budget_mib: int = Field(default=64, ge=1)
     max_steps: int = Field(default=12, ge=3, le=128)
     workspace_root: str | None = None
+    phase_banker: bool = True
+    staged_tools: bool = False
+    large_tool_protection: bool = True
+    protection_seconds: float = Field(default=5, gt=0, le=3600)
+    protection_bypasses: int = Field(default=8, ge=1, le=10000)
 
 
 class PoolAccount(Contract):
